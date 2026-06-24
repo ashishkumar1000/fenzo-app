@@ -50,6 +50,7 @@ yarn-error.log
 
 # Bun
 .bun/
+.bun-install/
 
 # Metro
 .metro-health-check*
