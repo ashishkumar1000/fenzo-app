@@ -1,0 +1,86 @@
+# =====================================================
+# Bare React Native 0.86 — .gitignore
+# /ios and /android ARE tracked (hand-edited native code);
+# only their build/dependency output is ignored.
+# =====================================================
+
+# OSX
+.DS_Store
+*.pem
+
+# Xcode / iOS
+build/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata
+*.xccheckout
+*.moved-aside
+DerivedData
+*.hmap
+*.ipa
+*.xcuserstate
+ios/.xcode.env.local
+ios/Pods/
+
+# Android / IntelliJ
+android/app/build/
+android/build/
+android/.gradle/
+android/.idea/
+android/.kotlin/
+android/captures/
+android/local.properties
+*.iml
+*.hprof
+.cxx/
+*.keystore
+!debug.keystore
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+.npm/
+
+# Bun
+.bun/
+
+# Metro
+.metro-health-check*
+metro-cache/
+
+# Watchman / haste
+.haste_cache/
+
+# Bundle artifacts
+*.jsbundle
+
+# CocoaPods / Ruby (Bundler)
+/vendor/
+vendor/bundle/
+
+# Testing / coverage
+coverage/
+
+# Environment
+.env*.local
+.env
+
+# Temporary / editor
+*.log
+*.orig.*
+*.swp
+.vscode/.react/
+
+# Expo (legacy — safe to keep ignored)
+.expo/
+.expo-shared/
+dist/
+web-build/
+expo-env.d.ts
