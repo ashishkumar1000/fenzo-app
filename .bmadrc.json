@@ -1,6 +1,6 @@
 {
   "project": {
-    "name": "fenzo-app",
+    "name": "fenzit-app",
     "type": "react-native",
     "description": "Fenzo React Native Expo App",
     "language": "TypeScript"
