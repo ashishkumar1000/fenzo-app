@@ -8,8 +8,8 @@
  *   bunx react-native-bootsplash generate <logo> --assets-output=assets/bootsplash ...
  */
 
-import { useState } from 'react';
-import { Animated, Easing, StyleSheet, Text } from 'react-native';
+import { useRef } from 'react';
+import { Animated, Easing, StyleSheet } from 'react-native';
 import BootSplash from 'react-native-bootsplash';
 
 type Props = {
@@ -17,17 +17,13 @@ type Props = {
 };
 
 function AnimatedBootSplash({ onAnimationEnd }: Props) {
-  const [opacity] = useState(() => new Animated.Value(1));
-  const [scale] = useState(() => new Animated.Value(0.8));
-  const [translateY] = useState(() => new Animated.Value(0));
+  const opacity = useRef(new Animated.Value(1)).current;
+  const scale = useRef(new Animated.Value(0.8)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
 
   const { container, logo } = BootSplash.useHideAnimation({
     manifest: require('../assets/bootsplash/manifest.json'),
     logo: require('../assets/bootsplash/logo.png'),
-
-    statusBarTranslucent: true,
-    navigationBarTranslucent: false,
-
     animate: () => {
       Animated.sequence([
         // 1. Logo pops in with a springy bounce.
@@ -58,9 +54,7 @@ function AnimatedBootSplash({ onAnimationEnd }: Props) {
             useNativeDriver: true,
           }),
         ]),
-      ]).start(() => {
-        onAnimationEnd();
-      });
+      ]).start(onAnimationEnd);
     },
   });
 
@@ -68,7 +62,6 @@ function AnimatedBootSplash({ onAnimationEnd }: Props) {
     <Animated.View
       {...container}
       style={[container.style, styles.container, { opacity }]}>
-        <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 20 }}>Welcome to My App</Text>
       <Animated.Image
         {...logo}
         style={[logo.style, { transform: [{ translateY }, { scale }] }]}

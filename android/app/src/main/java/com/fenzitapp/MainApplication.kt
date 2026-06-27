@@ -1,4 +1,4 @@
-package com.fenzoapp
+package com.fenzitapp
 
 import android.app.Application
 import com.facebook.react.PackageList

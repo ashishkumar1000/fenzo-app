@@ -1,4 +1,3 @@
-import React from 'react';
 import { Button, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
@@ -8,7 +7,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 export default function HomeScreen({ navigation }: Props) {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Fenzo</Text>
+      <Text style={styles.title}>Fenzit</Text>
       <Text style={styles.subtitle}>React Navigation is wired up.</Text>
       <Button
         title="Open details"

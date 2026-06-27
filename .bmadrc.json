@@ -2,7 +2,7 @@
   "project": {
     "name": "fenzit-app",
     "type": "react-native",
-    "description": "Fenzo React Native Expo App",
+    "description": "Fenzit React Native Expo App",
     "language": "TypeScript"
   },
   "bmad": {

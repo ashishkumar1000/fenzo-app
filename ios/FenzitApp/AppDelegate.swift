@@ -25,7 +25,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     window = UIWindow(frame: UIScreen.main.bounds)
 
     factory.startReactNative(
-      withModuleName: "FenzoApp",
+      withModuleName: "FenzitApp",
       in: window,
       launchOptions: launchOptions
     )
