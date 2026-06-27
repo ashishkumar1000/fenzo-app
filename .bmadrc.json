@@ -1,0 +1,28 @@
+{
+  "project": {
+    "name": "fenzo-app",
+    "type": "react-native",
+    "description": "Fenzo React Native Expo App",
+    "language": "TypeScript"
+  },
+  "bmad": {
+    "modules": [
+      "bmm"
+    ],
+    "tools": [
+      "claude-code"
+    ],
+    "version": "6.9.0",
+    "autoRun": {
+      "onSave": false,
+      "onCommit": false
+    }
+  },
+  "workflows": {
+    "planning": true,
+    "architecture": true,
+    "development": true,
+    "testing": true,
+    "deployment": true
+  }
+}
