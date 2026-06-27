@@ -10,8 +10,8 @@ import { StatusBar, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import AnimatedBootSplash from './components/AnimatedBootSplash';
-import RootNavigator from './src/navigation/RootNavigator';
-import { navigationRef } from './src/navigation/navigationRef';
+import RootNavigator from './navigation/RootNavigator';
+import { navigationRef } from './navigation/navigationRef';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
