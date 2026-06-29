@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { StatusBar, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
-import AnimatedBootSplash from './components/AnimatedBootSplash';
+import { AnimatedBootSplash } from './features/splash';
 import RootNavigator from './navigation/RootNavigator';
 import { navigationRef } from './navigation/navigationRef';
 import { OnboardingScreen, useOnboarding } from './features/onboarding';
