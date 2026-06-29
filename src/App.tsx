@@ -12,17 +12,24 @@ import { NavigationContainer } from '@react-navigation/native';
 import AnimatedBootSplash from './components/AnimatedBootSplash';
 import RootNavigator from './navigation/RootNavigator';
 import { navigationRef } from './navigation/navigationRef';
+import { OnboardingScreen, useOnboarding } from './features/onboarding';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
   const [splashVisible, setSplashVisible] = useState(true);
+  const { status, complete } = useOnboarding();
 
   return (
     <SafeAreaProvider>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <NavigationContainer ref={navigationRef}>
-        <RootNavigator />
-      </NavigationContainer>
+
+      {status === 'done' ? (
+        <NavigationContainer ref={navigationRef}>
+          <RootNavigator />
+        </NavigationContainer>
+      ) : (
+        <OnboardingScreen onDone={complete} />
+      )}
 
       {splashVisible && (
         <AnimatedBootSplash onAnimationEnd={() => setSplashVisible(false)} />
