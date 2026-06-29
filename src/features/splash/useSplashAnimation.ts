@@ -33,8 +33,8 @@ export function useSplashAnimation(onAnimationEnd: () => void) {
   const aurora2 = useSharedValue(0.5);
 
   const { container, logo } = BootSplash.useHideAnimation({
-    manifest: require('../../assets/bootsplash/manifest.json'),
-    logo: require('../../assets/bootsplash/logo.png'),
+    manifest: require('../../../assets/bootsplash/manifest.json'),
+    logo: require('../../../assets/bootsplash/logo.png'),
     statusBarTranslucent: true,
     navigationBarTranslucent: false,
     animate: () => {
