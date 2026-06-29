@@ -15,12 +15,12 @@ export default function RootNavigator() {
       <Stack.Screen
         name="Home"
         component={HomeScreen}
-        options={{ title: 'Fenzit' }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="Details"
         component={DetailsScreen}
-        options={{ title: 'Details' }}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );
