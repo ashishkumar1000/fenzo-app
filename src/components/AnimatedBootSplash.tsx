@@ -166,11 +166,11 @@ function AnimatedBootSplash({ onAnimationEnd }: Props) {
       );
 
       sceneScale.value = withDelay(
-        2000,
+        2200,
         withTiming(1.06, { duration: d(420), easing: Easing.in(Easing.cubic) }),
       );
       sceneOpacity.value = withDelay(
-        2000,
+        2200,
         withTiming(
           0,
           { duration: d(420), easing: Easing.in(Easing.cubic) },
@@ -401,11 +401,18 @@ function AnimatedBootSplash({ onAnimationEnd }: Props) {
           </Animated.View>
         </View>
 
-        <Animated.Text
-          entering={FadeInDown.delay(900).duration(460).easing(Easing.out(Easing.cubic))}
-          style={styles.tagline}>
-          FIELD MANAGEMENT, SIMPLIFIED
-        </Animated.Text>
+        <View style={styles.taglineRow}>
+          {['Assign.', 'Track.', 'Done.'].map((w, i) => (
+            <Animated.Text
+              key={w}
+              entering={FadeInDown.delay(980 + i * 160)
+                .duration(440)
+                .easing(Easing.out(Easing.cubic))}
+              style={styles.taglineWord}>
+              {w}
+            </Animated.Text>
+          ))}
+        </View>
       </View>
 
       {/* Native white F (seamless start) — cross-fades into the colored mark */}
@@ -459,12 +466,16 @@ const styles = StyleSheet.create({
     height: CAP,
     marginRight: GAP,
   },
-  tagline: {
+  taglineRow: {
+    flexDirection: 'row',
     marginTop: spacing.s5,
+  },
+  taglineWord: {
     color: 'rgba(255,255,255,0.82)',
     fontSize: fontSize.sm,
     fontWeight: weight.medium,
     letterSpacing: 0.3,
+    marginHorizontal: 4,
   },
 });
 
