@@ -1,5 +1,5 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import HomeScreen from '../screens/HomeScreen';
+import MainTabs from './MainTabs';
 import DetailsScreen from '../screens/DetailsScreen';
 import type { RootStackParamList } from './types';
 
@@ -7,14 +7,16 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 /**
  * The single source of truth for top-level navigation routes.
- * Add new screens here, and to `RootStackParamList` in `./types`.
+ * `MainTabs` holds the four bottom-tab screens (Home, Jobs, Customers, More).
+ * Full-screen routes that should cover the tab bar (e.g. Details) go here,
+ * as siblings of MainTabs.
  */
 export default function RootNavigator() {
   return (
-    <Stack.Navigator initialRouteName="Home">
+    <Stack.Navigator initialRouteName="MainTabs">
       <Stack.Screen
-        name="Home"
-        component={HomeScreen}
+        name="MainTabs"
+        component={MainTabs}
         options={{ headerShown: false }}
       />
       <Stack.Screen

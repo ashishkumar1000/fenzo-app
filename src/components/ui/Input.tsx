@@ -16,7 +16,7 @@ import {
   type TextInputProps,
   type ViewStyle,
 } from 'react-native';
-import { colors, radius, typography, touch } from '../../theme';
+import {colors, radius, typography, touch, spacing} from '../../theme';
 
 export type InputProps = {
   label?: string;
@@ -140,6 +140,7 @@ const styles = StyleSheet.create({
     padding: 0,
     ...typography.body,
     color: colors.textStrong,
+    marginBottom: 10,
   },
   helper: {
     ...typography.caption,

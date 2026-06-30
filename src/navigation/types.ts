@@ -1,13 +1,21 @@
 /**
- * Type definitions for the root navigator.
+ * Type definitions for the root navigator and the nested bottom tabs.
  *
- * Each route in `RootStackParamList` represents a screen in the stack and
- * describes the shape of its params. The global `RootParamList`
+ * `RootStackParamList` is the top-level stack: the tab group plus any
+ * full-screen routes pushed on top of it (e.g. Details). `MainTabParamList`
+ * describes the four bottom-tab routes. The global `RootParamList`
  * augmentation lets `useNavigation()` infer types at every call site.
  */
 
-export type RootStackParamList = {
+export type MainTabParamList = {
   Home: undefined;
+  Jobs: undefined;
+  Customers: undefined;
+  More: undefined;
+};
+
+export type RootStackParamList = {
+  MainTabs: undefined;
   Details: { itemId: number; title?: string };
 };
 

@@ -3,6 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Bell, Calendar, IndianRupee, Clock, Briefcase, Plus, ClipboardList, DollarSign } from 'lucide-react-native';
 import { Card, Button } from './ui';
 import { colors, palette, spacing, typography } from '../theme';
+import { CURRENT_BUSINESS } from '../constants/business';
 
 interface StatCardProps {
   icon: React.ReactNode;
@@ -65,8 +66,8 @@ export default function HomeHeader() {
           {/* Header Top - Greeting + Notification */}
           <View style={styles.headerContent}>
             <View style={styles.greetingSection}>
-              <Text style={styles.greetingText}>Good morning, Ravi</Text>
-              <Text style={styles.serviceText}>Cool Air AC Services</Text>
+              <Text style={styles.greetingText}>Good morning, {CURRENT_BUSINESS.ownerName.split(' ')[0]}</Text>
+              <Text style={styles.serviceText}>{CURRENT_BUSINESS.businessName}</Text>
             </View>
 
             <Pressable style={styles.notificationButton} onPress={() => {}}>
