@@ -1,10 +1,16 @@
 /**
- * Mock customer data for the Customers list, until a real customer service
- * exists.
+ * Customer data for the Customers list.
+ *
+ * `CUSTOMERS` is the live source the screen reads — empty for a new account so
+ * the first-run empty state shows. Swap to `SAMPLE_CUSTOMERS` to preview the
+ * populated list. Replace with API data later.
  */
 import type { Customer } from './types';
 
-export const MOCK_CUSTOMERS: Customer[] = [
+/** Live list. Empty until the owner adds customers (or the API is wired up). */
+export const CUSTOMERS: Customer[] = [];
+
+export const SAMPLE_CUSTOMERS: Customer[] = [
   { id: 'cust_1', name: 'Priya Sharma', location: 'Andheri West, Mumbai', lifetimeValue: 6400, jobCount: 4 },
   { id: 'cust_2', name: 'Ramesh Kumar', location: 'Bandra West, Mumbai', lifetimeValue: 18900, jobCount: 7 },
   { id: 'cust_3', name: 'Fatima Sheikh', location: 'Bandra West, Mumbai', lifetimeValue: 9200, jobCount: 3 },

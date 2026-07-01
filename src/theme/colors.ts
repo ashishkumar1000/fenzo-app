@@ -88,6 +88,9 @@ export const colors = {
   surfaceSunken: palette.gray100,
   surfaceInverse: palette.gray900,
 
+  // Scrim — modal / sheet backdrop overlay (gray900 @ 45% alpha).
+  scrim: 'rgba(17, 24, 39, 0.45)',
+
   // Text
   textStrong: palette.gray900,
   textBody: palette.gray700,

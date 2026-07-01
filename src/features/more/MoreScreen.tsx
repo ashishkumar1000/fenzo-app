@@ -5,22 +5,36 @@
  */
 import { Alert, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { Bell, ChevronRight, HardHat, LogOut, Settings } from 'lucide-react-native';
 import { Avatar, Card } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import { CURRENT_BUSINESS } from '../../constants/business';
 import { useAuth } from '../auth';
+import { useTechnicians } from '../technicians';
 import { MoreTile } from './components/MoreTile';
 
 export default function MoreScreen() {
   const { width } = useWindowDimensions();
   const tileSize = (width - spacing.s4 * 2 - spacing.s3) / 2;
   const { reset } = useAuth();
+  const { count, activeCount, offlineCount, clear: clearTechnicians } = useTechnicians();
+  const navigation = useNavigation();
+
+  const techSubtitle =
+    count === 0 ? 'Add your team' : `${activeCount} active · ${offlineCount} offline`;
 
   const handleLogOut = () => {
     Alert.alert('Log out', 'You will need to verify your number again to sign back in.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Log out', style: 'destructive', onPress: reset },
+      {
+        text: 'Log out',
+        style: 'destructive',
+        onPress: () => {
+          clearTechnicians();
+          reset();
+        },
+      },
     ]);
   };
 
@@ -37,8 +51,9 @@ export default function MoreScreen() {
             icon={<HardHat size={22} color={colors.status.progress.solid} strokeWidth={1.5} />}
             iconBg={colors.status.progress.bg}
             title="Technicians"
-            subtitle="4 active · 2 offline"
+            subtitle={techSubtitle}
             size={tileSize}
+            onPress={() => navigation.navigate('Technicians')}
           />
           <MoreTile
             icon={<Bell size={22} color={colors.status.done.solid} strokeWidth={1.5} />}

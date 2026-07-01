@@ -1,6 +1,7 @@
 /**
  * MoreTile — square stat tile used in the 2-up grid at the top of More
- * (Technicians, Notifications). Composes Card.
+ * (Technicians, Notifications). Composes Card. Pass `onPress` to make it
+ * tappable (the Card then gets press feedback).
  */
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -13,11 +14,16 @@ type Props = {
   title: string;
   subtitle: string;
   size: number;
+  onPress?: () => void;
 };
 
-export function MoreTile({ icon, iconBg, title, subtitle, size }: Props) {
+export function MoreTile({ icon, iconBg, title, subtitle, size, onPress }: Props) {
   return (
-    <Card padding="md" style={[styles.tile, { width: size, height: size }]}>
+    <Card
+      padding="md"
+      interactive={Boolean(onPress)}
+      onPress={onPress}
+      style={[styles.tile, { width: size, height: size }]}>
       <View style={[styles.iconBox, { backgroundColor: iconBg }]}>{icon}</View>
       <Text style={styles.title} numberOfLines={1}>
         {title}

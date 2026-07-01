@@ -1,9 +1,16 @@
 /**
- * Mock job data for the Jobs list, until `@services/jobService` exists.
+ * Job data for the Jobs list.
+ *
+ * `JOBS` is the live source the screen reads — empty for a new account so the
+ * first-run empty state shows. Swap it to `SAMPLE_JOBS` to preview the
+ * populated list during development. Replace with API data later.
  */
 import type { Job, JobFilter } from './types';
 
-export const MOCK_JOBS: Job[] = [
+/** Live list. Empty until the owner creates jobs (or the API is wired up). */
+export const JOBS: Job[] = [];
+
+export const SAMPLE_JOBS: Job[] = [
   {
     id: 'job_1',
     customerName: 'Priya Sharma',

@@ -31,3 +31,6 @@ export type { SelectProps } from './Select';
 
 export { Switch } from './Switch';
 export type { SwitchProps } from './Switch';
+
+export { EmptyState } from './EmptyState';
+export type { EmptyStateProps } from './EmptyState';

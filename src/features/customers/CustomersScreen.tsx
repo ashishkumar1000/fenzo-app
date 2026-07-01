@@ -1,25 +1,29 @@
 /**
- * CustomersScreen — searchable customer list with an "+ Add" action.
- * Mock data via `data.ts` until a real customer service exists.
+ * CustomersScreen — searchable customer list with an "+ Add" action. When the
+ * owner has no customers yet, the search bar is hidden and a first-run empty
+ * state is shown. Live data via `CUSTOMERS` in `data.ts` until a real customer
+ * service exists.
  */
 import { useMemo, useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
-import { Search, UserPlus } from 'lucide-react-native';
+import { Search, Users, UserPlus } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button } from '../../components/ui';
+import { Button, EmptyState } from '../../components/ui';
 import { colors, radius, spacing, touch, typography } from '../../theme';
 import { TextInput as RNTextInput } from 'react-native';
 import { CustomerRow } from './components/CustomerRow';
-import { MOCK_CUSTOMERS } from './data';
+import { CUSTOMERS } from './data';
 import type { Customer } from './types';
 
 export default function CustomersScreen() {
   const [query, setQuery] = useState('');
 
+  const hasCustomers = CUSTOMERS.length > 0;
+
   const customers = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return MOCK_CUSTOMERS;
-    return MOCK_CUSTOMERS.filter(
+    if (!q) return CUSTOMERS;
+    return CUSTOMERS.filter(
       c => c.name.toLowerCase().includes(q) || c.location.toLowerCase().includes(q),
     );
   }, [query]);
@@ -45,32 +49,45 @@ export default function CustomersScreen() {
         </Button>
       </View>
 
-      <View style={styles.searchWrap}>
-        <View style={styles.searchField}>
-          <Search size={18} color={colors.textMuted} strokeWidth={2} />
-          <RNTextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search customers…"
-            placeholderTextColor={colors.textMuted}
-            style={styles.searchInput}
-          />
-        </View>
-      </View>
+      {hasCustomers ? (
+        <>
+          <View style={styles.searchWrap}>
+            <View style={styles.searchField}>
+              <Search size={18} color={colors.textMuted} strokeWidth={2} />
+              <RNTextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search customers…"
+                placeholderTextColor={colors.textMuted}
+                style={styles.searchInput}
+              />
+            </View>
+          </View>
 
-      <FlatList
-        data={customers}
-        keyExtractor={item => item.id}
-        renderItem={({ item }) => (
-          <CustomerRow customer={item} onPress={handleOpenCustomer} />
-        )}
-        contentContainerStyle={styles.listContent}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>No customers match "{query}".</Text>
-        }
-        showsVerticalScrollIndicator={false}
-      />
+          <FlatList
+            data={customers}
+            keyExtractor={item => item.id}
+            renderItem={({ item }) => (
+              <CustomerRow customer={item} onPress={handleOpenCustomer} />
+            )}
+            contentContainerStyle={styles.listContent}
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
+            ListEmptyComponent={
+              <Text style={styles.emptyText}>No customers match "{query}".</Text>
+            }
+            showsVerticalScrollIndicator={false}
+          />
+        </>
+      ) : (
+        <EmptyState
+          icon={<Users size={36} color={colors.primary} strokeWidth={1.5} />}
+          title="No customers yet"
+          description="Customers are added automatically when you create a job, or you can add them manually."
+          ctaLabel="Add first customer"
+          ctaIcon={<UserPlus size={20} color={colors.onPrimary} strokeWidth={2.5} />}
+          onPressCta={handleAdd}
+        />
+      )}
     </SafeAreaView>
   );
 }
