@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../../../components/ui';
-import { colors, spacing, typography } from '../../../theme';
+import { colors, radius, spacing, typography } from '../../../theme';
 import { AuthScaffold } from '../components/AuthScaffold';
 import { OtpInput } from '../components/OtpInput';
 import { DIAL_CODE, OTP_LENGTH, RESEND_SECONDS } from '../constants';
@@ -20,9 +20,16 @@ type Props = {
   onChangeNumber: () => void;
   verifying?: boolean;
   error?: string;
+  /**
+   * DEV ONLY — the real OTP, when the backend includes it (no SMS delivery
+   * yet). Rendered only when `__DEV__` is true, so it can never show up in
+   * a production build regardless of what a response contains.
+   */
+  devOtp?: string;
 };
 
-const formatPhone = (digits: string) =>
+const formatPhone
+ = (digits: string) =>
   `${DIAL_CODE} ${digits.replace(/(\d{5})(\d{5})/, '$1 $2')}`;
 
 const mmss = (total: number) => {
@@ -40,8 +47,10 @@ export function OtpScreen({
   onChangeNumber,
   verifying = false,
   error,
+  devOtp,
 }: Props) {
   const [seconds, setSeconds] = useState(RESEND_SECONDS);
+
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const startTimer = useCallback(() => {
@@ -91,6 +100,12 @@ export function OtpScreen({
           onFilled={onVerify}
         />
       </View>
+
+      {__DEV__ && devOtp ? (
+        <Pressable onPress={() => onChangeCode(devOtp)} hitSlop={8} style={styles.devBanner}>
+          <Text style={styles.devBannerText}>DEV — OTP is {devOtp} (tap to fill)</Text>
+        </Pressable>
+      ) : null}
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -148,6 +163,21 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.danger,
     marginTop: spacing.s3,
+  },
+  devBanner: {
+    marginTop: spacing.s3,
+    paddingVertical: spacing.s2,
+    paddingHorizontal: spacing.s3,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceCard,
+    borderWidth: 1,
+    borderColor: colors.borderDefault,
+    alignSelf: 'flex-start',
+  },
+  devBannerText: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontWeight: '600',
   },
   metaRow: {
     flexDirection: 'row',

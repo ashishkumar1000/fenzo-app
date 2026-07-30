@@ -22,8 +22,9 @@ import { Platform } from 'react-native';
 const DEV_API_HOST = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
 
 export const API_BASE_URL = __DEV__
-  ? `http://${DEV_API_HOST}:3000/api`
-  : 'https://api.fenzit.com/api';
+  ? `http://${DEV_API_HOST}:3000/api/v1`
+  : 'https://api.fenzit.com/api/v1';
+
 
 /** Default request timeout, in milliseconds. */
 export const API_TIMEOUT = 15000;

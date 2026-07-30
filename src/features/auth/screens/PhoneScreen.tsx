@@ -14,9 +14,22 @@ type Props = {
   onChangePhone: (digits: string) => void;
   onContinue: () => void;
   sending?: boolean;
+  /**
+   * Error from the `sendOtp` API call (validation or rate-limit), distinct
+   * from the local format validation below — kept separate so a fresh server
+   * error isn't wiped out by the local `setError('')` on every keystroke,
+   * and vice versa.
+   */
+  serverError?: string;
 };
 
-export function PhoneScreen({ value, onChangePhone, onContinue, sending = false }: Props) {
+export function PhoneScreen({
+  value,
+  onChangePhone,
+  onContinue,
+  sending = false,
+  serverError = '',
+}: Props) {
   const [error, setError] = useState('');
 
   const handleChange = (text: string) => {
@@ -48,11 +61,12 @@ export function PhoneScreen({ value, onChangePhone, onContinue, sending = false 
           placeholder="98765 43210"
           keyboardType="phone-pad"
           maxLength={PHONE_LENGTH}
-          error={error}
+          error={error || serverError}
           leadingIcon={<Text style={styles.dial}>{DIAL_CODE}</Text>}
           style={{ marginBottom: spacing.s20 }}
         />
       </View>
+
 
       <Button
         variant="primary"

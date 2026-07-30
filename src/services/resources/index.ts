@@ -11,3 +11,6 @@
  * top-level `@services` barrel, which re-exports everything from here.
  */
 export { technicianService } from './technicians';
+export { authApi } from './authApi';
+export type { SendOtpRequest, SendOtpResponse } from './authApi';
+

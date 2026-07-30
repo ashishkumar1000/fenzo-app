@@ -25,7 +25,7 @@ export interface ApiError {
   status: number;
   /**
    * Machine-readable bucket for programmatic handling, e.g. checking
-   * `if (err.code === 'UNAUTHORIZED')`. Prefers the backend's own `code`
+   * `if (err.code === 'UNAUTHORIZED')`. Prefers the backend's own `error_code`
    * field when present, otherwise falls back to a status-based default
    * (see `defaultCodeForStatus`).
    */
@@ -85,10 +85,11 @@ export function toApiError(error: AxiosError, onUnauthorized?: () => void): ApiE
 
 
   const { status, data } = error.response;
-  // Backends are expected to send `{ code, message }` on error responses.
-  // Both are optional here because we can't guarantee every endpoint (or
-  // every failure mode, e.g. a 502 from a proxy) follows that contract.
-  const payload = data as { code?: string; message?: string } | undefined;
+  // The Fenzit backend's error envelope is `{ statusCode, error_code, message }`
+  // (see auth API docs) — note the field is `error_code`, not `code`. Both are
+  // optional here because we can't guarantee every endpoint (or every failure
+  // mode, e.g. a 502 from a proxy) follows that contract.
+  const payload = data as { error_code?: string; message?: string } | undefined;
 
   if (status === 401) {
     onUnauthorized?.();
@@ -96,15 +97,16 @@ export function toApiError(error: AxiosError, onUnauthorized?: () => void): ApiE
 
   return {
     status,
-    code: payload?.code ?? defaultCodeForStatus(status),
+    code: payload?.error_code ?? defaultCodeForStatus(status),
     message: payload?.message ?? defaultMessageForStatus(status),
     details: data,
   };
 }
 
-/** Machine-readable fallback when the backend response has no `code` field. */
 
+/** Machine-readable fallback when the backend response has no `error_code` field. */
 function defaultCodeForStatus(status: number): string {
+
   if (status === 401) return 'UNAUTHORIZED';
   if (status === 403) return 'FORBIDDEN';
   if (status === 404) return 'NOT_FOUND';
