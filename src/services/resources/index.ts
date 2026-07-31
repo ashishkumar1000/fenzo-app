@@ -11,6 +11,8 @@
  * top-level `@services` barrel, which re-exports everything from here.
  */
 export { technicianService } from './technicians';
+export { skillService } from './skills';
+export type { Skill, NewSkillInput } from './skills';
 export { authApi } from './authApi';
 export type {
   SendOtpRequest,

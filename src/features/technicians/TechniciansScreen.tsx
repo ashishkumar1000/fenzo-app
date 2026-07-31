@@ -23,9 +23,11 @@ export default function TechniciansScreen({ navigation }: Props) {
   const { technicians, hasTechnicians, add } = useTechnicians();
   const [sheetVisible, setSheetVisible] = useState(false);
 
-  const handleSubmit = (input: NewTechnicianInput) => {
-    add(input);
-    setSheetVisible(false);
+  const handleSubmit = async (input: NewTechnicianInput) => {
+    // Deliberately not caught here: rejects with `ApiError`, and
+    // AddTechnicianSheet needs that rejection to keep itself open and show
+    // the error instead of closing on a failed invite.
+    await add(input);
   };
 
   return (

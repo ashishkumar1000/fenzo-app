@@ -6,13 +6,16 @@
  * tile and the Technicians screen all re-render together the moment a
  * technician is added. Persisted to MMKV (synchronous → no loading flash).
  *
- * INTEGRATION POINT (backend): the three mutators below — `add`, `remove`,
- * `refresh` — are the only places that touch data. When the real API is ready,
- * replace their bodies with API calls (e.g. POST /technicians) and hydrate the
- * store from the response; every screen that consumes this hook stays unchanged.
+ * `add` is wired to the real backend (`POST /auth/invite` via
+ * `technicianService.invite`) and rejects with `ApiError` on failure —
+ * callers must catch it. `remove` is still local-only (no DELETE
+ * /technicians/:id documented yet); replace its body the same way once
+ * that endpoint exists.
  */
 import { useCallback, useSyncExternalStore } from 'react';
 import { storage } from '../../services/storage';
+import { technicianService } from '../../services';
+import { DIAL_CODE } from './constants';
 import type { NewTechnicianInput, Technician } from './types';
 
 const KEY = 'fenzit.technicians';
@@ -51,21 +54,35 @@ function getSnapshot() {
   return technicians;
 }
 
-function makeId() {
-  return `tech_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
 export function useTechnicians() {
   const list = useSyncExternalStore(subscribe, getSnapshot);
 
-  const add = useCallback((input: NewTechnicianInput): Technician => {
-    // INTEGRATION POINT: replace with `await technicianService.invite(input)`.
+  const add = useCallback(async (input: NewTechnicianInput): Promise<Technician> => {
+    // The backend only ever returns `{ invite_id }` — never the full
+    // record — so the local Technician is built from what we already have
+    // (name, phone, skillIds) plus that id. Rejects with `ApiError` on
+    // failure; the caller (AddTechnicianSheet) is responsible for catching
+    // it and showing the message.
+    //
+    // ⚠️ `invite_id` identifies the INVITE, not necessarily the eventual
+    // technician/user record — the API reference gives no guarantee they're
+    // the same value. Namespaced with `invite_` so it can never collide
+    // with a real server-issued technician id if a future `GET /technicians`
+    // (or similar) is used to hydrate this store via `refresh()` — that
+    // hydration should replace these entries outright rather than merge.
+    const { inviteId } = await technicianService.invite({
+      countryCode: DIAL_CODE,
+      phoneNumber: input.phone.trim(),
+      name: input.name.trim(),
+      skillIds: input.skillIds,
+    });
     const technician: Technician = {
-      id: makeId(),
+      id: `invite_${inviteId}`,
       name: input.name.trim(),
       phone: input.phone.trim(),
       status: 'offline', // invited; flips to 'active' once they install the app
       invitedAt: new Date().toISOString(),
+      skillIds: input.skillIds,
     };
     setTechnicians([technician, ...technicians]);
     return technician;

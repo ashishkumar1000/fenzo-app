@@ -17,6 +17,7 @@ export const SAMPLE_TECHNICIANS: Technician[] = [
     phone: '+91 98765 43210',
     status: 'active',
     invitedAt: '2025-01-10T09:00:00.000Z',
+    skillIds: [],
   },
   {
     id: 'tech_sample_2',
@@ -24,5 +25,6 @@ export const SAMPLE_TECHNICIANS: Technician[] = [
     phone: '+91 91234 56780',
     status: 'offline',
     invitedAt: '2025-01-12T09:00:00.000Z',
+    skillIds: [],
   },
 ];
