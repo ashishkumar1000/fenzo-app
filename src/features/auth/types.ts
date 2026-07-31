@@ -12,13 +12,17 @@ export type AuthStep = 'phone' | 'otp' | 'profile';
 export type BusinessProfile = {
   businessName: string;
   ownerName: string;
-  businessType: string;
+  /** One or more business types — maps 1:1 to `serviceCategories` on company setup. */
+  businessTypes: string[];
   city: string;
+  /** 2-letter ISO 3166-2: IN state code, e.g. "KA" — required by company setup. */
+  stateCode: string;
   /** GSTIN — optional; only needed for GST invoices. */
   gstNumber: string;
 };
 
 /** What the flow hands back once setup is complete. */
+
 export type AuthResult = {
   phone: string; // E.164-ish, e.g. "+919876543210"
   profile: BusinessProfile;

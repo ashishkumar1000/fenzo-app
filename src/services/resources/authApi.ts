@@ -13,8 +13,7 @@
  * response interceptor) — the same contract as `ApiService`, callers never see
  * a raw axios error.
  *
- * Currently implemented: `sendOtp` only. `verifyOtp` and `setupCompany` will
- * be added the same way once those steps are wired up.
+ * Currently implemented: `sendOtp`, `verifyOtp`, and `setupCompany`.
  */
 import { apiClient } from '../api/apiClient';
 
@@ -47,6 +46,96 @@ async function sendOtp(input: SendOtpRequest): Promise<SendOtpResponse> {
   return res.data;
 }
 
+// ── Verify OTP ───────────────────────────────────────────────────────────────
+
+export interface VerifyOtpRequest {
+  /** From `sendOtp`'s response — not the phone number. */
+  otpSessionId: string;
+  /** Exactly 6 digits. */
+  otpCode: string;
+}
+
+export type UserRole = 'owner' | 'technician';
+
+export interface VerifiedUser {
+  userId: string;
+  /**
+   * `null` if this owner hasn't set up a company yet — route to company
+   * setup (step 3) next. Already set for returning owners or for any
+   * technician (always assigned a tenant by their owner at invite time).
+   */
+  tenantId: string | null;
+  role: UserRole;
+  /** `null` until set — owners currently have no name field; technicians get one at invite time. */
+  name: string | null;
+}
+
+export interface VerifyOtpResponse {
+  /** JWT — persist via `setAuthToken`; send as `Authorization: Bearer <token>` on subsequent requests. */
+  token: string;
+  user: VerifiedUser;
+}
+
+/** `POST /auth/otp/verify` — no auth required. */
+async function verifyOtp(input: VerifyOtpRequest): Promise<VerifyOtpResponse> {
+  const res = await apiClient.post<VerifyOtpResponse>('/auth/otp/verify', input);
+  return res.data;
+}
+
+// ── Company setup ────────────────────────────────────────────────────────────
+
+export interface SetupCompanyRequest {
+  companyName: string;
+  /** 2-letter uppercase ISO 3166-2:IN code, e.g. `KA`. */
+  stateCode: string;
+  /** Standard 15-char GSTIN, if provided. */
+  gstin?: string;
+  address?: string;
+  /**
+   * Seeds the company's initial skill list — only takes effect on the very
+   * first successful call (when the tenant is created). Ignored by the
+   * backend on subsequent calls; edit skills via the Skills API after that.
+   */
+  serviceCategories?: string[];
+  /** UPI VPA for payments, e.g. `name@bank`. */
+  upiVpa?: string;
+}
+
+export interface Tenant {
+  id: string;
+  ownerId: string;
+  companyName: string;
+  gstin: string | null;
+  address: string | null;
+  stateCode: string;
+  serviceCategories: string[];
+  upiVpa: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SetupCompanyResponse {
+  /**
+   * ⚠️ CRITICAL: a NEW token, replacing the one from `verifyOtp` — it now
+   * has `tenantId` populated. The old token will keep failing tenant-scoped
+   * endpoints. Always persist this one via `setAuthToken` immediately.
+   */
+  token: string;
+  tenant: Tenant;
+}
+
+/**
+ * `POST /auth/company` — requires the token from `verifyOtp`. Owner role
+ * only (technicians get 403). Idempotent: safe to call again later to
+ * update company details.
+ */
+async function setupCompany(input: SetupCompanyRequest): Promise<SetupCompanyResponse> {
+  const res = await apiClient.post<SetupCompanyResponse>('/auth/company', input);
+  return res.data;
+}
+
 export const authApi = {
   sendOtp,
+  verifyOtp,
+  setupCompany,
 };

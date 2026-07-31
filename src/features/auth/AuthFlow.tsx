@@ -1,20 +1,19 @@
 /**
  * AuthFlow — orchestrates first-time account setup: phone → otp → profile.
  *
- * Owns the shared state (number, code, business profile) and the current step,
- * and renders the matching screen. Step 1 (send OTP) is wired to the real
- * backend via `authApi.sendOtp`. Steps 2 (verify) and 3 (company setup) are
- * still stubbed behind TODOs — wire them the same way once those are ready.
- * On success it calls `onComplete`, and the app gate (useAuth) flips to
- * the main app.
+ * Owns the shared state (number, code, business profile) and the current step
+ * and renders the matching screen. All three steps — send OTP, verify OTP,
+ * and company setup — are wired to the real backend via `authApi`. On
+ * success, it calls `onComplete`, and the app gate (useAuth) flips to the
+ * main app.
  */
 import { useCallback, useState } from 'react';
-import { BUSINESS_TYPES, DIAL_CODE, OTP_LENGTH } from './constants';
+import { DIAL_CODE, OTP_LENGTH, SERVICE_CATEGORY_BY_BUSINESS_TYPE } from './constants';
 import type { AuthResult, AuthStep, BusinessProfile } from './types';
 import { PhoneScreen } from './screens/PhoneScreen';
 import { OtpScreen } from './screens/OtpScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
-import { authApi } from '../../services';
+import { authApi, setAuthToken } from '../../services';
 import type { ApiError } from '../../services';
 
 type Props = {
@@ -24,13 +23,15 @@ type Props = {
 const EMPTY_PROFILE: BusinessProfile = {
   businessName: '',
   ownerName: '',
-  businessType: BUSINESS_TYPES[0],
+  businessTypes: [],
   city: '',
+  stateCode: '',
   gstNumber: '',
 };
 
 /** Turns a failed `sendOtp` call into copy the phone/otp screens can show directly. */
 function sendOtpErrorMessage(err: ApiError): string {
+
   if (err.code === 'VALIDATION_ERROR') {
     return 'That doesn\u2019t look like a valid mobile number.';
   }
@@ -40,9 +41,29 @@ function sendOtpErrorMessage(err: ApiError): string {
   return err.message;
 }
 
+/** Turns a failed `setupCompany` call into a copy the profile screen can show directly. */
+function setupCompanyErrorMessage(err: ApiError): string {
+  if (err.code === 'VALIDATION_ERROR') {
+    return 'Check your GSTIN and state — one of them looks invalid.';
+  }
+  if (err.status === 403) {
+    return "This account can't set up a company. Contact your business owner.";
+  }
+  return err.message;
+}
+
+/** Maps `businessTypes` labels to their service-category codes, per `SERVICE_CATEGORY_BY_BUSINESS_TYPE` — deduped in case two labels ever map to the same code. */
+function serviceCategoriesFor(businessTypes: string[]): string[] {
+  const codes = businessTypes.map(
+    t => SERVICE_CATEGORY_BY_BUSINESS_TYPE[t as keyof typeof SERVICE_CATEGORY_BY_BUSINESS_TYPE] ?? 'other',
+  );
+  return [...new Set(codes)];
+}
+
 export default function AuthFlow({ onComplete }: Props) {
   const [step, setStep] = useState<AuthStep>('phone');
   const [phone, setPhone] = useState('');
+
   const [code, setCode] = useState('');
   const [profile, setProfile] = useState<BusinessProfile>(EMPTY_PROFILE);
 
@@ -62,6 +83,7 @@ export default function AuthFlow({ onComplete }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [otpError, setOtpError] = useState('');
   const [phoneError, setPhoneError] = useState('');
+  const [profileError, setProfileError] = useState('');
 
   const changePhone = useCallback((digits: string) => {
     setPhone(digits);
@@ -74,7 +96,6 @@ export default function AuthFlow({ onComplete }: Props) {
     setOtpSessionId(res.otp_session_id);
     setDevOtp(__DEV__ && res.otp ? res.otp : '');
   }, [phone]);
-
 
   const sendOtp = useCallback(async () => {
     setSending(true);
@@ -108,34 +129,79 @@ export default function AuthFlow({ onComplete }: Props) {
     setVerifying(true);
     setOtpError('');
     try {
-      // TODO(authApi): const res = await authApi.verifyOtp({ otpSessionId, otpCode: code })
-      // On success: persist res.token via setAuthToken, then branch on
-      // res.user.tenantId — null means route to 'profile' (company setup),
-      // otherwise this owner/technician already has a company; call
-      // onComplete directly instead of showing the profile step.
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 500)); // simulate network
-      const ok = true; // mock: accept any complete 6-digit code for now
-      if (ok) {
+      const res = await authApi.verifyOtp({ otpSessionId, otpCode: code });
+      setAuthToken(res.token);
+
+      if (res.user.tenantId === null) {
+        // New owner, first time through — company setup (step 3) is next.
         setStep('profile');
       } else {
+        // Already has a tenant (returning owner, or a technician assigned
+        // one at invite time) — nothing left to set up.
+        onComplete({ phone: `${DIAL_CODE}${phone}`, profile });
+      }
+    } catch (err) {
+      const apiError = err as ApiError;
+
+      if (apiError.code === 'OTP_EXPIRED' || apiError.code === 'OTP_SESSION_LOCKED') {
+        // Per the backend docs, the only recovery here is requesting a
+        // fresh OTP — send the person back to step 1 rather than leaving
+        // them stuck retrying a code that can never succeed.
+        setCode('');
+        setStep('phone');
+        setDevOtp('');
+        setPhoneError(
+          apiError.code === 'OTP_SESSION_LOCKED'
+            ? 'Too many incorrect attempts. Please request a new code.'
+            : 'That code expired. Please request a new one.',
+        );
+        return;
+      }
+
+      if (apiError.code === 'INVALID_OTP') {
         setOtpError('That code is incorrect. Try again.');
         setCode('');
+        return;
       }
+
+      // VALIDATION_ERROR or anything else unexpected.
+      setOtpError(apiError.message);
+      setCode('');
     } finally {
       setVerifying(false);
     }
-  }, [code, verifying]);
+  }, [code, otpSessionId, phone, profile, onComplete, verifying]);
 
-  // --- Step 3: finish setup --------------------------------------------
+  // --- Step 3: finish setup ----------------------------------------------
   const finish = useCallback(async () => {
+    // Belt-and-braces: the profile screen already requires at least one
+    // business type before calling this, but guard here too in case that
+    // validation is ever bypassed or this function is called from
+    // somewhere else in the future.
+    if (profile.businessTypes.length === 0) {
+      setProfileError('Select at least one business type.');
+      return;
+    }
+
     setSubmitting(true);
+    setProfileError('');
     try {
-      // TODO(authApi): await authApi.setupCompany({ companyName, stateCode, ... })
-      // On success: persist the NEW token (replaces the step-2 token) via
-      // setAuthToken before calling onComplete — see docs/auth doc's
-      // "Token behavior" section for why the old token must be discarded.
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 500)); // simulate network
+      const res = await authApi.setupCompany({
+
+
+        companyName: profile.businessName,
+        stateCode: profile.stateCode,
+        gstin: profile.gstNumber || undefined,
+        address: profile.city || undefined,
+        serviceCategories: serviceCategoriesFor(profile.businessTypes),
+      });
+      // CRITICAL: this token replaces the one from verifyOtp — it now has
+      // tenantId populated. The old one would keep failing tenant-scoped
+      // endpoints. See the doc's "Token behavior" section.
+      setAuthToken(res.token);
       onComplete({ phone: `${DIAL_CODE}${phone}`, profile });
+    } catch (err) {
+      setProfileError(setupCompanyErrorMessage(err as ApiError));
     } finally {
       setSubmitting(false);
     }
@@ -174,14 +240,13 @@ export default function AuthFlow({ onComplete }: Props) {
     );
   }
 
-
   return (
     <ProfileScreen
       profile={profile}
       onChange={patchProfile}
       onFinish={finish}
       submitting={submitting}
+      serverError={profileError}
     />
   );
 }
-

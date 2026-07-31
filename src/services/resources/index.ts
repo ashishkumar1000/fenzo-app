@@ -12,5 +12,15 @@
  */
 export { technicianService } from './technicians';
 export { authApi } from './authApi';
-export type { SendOtpRequest, SendOtpResponse } from './authApi';
+export type {
+  SendOtpRequest,
+  SendOtpResponse,
+  VerifyOtpRequest,
+  VerifyOtpResponse,
+  VerifiedUser,
+  UserRole,
+  SetupCompanyRequest,
+  SetupCompanyResponse,
+  Tenant,
+} from './authApi';
 

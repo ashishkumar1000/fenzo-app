@@ -2,7 +2,7 @@
  * Fenzit Design System — UI components for React Native.
  *
  * Usage:
- *   import { Button, Badge, Card, Input, IconButton, Avatar, Select, Switch }
+ *   import { Button, Badge, Card, Input, IconButton, Avatar, Select, MultiSelect, Switch }
  *     from '../components/ui';
  *
  * Every component consumes design tokens from src/theme. Never hard-code
@@ -28,6 +28,9 @@ export type { InputProps } from './Input';
 
 export { Select } from './Select';
 export type { SelectProps } from './Select';
+
+export { MultiSelect } from './MultiSelect';
+export type { MultiSelectProps } from './MultiSelect';
 
 export { Switch } from './Switch';
 export type { SwitchProps } from './Switch';
