@@ -31,6 +31,11 @@
  * interactive: adds press feedback (scale 0.99) and makes the card tappable.
  * elevated:    soft shadow on white (default true).
  * style:       extend container styles (backgroundColor, border, etc.).
+ *
+ * Accessibility props (`accessibilityLabel`, `accessibilityState`,
+ * `accessibilityHint`) pass through to the underlying View or Pressable, so a
+ * caller can mark a card as disabled/selected for screen readers — visual
+ * greying alone conveys nothing to them.
  */
 import { useRef, type ReactNode } from 'react';
 import {
@@ -38,6 +43,7 @@ import {
   Pressable,
   StyleSheet,
   View,
+  type AccessibilityState,
   type PressableProps,
   type StyleProp,
   type ViewStyle,
@@ -56,6 +62,10 @@ export type CardProps = {
   elevated?: boolean;
   onPress?: PressableProps['onPress'];
   style?: StyleProp<ViewStyle>;
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
+  /** e.g. `{ disabled: true }` for a card representing a not-yet-available feature. */
+  accessibilityState?: AccessibilityState;
 };
 
 const padMap: Record<Padding, number> = {
@@ -73,6 +83,9 @@ export function Card({
   elevated = true,
   onPress,
   style,
+  accessibilityLabel,
+  accessibilityHint,
+  accessibilityState,
 }: CardProps) {
   // `children` takes precedence; `view` is the explicit-holder alias.
   const content = children ?? view;
@@ -94,7 +107,15 @@ export function Card({
   ];
 
   if (!interactive) {
-    return <View style={containerStyle}>{content}</View>;
+    return (
+      <View
+        style={containerStyle}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityHint={accessibilityHint}
+        accessibilityState={accessibilityState}>
+        {content}
+      </View>
+    );
   }
 
   return (
@@ -104,6 +125,9 @@ export function Card({
         onPressIn={() => animateTo(0.99)}
         onPressOut={() => animateTo(1)}
         android_ripple={{ color: 'transparent' }}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityHint={accessibilityHint}
+        accessibilityState={accessibilityState}
         style={containerStyle}>
         {content}
       </Pressable>
