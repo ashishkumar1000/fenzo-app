@@ -117,7 +117,7 @@ export default function NewJobScreen({ navigation }: Props) {
    * can legitimately be `''`.
    *
    * ⚠️ Sending `''` for a required string will very likely fail validation. It's
-   * the agreed interim behaviour on the basis that customer addresses won't be
+   * the agreed interim behavior on the basis that customer addresses won't be
    * null in practice — but if job creation starts 422-ing, this is why. The fix
    * is an editable service-location field on the form.
    */
@@ -134,7 +134,7 @@ export default function NewJobScreen({ navigation }: Props) {
    * and then an earlier time yields a slot in the past with no complaint from
    * the control. Checked here against the combined value.
    *
-   * Recomputed each render rather than memoised: the comparison moves with the
+   * Recomputed each render rather than memorized: the comparison moves with the
    * clock, and a stale `true` would wrongly block a legitimate submit.
    */
   const isPastSlot = draft.scheduledAt.getTime() <= Date.now();
@@ -164,7 +164,7 @@ export default function NewJobScreen({ navigation }: Props) {
 
   /**
    * The skill match is advisory, so a technician with no matching skill is
-   * still offerable — but only once we know filtering found nobody. Otherwise
+   * still offerable — but only once we know filtering found nobody. Otherwise,
    * the owner would see the full roster with no hint that none of them fit.
    */
   const noSkillMatch =
@@ -257,7 +257,7 @@ export default function NewJobScreen({ navigation }: Props) {
    * placeholder when the value matches no option — a job creatable with an
    * invisible customer and an empty service location.
    *
-   * The refresh still runs afterwards to pick up anything server-side, but it's
+   * The refresh still runs afterward to pick up anything server-side, but it's
    * now belt-and-braces rather than load-bearing.
    *
    * Not caught here: `AddCustomerSheet` needs the rejection to stay open and
