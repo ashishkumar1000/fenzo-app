@@ -5,7 +5,7 @@
  * service exists.
  */
 import { useMemo, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, StyleSheet, Text, View } from 'react-native';
 import { Search, Users, UserPlus } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, EmptyState } from '../../components/ui';
@@ -29,7 +29,10 @@ export default function CustomersScreen() {
   }, [query]);
 
   const handleAdd = () => {
+    // Now the only entry point on this screen, so say something rather than
+    // swallowing the tap — same placeholder as Jobs' "New job".
     // TODO: navigate to an "Add customer" form once it exists.
+    Alert.alert('Coming soon', 'Adding customers will be available in a later update.');
   };
 
   const handleOpenCustomer = (_customer: Customer) => {
@@ -43,6 +46,7 @@ export default function CustomersScreen() {
         <Button
           variant="primary"
           size="md"
+          shape="pill"
           onPress={handleAdd}
           leadingIcon={<UserPlus size={18} color={colors.onPrimary} strokeWidth={2.5} />}>
           Add
@@ -79,13 +83,12 @@ export default function CustomersScreen() {
           />
         </>
       ) : (
+        // No CTA in the centre — the "Add" button in the header is the single
+        // entry point, so this stays informational.
         <EmptyState
           icon={<Users size={36} color={colors.primary} strokeWidth={1.5} />}
           title="No customers yet"
           description="Customers are added automatically when you create a job, or you can add them manually."
-          ctaLabel="Add first customer"
-          ctaIcon={<UserPlus size={20} color={colors.onPrimary} strokeWidth={2.5} />}
-          onPressCta={handleAdd}
         />
       )}
     </SafeAreaView>
