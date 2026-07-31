@@ -27,6 +27,7 @@ export type TechnicianTabParamList = {
 export type RootStackParamList = {
   MainTabs: undefined;
   Technicians: undefined;
+  NewJob: undefined;
 };
 
 declare global {

@@ -1,6 +1,7 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import MainTabs from './MainTabs';
 import { TechniciansScreen } from '../features/technicians';
+import { NewJobScreen } from '../features/newJob';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -22,6 +23,11 @@ export default function RootNavigator() {
       <Stack.Screen
         name="Technicians"
         component={TechniciansScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="NewJob"
+        component={NewJobScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

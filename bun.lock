@@ -5,6 +5,7 @@
     "": {
       "name": "FenzitApp",
       "dependencies": {
+        "@react-native-community/datetimepicker": "^9.1.0",
         "@react-navigation/bottom-tabs": "^7.4.0",
         "@react-navigation/native": "^7.3.4",
         "@react-navigation/native-stack": "^7.17.6",
@@ -458,6 +459,8 @@
     "@react-native-community/cli-tools": ["@react-native-community/cli-tools@20.1.0", "https://packagerepo.orb.alkamitech.com/npm/npm.third-party/%40react-native-community/cli-tools/-/cli-tools-20.1.0.tgz", { "dependencies": { "@vscode/sudo-prompt": "^9.0.0", "appdirsjs": "^1.2.4", "execa": "^5.0.0", "find-up": "^5.0.0", "launch-editor": "^2.9.1", "mime": "^2.4.1", "ora": "^5.4.1", "picocolors": "^1.1.1", "prompts": "^2.4.2", "semver": "^7.5.2" } }, "sha512-/YmzHGOkY6Bgrv4OaA1L8rFqsBlQd1EB2/ipAoKPiieV0EcB5PUamUSuNeFU3sBZZTYQCUENwX4wgOHgFUlDnQ=="],
 
     "@react-native-community/cli-types": ["@react-native-community/cli-types@20.1.0", "https://packagerepo.orb.alkamitech.com/npm/npm.third-party/%40react-native-community/cli-types/-/cli-types-20.1.0.tgz", { "dependencies": { "joi": "^17.2.1" } }, "sha512-D0kDspcwgbVXyNjwicT7Bb1JgXjijTw1JJd+qxyF/a9+sHv7TU4IchV+gN38QegeXqVyM4Ym7YZIvXMFBmyJqA=="],
+
+    "@react-native-community/datetimepicker": ["@react-native-community/datetimepicker@9.1.0", "https://packagerepo.orb.alkamitech.com/npm/npm.third-party/%40react-native-community/datetimepicker/-/datetimepicker-9.1.0.tgz", { "dependencies": { "invariant": "^2.2.4" }, "peerDependencies": { "expo": ">=52.0.0", "react": "*", "react-native": "*", "react-native-windows": "*" }, "optionalPeers": ["expo", "react-native-windows"] }, "sha512-eadbnk+I2vxvW30iTAsm/qlCnMMAadkifIMYNEB2lzhxN/SvlKc7S2V4k5DyrwjdCbqdcMk3t9K6fnUMcAV34w=="],
 
     "@react-native/assets-registry": ["@react-native/assets-registry@0.86.0", "https://packagerepo.orb.alkamitech.com/npm/npm.third-party/%40react-native/assets-registry/-/assets-registry-0.86.0.tgz", {}, "sha512-nIaXbm2jX1OTYp0qbviJ3O6KZivoE8z3BnhUQ2LsqfZSWRoOK/n1qsiAr6oALiNKWnXY3j2KPwtYORnZzp8xew=="],
 

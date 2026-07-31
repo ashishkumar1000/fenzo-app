@@ -41,6 +41,9 @@ export interface HomeHeaderProps {
   technicianCount: number;
   /** From the profile's `jobStatusCounts`. */
   jobCounts: JobStatusCounts;
+  /** Opens the "New job" flow. Optional so the header stays renderable in
+   * isolation (previews, tests) without a navigator in scope. */
+  onNewJob?: () => void;
 }
 
 export default function HomeHeader({
@@ -48,6 +51,7 @@ export default function HomeHeader({
   businessName,
   technicianCount,
   jobCounts,
+  onNewJob,
 }: HomeHeaderProps) {
   // Card side = (screen width - horizontal gutters - inter-card gap) / 2
   // Recalculated on every render so it stays correct on rotation / split-screen.
@@ -121,7 +125,7 @@ export default function HomeHeader({
             size="lg"
             fullWidth={false}
             style={styles.newJobButton}
-            onPress={() => {}}
+            onPress={onNewJob}
           >
             <View style={styles.buttonContent}>
               <Plus color={colors.surfaceCard} size={20} strokeWidth={2.5} />

@@ -1,6 +1,6 @@
 /**
  * JobsScreen — full job list with status filter chips (All / Scheduled /
- * In Progress / Done) and a "+ New job" action.
+ * In Progress / Done) and a "+ New job" action that pushes the NewJob route.
  *
  * The filter row is always visible, even with no jobs at all, so the four
  * sections are discoverable from the first launch. Any section with nothing
@@ -10,7 +10,7 @@
  * Live data via `JOBS` in `data.ts` until `@services/jobService` exists.
  */
 import { useMemo, useState } from 'react';
-import { Alert, FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 import {
   CalendarClock,
   CircleCheck,
@@ -21,8 +21,12 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import type { CompositeScreenProps } from '@react-navigation/native';
+import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button, EmptyState } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
+import type { MainTabParamList, RootStackParamList } from '../../navigation/types';
 import { JobCard } from './components/JobCard';
 import { StatusFilterBar } from './components/StatusFilterBar';
 import { JOBS } from './data';
@@ -62,7 +66,16 @@ const EMPTY_BY_FILTER: Record<JobFilter, { icon: LucideIcon; description: string
   },
 };
 
-export default function JobsScreen() {
+/**
+ * Jobs is a tab screen, but "New job" is a full-screen route on the root
+ * stack — hence the composite props rather than plain tab props.
+ */
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<MainTabParamList, 'Jobs'>,
+  NativeStackScreenProps<RootStackParamList>
+>;
+
+export default function JobsScreen({ navigation }: Props) {
   const [filter, setFilter] = useState<JobFilter>('all');
 
   // `JOBS` is a module constant today, so `filter` is the only dependency.
@@ -77,10 +90,7 @@ export default function JobsScreen() {
   const { icon: EmptyIcon, description: emptyDescription } = EMPTY_BY_FILTER[filter];
 
   const handleNewJob = () => {
-    // Until the create-job flow exists, say so rather than swallowing the tap:
-    // this is the only entry point on the screen.
-    // TODO(jobService): open the "New job" sheet instead (Phase 2).
-    Alert.alert('Coming soon', 'Creating jobs will be available in a later update.');
+    navigation.navigate('NewJob');
   };
 
   const handleOpenJob = (_job: Job) => {

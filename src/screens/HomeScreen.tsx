@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -42,11 +41,8 @@ export default function HomeScreen({ navigation }: Props) {
   }, [refresh]);
 
   const handleNewJob = useCallback(() => {
-    // Same placeholder as JobsScreen's header button — better than a tap that
-    // does nothing at all.
-    // TODO: open the "New job" flow once it exists.
-    Alert.alert('Coming soon', 'Creating jobs will be available in a later update.');
-  }, []);
+    navigation.navigate('NewJob');
+  }, [navigation]);
 
   const quickActions = (
     <QuickActions
@@ -152,6 +148,7 @@ export default function HomeScreen({ navigation }: Props) {
         businessName={businessName}
         technicianCount={technicianCount}
         jobCounts={jobStatusCounts}
+        onNewJob={handleNewJob}
       />
       <ScrollView
         style={styles.screen}
