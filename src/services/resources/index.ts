@@ -11,6 +11,8 @@
  * top-level `@services` barrel, which re-exports everything from here.
  */
 export { technicianService } from './technicians';
+export { customerService } from './customers';
+export type { ApiCustomer, CreateCustomerRequest, CreatedCustomer } from './customers';
 export { skillService } from './skills';
 export type { Skill, NewSkillInput } from './skills';
 export { authApi } from './authApi';
@@ -18,7 +20,6 @@ export { usersApi } from './users';
 export type {
   MyProfile,
   ProfileTenant,
-  Paginated,
   JobStatusCounts,
   UserStatus,
 } from './users';

@@ -1,10 +1,19 @@
 /**
  * CustomerRow — one row in the Customers list. Composes Card + Avatar.
- * Name + location on the left, lifetime value + job count on the right.
+ * Name, then city · address, then phone on the left; job count and last-job
+ * date on the right.
+ *
+ * No lifetime value: `GET /customers` doesn't return one.
  */
 import { StyleSheet, Text, View } from 'react-native';
 import { Avatar, Card } from '../../../components/ui';
 import { colors, spacing, typography } from '../../../theme';
+import {
+  customerLocation,
+  customerPhone,
+  formatShortDate,
+  jobCountLabel,
+} from '../format';
 import type { Customer } from '../types';
 
 type Props = {
@@ -12,9 +21,10 @@ type Props = {
   onPress?: (customer: Customer) => void;
 };
 
-const formatRupees = (amount: number) => `₹${amount.toLocaleString('en-IN')}`;
-
 export function CustomerRow({ customer, onPress }: Props) {
+  const location = customerLocation(customer);
+  const lastJob = customer.lastJobDate ? formatShortDate(customer.lastJobDate) : '';
+
   return (
     <Card
       padding="md"
@@ -27,16 +37,19 @@ export function CustomerRow({ customer, onPress }: Props) {
         <Text style={styles.name} numberOfLines={1}>
           {customer.name}
         </Text>
-        <Text style={styles.location} numberOfLines={1}>
-          {customer.location}
+        {location ? (
+          <Text style={styles.meta} numberOfLines={1}>
+            {location}
+          </Text>
+        ) : null}
+        <Text style={styles.meta} numberOfLines={1}>
+          {customerPhone(customer)}
         </Text>
       </View>
 
       <View style={styles.stats}>
-        <Text style={styles.value}>{formatRupees(customer.lifetimeValue)}</Text>
-        <Text style={styles.jobs}>
-          {customer.jobCount} {customer.jobCount === 1 ? 'job' : 'jobs'}
-        </Text>
+        <Text style={styles.jobCount}>{jobCountLabel(customer.jobCount)}</Text>
+        {lastJob ? <Text style={styles.lastJob}>Last {lastJob}</Text> : null}
       </View>
     </Card>
   );
@@ -56,7 +69,7 @@ const styles = StyleSheet.create({
     ...typography.heading,
     color: colors.textStrong,
   },
-  location: {
+  meta: {
     ...typography.bodySm,
     color: colors.textMuted,
   },
@@ -64,12 +77,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: 2,
   },
-  value: {
-    ...typography.heading,
+  jobCount: {
+    ...typography.labelStrong,
     color: colors.textStrong,
   },
-  jobs: {
-    ...typography.bodySm,
+  lastJob: {
+    ...typography.caption,
     color: colors.textMuted,
   },
 });
