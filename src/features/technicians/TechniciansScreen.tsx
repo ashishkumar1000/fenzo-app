@@ -1,8 +1,8 @@
 /**
  * TechniciansScreen — full-screen route (pushed over the tabs). Shows the
  * zero-data empty state for a new account, or the technician list once the
- * owner has invited their team. The header "Add" button and the empty-state
- * CTA both open the AddTechnicianSheet.
+ * owner has invited their team. The header "Add" button opens the
+ * AddTechnicianSheet.
  */
 import { useState } from 'react';
 import { FlatList, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
@@ -67,9 +67,6 @@ export default function TechniciansScreen({ navigation }: Props) {
           icon={<HardHat size={36} color={colors.primary} strokeWidth={1.5} />}
           title="No technicians yet"
           description="Add your team so you can assign jobs to them. They'll get an SMS invite to download the Fenzit app."
-          ctaLabel="Add first technician"
-          ctaIcon={<UserPlus size={20} color={colors.onPrimary} strokeWidth={2.5} />}
-          onPressCta={() => setSheetVisible(true)}
         />
       )}
 
