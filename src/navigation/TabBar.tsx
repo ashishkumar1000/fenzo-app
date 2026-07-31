@@ -3,6 +3,10 @@
  * Navigator, styled with Fenzit tokens (active = primary blue, inactive =
  * muted gray). Built from core RN + Lucide; no extra dependency.
  *
+ * Shared by both the owner's `MainTabs` and the technician's `TechnicianTabs`
+ * — it's purely a route-name → icon/label renderer, so one component serves
+ * both tab groups; `ICONS` just needs an entry per route name used by either.
+ *
  * Using a custom `tabBar` (rather than the default + tabBarIcon/tabBarLabel
  * options) keeps every visual value sourced from `@theme`, per the design
  * system's "never hard-code" rule, and matches the existing Button/IconButton
@@ -13,18 +17,26 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ClipboardList,
+  History,
   Home as HomeIcon,
   MoreHorizontal,
+  Sun,
+  User,
   Users,
   type LucideIcon,
 } from 'lucide-react-native';
 import { colors, fontSize, spacing, weight } from '../theme';
 
 const ICONS: Record<string, LucideIcon> = {
+  // Owner tabs (MainTabParamList)
   Home: HomeIcon,
   Jobs: ClipboardList,
   Customers: Users,
   More: MoreHorizontal,
+  // Technician tabs (TechnicianTabParamList)
+  Today: Sun,
+  History: History,
+  Profile: User,
 };
 
 export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {

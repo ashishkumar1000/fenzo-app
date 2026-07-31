@@ -138,7 +138,13 @@ export default function AuthFlow({ onComplete }: Props) {
       } else {
         // Already has a tenant (returning owner, or a technician assigned
         // one at invite time) — nothing left to set up.
-        onComplete({ phone: `${DIAL_CODE}${phone}`, profile });
+        onComplete({
+          phone: `${DIAL_CODE}${phone}`,
+          profile,
+          role: res.user.role,
+          name: res.user.name,
+          tenantId: res.user.tenantId,
+        });
       }
     } catch (err) {
       const apiError = err as ApiError;
@@ -199,7 +205,16 @@ export default function AuthFlow({ onComplete }: Props) {
       // tenantId populated. The old one would keep failing tenant-scoped
       // endpoints. See the doc's "Token behavior" section.
       setAuthToken(res.token);
-      onComplete({ phone: `${DIAL_CODE}${phone}`, profile });
+      // Only owners ever reach step 3 (company setup is 403 for
+      // technicians) — role is hardcoded here rather than threaded through
+      // from verifyOtp's response.
+      onComplete({
+        phone: `${DIAL_CODE}${phone}`,
+        profile,
+        role: 'owner',
+        name: null,
+        tenantId: res.tenant.id,
+      });
     } catch (err) {
       setProfileError(setupCompanyErrorMessage(err as ApiError));
     } finally {

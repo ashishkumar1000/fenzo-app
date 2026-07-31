@@ -15,6 +15,15 @@ export type MainTabParamList = {
   More: undefined;
 };
 
+/** Bottom-tab routes for a signed-in technician — a separate, much smaller
+ * surface than the owner's `MainTabParamList`: no Jobs/Customers management,
+ * no More/settings, just their own day. */
+export type TechnicianTabParamList = {
+  Today: undefined;
+  History: undefined;
+  Profile: undefined;
+};
+
 export type RootStackParamList = {
   MainTabs: undefined;
   Details: { itemId: number; title?: string };

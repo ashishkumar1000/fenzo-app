@@ -4,6 +4,7 @@
  * Kept local to the feature; promote to `src/types` only if another feature
  * needs to consume them.
  */
+import type { UserRole } from '../../services';
 
 /** The three steps of first-time account setup. */
 export type AuthStep = 'phone' | 'otp' | 'profile';
@@ -21,9 +22,16 @@ export type BusinessProfile = {
   gstNumber: string;
 };
 
-/** What the flow hands back once setup is complete. */
-
+/**
+ * What the flow hands back once setup is complete — everything the app gate
+ * (`useAuth`) needs to persist to know who's signed in and route them to the
+ * right side of the app (owner vs technician) on this and future launches.
+ */
 export type AuthResult = {
   phone: string; // E.164-ish, e.g. "+919876543210"
   profile: BusinessProfile;
+  role: UserRole;
+  /** `null` for owners (no name field yet); set for technicians at invite time. */
+  name: string | null;
+  tenantId: string;
 };
