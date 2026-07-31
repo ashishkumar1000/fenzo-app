@@ -1,23 +1,19 @@
 /**
- * MoreScreen — Technicians + Notifications tiles, Settings row, account
- * card, and Log out. Logging out resets the auth gate (`useAuth().reset()`),
- * which sends the user back to the account-setup flow.
+ * MoreScreen — the account/settings tab. Header is a plain "Account &
+ * settings"; below it, Technicians + Notifications tiles, a Settings row, the
+ * account card, and Log out. Logging out resets the auth gate
+ * (`useAuth().reset()`), which sends the user back to the account-setup flow.
  */
 import { Alert, ActivityIndicator, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { Bell, ChevronRight, HardHat, LogOut, Settings } from 'lucide-react-native';
+import { Bell, ChevronRight, HardHat, LogOut, Phone, Settings, ShieldCheck } from 'lucide-react-native';
 import { Avatar, Card } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import { useAuth } from '../auth';
-import { useMyProfile } from '../profile';
+import { formatPhone, formatRole, useMyProfile } from '../profile';
 import { useTechnicians } from '../technicians';
 import { MoreTile } from './components/MoreTile';
-
-/** `role` is a lowercase enum on the wire (`owner` | `technician`) — title-case it for display. */
-function roleLabel(role: string): string {
-  return role.charAt(0).toUpperCase() + role.slice(1);
-}
 
 export default function MoreScreen() {
   const { width } = useWindowDimensions();
@@ -63,8 +59,7 @@ export default function MoreScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>More</Text>
-        <Text style={styles.subtitle}>{profile.tenant.companyName}</Text>
+        <Text style={styles.title}>Account &amp; settings</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -77,11 +72,13 @@ export default function MoreScreen() {
             size={tileSize}
             onPress={() => navigation.navigate('Technicians')}
           />
-          {/* No notifications system exists yet — no count to show. */}
+          {/* No notifications system exists yet — greyed out until there is one. */}
           <MoreTile
-            icon={<Bell size={22} color={colors.status.done.solid} strokeWidth={1.5} />}
-            iconBg={colors.status.done.bg}
+            icon={<Bell size={22} color={colors.status.neutral.solid} strokeWidth={1.5} />}
+            iconBg={colors.status.neutral.bg}
             title="Notifications"
+            subtitle="Coming soon"
+            inactive
             size={tileSize}
           />
         </View>
@@ -102,7 +99,16 @@ export default function MoreScreen() {
             <Avatar name={profile.name} size="lg" />
             <View style={styles.rowInfo}>
               <Text style={styles.rowTitle}>{profile.name}</Text>
-              <Text style={styles.rowSubtitle}>{roleLabel(profile.role)}</Text>
+
+              <View style={styles.metaRow}>
+                <ShieldCheck size={14} color={colors.textMuted} strokeWidth={2} />
+                <Text style={styles.rowSubtitle}>{formatRole(profile.role)}</Text>
+              </View>
+
+              <View style={styles.metaRow}>
+                <Phone size={14} color={colors.textMuted} strokeWidth={2} />
+                <Text style={styles.rowSubtitle}>{formatPhone(profile)}</Text>
+              </View>
             </View>
           </View>
 
@@ -114,7 +120,9 @@ export default function MoreScreen() {
             elevated={false}
             onPress={handleLogOut}
             style={styles.logoutRow}>
-            <LogOut size={18} color={colors.danger} strokeWidth={2} />
+            <View style={[styles.rowIconBox, styles.logoutIconBox]}>
+              <LogOut size={20} color={colors.danger} strokeWidth={2} />
+            </View>
             <Text style={styles.logoutText}>Log out</Text>
           </Card>
         </Card>
@@ -144,12 +152,6 @@ const styles = StyleSheet.create({
     ...typography.title,
     color: colors.onPrimary,
     fontSize: 28,
-  },
-  subtitle: {
-    ...typography.body,
-    color: colors.onPrimary,
-    opacity: 0.8,
-    marginTop: spacing.s1,
   },
   content: {
     backgroundColor: colors.surfacePage,
@@ -187,6 +189,11 @@ const styles = StyleSheet.create({
     ...typography.bodySm,
     color: colors.textMuted,
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s2,
+  },
   accountCard: {
     gap: 0,
   },
@@ -203,8 +210,12 @@ const styles = StyleSheet.create({
   logoutRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.s2,
+    // s3 to match the Settings row's icon-box-to-label spacing.
+    gap: spacing.s3,
     borderRadius: 0,
+  },
+  logoutIconBox: {
+    backgroundColor: colors.status.cancelled.bg,
   },
   logoutText: {
     ...typography.body,

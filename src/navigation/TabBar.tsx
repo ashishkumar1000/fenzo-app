@@ -19,9 +19,9 @@ import {
   ClipboardList,
   History,
   Home as HomeIcon,
-  MoreHorizontal,
   Sun,
   User,
+  UserCog,
   Users,
   type LucideIcon,
 } from 'lucide-react-native';
@@ -32,7 +32,8 @@ const ICONS: Record<string, LucideIcon> = {
   Home: HomeIcon,
   Jobs: ClipboardList,
   Customers: Users,
-  More: MoreHorizontal,
+  // Labelled "Account" in MainTabs — the route key stays `More`.
+  More: UserCog,
   // Technician tabs (TechnicianTabParamList)
   Today: Sun,
   History: History,

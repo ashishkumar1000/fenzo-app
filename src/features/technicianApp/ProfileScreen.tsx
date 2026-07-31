@@ -14,7 +14,7 @@ import { LogOut, Phone } from 'lucide-react-native';
 import { Avatar, Card } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import { useAuth } from '../auth';
-import { useMyProfile } from '../profile';
+import { formatPhone, useMyProfile } from '../profile';
 
 export default function ProfileScreen() {
   const { reset } = useAuth();
@@ -43,7 +43,7 @@ export default function ProfileScreen() {
   }
 
   const name = profile.name;
-  const phone = `${profile.countryCode} ${profile.phoneNumber}`;
+  const phone = formatPhone(profile);
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>

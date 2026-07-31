@@ -1,7 +1,11 @@
 /**
- * MainTabs — the bottom-tab group: Home, Jobs, Customers, More.
+ * MainTabs — the bottom-tab group: Home, Jobs, Customers, Account.
  * Nested under the root stack so full-screen routes (e.g. Technicians) can
  * still push on top of the whole tab group.
+ *
+ * The last route is still named `More` internally (the param-list key and
+ * TabBar's icon lookup use it); only its label reads "Account", matching the
+ * screen it opens.
  */
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import HomeScreen from '../screens/HomeScreen';
@@ -25,7 +29,7 @@ export default function MainTabs() {
         component={CustomersScreen}
         options={{ tabBarLabel: 'Customers' }}
       />
-      <Tab.Screen name="More" component={MoreScreen} options={{ tabBarLabel: 'More' }} />
+      <Tab.Screen name="More" component={MoreScreen} options={{ tabBarLabel: 'Account' }} />
     </Tab.Navigator>
   );
 }
