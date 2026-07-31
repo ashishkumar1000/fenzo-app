@@ -12,7 +12,8 @@ type Props = {
   icon: ReactNode;
   iconBg: string;
   title: string;
-  subtitle: string;
+  /** Omit when there's no real figure to show — the tile renders title-only. */
+  subtitle?: string;
   size: number;
   onPress?: () => void;
 };
@@ -28,9 +29,11 @@ export function MoreTile({ icon, iconBg, title, subtitle, size, onPress }: Props
       <Text style={styles.title} numberOfLines={1}>
         {title}
       </Text>
-      <Text style={styles.subtitle} numberOfLines={1}>
-        {subtitle}
-      </Text>
+      {subtitle ? (
+        <Text style={styles.subtitle} numberOfLines={1}>
+          {subtitle}
+        </Text>
+      ) : null}
     </Card>
   );
 }

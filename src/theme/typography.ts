@@ -94,6 +94,22 @@ export const typography = {
     fontWeight: weight.medium,
     lineHeight: Math.round(fontSize.sm * leading.snug),
   },
+  /**
+   * Emphasised label — same size as `label`, one weight up. For tappable
+   * tile/button captions that need to read as an action rather than a field
+   * name (Home's quick-action tiles, action button text).
+   *
+   * Exists as its own role because weight in RN comes from the *family* once
+   * the static Inter .ttf files are linked: spreading `label` or `bodySm` and
+   * overriding `fontWeight: '600'` silently does nothing on Android at that
+   * point. Always pick the role, never patch the weight.
+   */
+  labelStrong: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.sm,
+    fontWeight: weight.semibold,
+    lineHeight: Math.round(fontSize.sm * leading.snug),
+  },
   caption: {
     fontFamily: fontFamily.regular,
     fontSize: fontSize.xs,
