@@ -8,20 +8,24 @@
  * `TODAY_JOBS` is empty until the technician-jobs API exists (see data.ts),
  * so this renders the empty state for every technician today, including
  * first login right after accepting an invite.
+ *
+ * The greeting name comes from `GET /users/me` via `useMyProfile` — the auth
+ * session holds gating fields only. Until it lands, the greeting renders
+ * without a name rather than with a placeholder one.
  */
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CalendarCheck } from 'lucide-react-native';
 import { EmptyState } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
-import { useAuth } from '../auth';
+import { useMyProfile } from '../profile';
 import { JobCard } from '../jobs/components/JobCard';
 import { TODAY_JOBS } from './data';
 import type { Job } from '../jobs/types';
 
 export default function TodayScreen() {
-  const { session } = useAuth();
-  const firstName = session?.name?.split(' ')[0] ?? 'there';
+  const { profile } = useMyProfile();
+  const firstName = profile?.name.split(' ')[0];
   const hasJobs = TODAY_JOBS.length > 0;
 
   const handleOpenJob = (_job: Job) => {
@@ -31,7 +35,9 @@ export default function TodayScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.greeting}>Good morning, {firstName}</Text>
+        <Text style={styles.greeting}>
+          {firstName ? `Good morning, ${firstName}` : 'Good morning'}
+        </Text>
       </View>
 
       {hasJobs ? (

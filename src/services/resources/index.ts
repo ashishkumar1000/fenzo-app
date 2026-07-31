@@ -14,6 +14,14 @@ export { technicianService } from './technicians';
 export { skillService } from './skills';
 export type { Skill, NewSkillInput } from './skills';
 export { authApi } from './authApi';
+export { usersApi } from './users';
+export type {
+  MyProfile,
+  ProfileTenant,
+  Paginated,
+  JobStatusCounts,
+  UserStatus,
+} from './users';
 export type {
   SendOtpRequest,
   SendOtpResponse,

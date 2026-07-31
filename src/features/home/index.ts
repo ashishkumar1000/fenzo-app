@@ -1,4 +1,5 @@
 /**
  * Home feature — public surface.
  */
-export { GettingStartedCard } from './components/GettingStartedCard';
+export { QuickActions } from './components/QuickActions';
+export type { QuickActionsProps } from './components/QuickActions';

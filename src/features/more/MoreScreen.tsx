@@ -3,26 +3,37 @@
  * card, and Log out. Logging out resets the auth gate (`useAuth().reset()`),
  * which sends the user back to the account-setup flow.
  */
-import { Alert, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Alert, ActivityIndicator, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Bell, ChevronRight, HardHat, LogOut, Settings } from 'lucide-react-native';
 import { Avatar, Card } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
-import { CURRENT_BUSINESS } from '../../constants/business';
 import { useAuth } from '../auth';
+import { useMyProfile } from '../profile';
 import { useTechnicians } from '../technicians';
 import { MoreTile } from './components/MoreTile';
+
+/** `role` is a lowercase enum on the wire (`owner` | `technician`) — title-case it for display. */
+function roleLabel(role: string): string {
+  return role.charAt(0).toUpperCase() + role.slice(1);
+}
 
 export default function MoreScreen() {
   const { width } = useWindowDimensions();
   const tileSize = (width - spacing.s4 * 2 - spacing.s3) / 2;
   const { reset } = useAuth();
-  const { count, activeCount, offlineCount, clear: clearTechnicians } = useTechnicians();
+  const { clear: clearTechnicians } = useTechnicians();
+  const { profile, isLoading, clear: clearProfile } = useMyProfile();
   const navigation = useNavigation();
 
+  // Server truth (`technicianCount`), not the local invite store. The API has
+  // no active/offline split, so the tile shows the count only.
+  const technicianCount = profile?.technicianCount ?? 0;
   const techSubtitle =
-    count === 0 ? 'Add your team' : `${activeCount} active · ${offlineCount} offline`;
+    technicianCount === 0
+      ? 'Add your team'
+      : `${technicianCount} ${technicianCount === 1 ? 'technician' : 'technicians'}`;
 
   const handleLogOut = () => {
     Alert.alert('Log out', 'You will need to verify your number again to sign back in.', [
@@ -32,17 +43,28 @@ export default function MoreScreen() {
         style: 'destructive',
         onPress: () => {
           clearTechnicians();
+          clearProfile();
           reset();
         },
       },
     ]);
   };
 
+  // Account name and company come from `GET /users/me` (shared with Home) —
+  // nothing is hardcoded, so hold the screen until the profile is in.
+  if (isLoading || !profile) {
+    return (
+      <SafeAreaView style={styles.loadingRoot} edges={['top']}>
+        <ActivityIndicator size="large" color={colors.onPrimary} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>More</Text>
-        <Text style={styles.subtitle}>{CURRENT_BUSINESS.businessName}</Text>
+        <Text style={styles.subtitle}>{profile.tenant.companyName}</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -55,11 +77,11 @@ export default function MoreScreen() {
             size={tileSize}
             onPress={() => navigation.navigate('Technicians')}
           />
+          {/* No notifications system exists yet — no count to show. */}
           <MoreTile
             icon={<Bell size={22} color={colors.status.done.solid} strokeWidth={1.5} />}
             iconBg={colors.status.done.bg}
             title="Notifications"
-            subtitle="4 new today"
             size={tileSize}
           />
         </View>
@@ -77,10 +99,10 @@ export default function MoreScreen() {
 
         <Card padding="none" style={styles.accountCard}>
           <View style={styles.accountRow}>
-            <Avatar name={CURRENT_BUSINESS.ownerName} size="lg" />
+            <Avatar name={profile.name} size="lg" />
             <View style={styles.rowInfo}>
-              <Text style={styles.rowTitle}>{CURRENT_BUSINESS.ownerName}</Text>
-              <Text style={styles.rowSubtitle}>{CURRENT_BUSINESS.ownerRole}</Text>
+              <Text style={styles.rowTitle}>{profile.name}</Text>
+              <Text style={styles.rowSubtitle}>{roleLabel(profile.role)}</Text>
             </View>
           </View>
 
@@ -102,6 +124,12 @@ export default function MoreScreen() {
 }
 
 const styles = StyleSheet.create({
+  loadingRoot: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   root: {
     flex: 1,
     backgroundColor: colors.primary,

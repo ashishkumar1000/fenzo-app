@@ -30,10 +30,10 @@ function App() {
     content = (
       <AuthFlow
         onComplete={result => {
+          // Gating fields only — name/phone/company come from `GET /users/me`
+          // via `useMyProfile`, so there's one authoritative copy of them.
           completeAuth({
             role: result.role,
-            name: result.name,
-            phone: result.phone,
             tenantId: result.tenantId,
           });
         }}
@@ -41,7 +41,7 @@ function App() {
     );
   } else if (session?.role === 'technician') {
     // Separate nav tree from the owner side — a technician never needs
-    // MainTabs' Jobs/Customers/More routes or RootNavigator's Details stack.
+    // MainTabs' Jobs/Customers/More routes or RootNavigator's Technicians stack.
     content = (
       <NavigationContainer ref={navigationRef}>
         <TechnicianTabs />

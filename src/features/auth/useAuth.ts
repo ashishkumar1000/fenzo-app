@@ -11,10 +11,13 @@
  * every call shares a single module-level store via `useSyncExternalStore`.
  * One source of truth, all instances re-render together.
  *
- * NOTE: This is the client-side gate only. Real token/session handling
- * belongs in `services/authToken.ts` (already wired) — this hook only
- * tracks the lightweight identity bits the UI needs to render the right
- * screens, not the token itself.
+ * SCOPE: gating only. This holds the two things routing decisions need —
+ * role and tenantId — and nothing that gets rendered. Anything displayed
+ * (name, phone, company name) belongs to `useMyProfile` (`GET /users/me`),
+ * which is authoritative and refetchable. Duplicating display fields here
+ * would let them go stale the moment the user edits their profile.
+ *
+ * NOTE: the token itself lives in `services/authToken.ts`, not here.
  */
 import { useCallback, useSyncExternalStore } from 'react';
 import { storage } from '../../services/storage';
@@ -24,12 +27,9 @@ const KEY = 'fenzit.session';
 
 export type AuthStatus = 'pending' | 'done';
 
-/** The identity bits every screen needs once signed in — set once, by `AuthFlow`, on `complete()`. */
+/** The gating bits — set once, by `AuthFlow`, on `complete()`. Nothing here is rendered. */
 export interface Session {
   role: UserRole;
-  /** `null` for owners (no name field yet); set for technicians at invite time. */
-  name: string | null;
-  phone: string;
   tenantId: string;
 }
 

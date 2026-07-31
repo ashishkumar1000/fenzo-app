@@ -2,7 +2,7 @@
  * Type definitions for the root navigator and the nested bottom tabs.
  *
  * `RootStackParamList` is the top-level stack: the tab group plus any
- * full-screen routes pushed on top of it (e.g. Details, Technicians).
+ * full-screen routes pushed on top of it (e.g. Technicians).
  * `MainTabParamList` describes the four bottom-tab routes. The global
  * `RootParamList` augmentation lets `useNavigation()` infer types at every
  * call site.
@@ -26,7 +26,6 @@ export type TechnicianTabParamList = {
 
 export type RootStackParamList = {
   MainTabs: undefined;
-  Details: { itemId: number; title?: string };
   Technicians: undefined;
 };
 

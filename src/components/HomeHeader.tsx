@@ -1,9 +1,8 @@
 import { View, Text, StyleSheet, Pressable, StatusBar, useWindowDimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Bell, Calendar, IndianRupee, Clock, Briefcase, Plus, ClipboardList, DollarSign } from 'lucide-react-native';
+import { Bell, Calendar, HardHat, Plus, ClipboardList, DollarSign } from 'lucide-react-native';
 import { Card, Button } from './ui';
 import { colors, palette, spacing, typography } from '../theme';
-import { CURRENT_BUSINESS } from '../constants/business';
+import type { JobStatusCounts } from '../services';
 
 interface StatCardProps {
   icon: React.ReactNode;
@@ -11,15 +10,10 @@ interface StatCardProps {
   title: string;
   subtitle: string;
   details?: string;
-  trend?: {
-    label: string;
-    value: string;
-    positive: boolean;
-  };
   size: number;
 }
 
-function StatCard({ icon, bgColor, title, subtitle, details, trend, size }: StatCardProps) {
+function StatCard({ icon, bgColor, title, subtitle, details, size }: StatCardProps) {
   return (
     <Card padding="sm" style={[styles.statCard, { width: size, height: size }]}>
       <View style={styles.statIconContainer}>
@@ -34,40 +28,57 @@ function StatCard({ icon, bgColor, title, subtitle, details, trend, size }: Stat
       {details && (
         <Text style={styles.statDetails} numberOfLines={1}>{details}</Text>
       )}
-
-      {trend && (
-        <View style={styles.trendContainer}>
-          <Text
-            style={[styles.trendText, { color: trend.positive ? colors.success : colors.textMuted }]}
-            numberOfLines={1}
-          >
-            {trend.positive ? '↑' : '↓'} {trend.value} {trend.label}
-          </Text>
-        </View>
-      )}
     </Card>
   );
 }
 
-export default function HomeHeader() {
+export interface HomeHeaderProps {
+  /** Full name of the signed-in owner, from `GET /users/me`. Only the first word is shown. */
+  ownerName: string;
+  /** Company name, from the profile's `tenant.companyName`. */
+  businessName: string;
+  /** From the profile's `technicianCount`. */
+  technicianCount: number;
+  /** From the profile's `jobStatusCounts`. */
+  jobCounts: JobStatusCounts;
+}
+
+export default function HomeHeader({
+  ownerName,
+  businessName,
+  technicianCount,
+  jobCounts,
+}: HomeHeaderProps) {
   // Card side = (screen width - horizontal gutters - inter-card gap) / 2
   // Recalculated on every render so it stays correct on rotation / split-screen.
   const { width: screenWidth } = useWindowDimensions();
   const cardSize = (screenWidth - spacing.s4 * 2 - spacing.s3) / 2;
+
+  // Deliberately labelled "Jobs", not "Jobs today": `jobStatusCounts` is a
+  // total across the account, and the API has no today-scoped counts yet.
+  const totalJobs =
+    jobCounts.scheduled +
+    jobCounts.inProgress +
+    jobCounts.completed +
+    jobCounts.cancelled;
 
   return (
     <>
       {/* iOS blue status bar */}
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
-      <View style={styles.safeArea} edges={['top', 'left', 'right']}>
+      {/* Plain View, not SafeAreaView: the blue header handles the notch with
+          its own top margin (see headerContent.marginTop). It previously kept
+          an `edges` prop left over from a SafeAreaView — a no-op at runtime,
+          and a type error. */}
+      <View style={styles.safeArea}>
         {/* Blue Gradient Header */}
         <View style={styles.headerGradient}>
           {/* Header Top - Greeting + Notification */}
           <View style={styles.headerContent}>
             <View style={styles.greetingSection}>
-              <Text style={styles.greetingText}>Good morning, {CURRENT_BUSINESS.ownerName.split(' ')[0]}</Text>
-              <Text style={styles.serviceText}>{CURRENT_BUSINESS.businessName}</Text>
+              <Text style={styles.greetingText}>Good morning, {ownerName.split(' ')[0]}</Text>
+              <Text style={styles.serviceText}>{businessName}</Text>
             </View>
 
             <Pressable style={styles.notificationButton} onPress={() => {}}>
@@ -85,18 +96,19 @@ export default function HomeHeader() {
             <StatCard
                 icon={<Calendar color={colors.status.progress.solid} size={24} strokeWidth={1.5} />}
                 bgColor={colors.status.progress.bg}
-                title="12"
-                subtitle="Jobs today"
-                details="3 done · 5 active · 4 sched."
+                title={String(totalJobs)}
+                subtitle="Jobs"
+                details={`${jobCounts.completed} done · ${jobCounts.inProgress} active · ${jobCounts.scheduled} sched.`}
                 size={cardSize}
             />
 
+            {/* No active/offline split: the API returns a count only, so the
+                tile shows the count only. */}
             <StatCard
-                icon={<Briefcase color={colors.status.neutral.solid} size={24} strokeWidth={1.5} />}
+                icon={<HardHat color={colors.status.neutral.solid} size={24} strokeWidth={1.5} />}
                 bgColor={colors.status.neutral.bg}
-                title="4 of 6"
-                subtitle="Active techs"
-                details="2 offline today"
+                title={String(technicianCount)}
+                subtitle="Technicians"
                 size={cardSize}
             />
           </Card>
@@ -241,13 +253,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: spacing.s1,
   },
-  trendContainer: {
-    marginTop: spacing.s1,
-  },
-  trendText: {
-    ...typography.bodySm,
-    fontWeight: '500',
-  },
   actionButtonsContainer: {
     flexDirection: 'row',
     gap: spacing.s3,
@@ -265,17 +270,15 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   newJobButtonText: {
-    ...typography.bodySm,
+    ...typography.labelStrong,
     color: colors.surfaceCard,
-    fontWeight: '600',
   },
   actionButton: {
     flex: 1,
     borderRadius: 12,
   },
   actionButtonText: {
-    ...typography.bodySm,
+    ...typography.label,
     color: colors.textStrong,
-    fontWeight: '500',
   },
 });

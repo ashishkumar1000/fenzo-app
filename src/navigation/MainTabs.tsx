@@ -1,6 +1,6 @@
 /**
  * MainTabs — the bottom-tab group: Home, Jobs, Customers, More.
- * Nested under the root stack so full-screen routes (e.g. Details) can
+ * Nested under the root stack so full-screen routes (e.g. Technicians) can
  * still push on top of the whole tab group.
  */
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';

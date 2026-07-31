@@ -1,16 +1,22 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import {
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { MainTabParamList, RootStackParamList } from '../navigation/types';
 import HomeHeader from '../components/HomeHeader';
-import { Badge, Button, Card } from '../components/ui';
+import { Button, Card, InlineError } from '../components/ui';
 import { colors, spacing, typography } from '../theme';
-import { CURRENT_BUSINESS } from '../constants/business';
-import { useTechnicians } from '../features/technicians';
-import { GettingStartedCard } from '../features/home/components/GettingStartedCard';
-import { JOBS } from '../features/jobs/data';
+import { useMyProfile } from '../features/profile';
+import { QuickActions } from '../features/home';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Home'>,
@@ -18,33 +24,102 @@ type Props = CompositeScreenProps<
 >;
 
 export default function HomeScreen({ navigation }: Props) {
-  const { hasTechnicians } = useTechnicians();
-  const hasJobs = JOBS.length > 0;
+  // Everything on this screen comes from `GET /users/me` — name, company,
+  // technician count and job counts — shared with More via the same store, so
+  // switching tabs doesn't refetch. Nothing is hardcoded, which is why a
+  // failed load gets its own error branch rather than a placeholder.
+  const { profile, isLoading, error, refresh, dismissError } = useMyProfile();
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // First-run: surface the setup checklist until the owner has a team and a job.
-  const isSetupComplete = hasTechnicians && hasJobs;
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refresh]);
 
-  const handleCreateJob = () => {
-    // TODO(Phase 2): open the "New job" sheet once it exists.
-  };
+  const quickActions = (
+    <QuickActions
+      // TODO: open the "New job" flow once it exists.
+      onNewJob={() => {}}
+      onAllJobs={() => navigation.navigate('Jobs')}
+      onCustomers={() => navigation.navigate('Customers')}
+    />
+  );
+
+  /**
+   * Shown when a *refresh* failed but we still have a profile to render — the
+   * screen stays usable, the banner explains why it may be stale. A failure
+   * with no profile at all takes the full-screen error branch below instead.
+   */
+  const errorBanner =
+    error && profile ? (
+      <InlineError message={error} onDismiss={dismissError} />
+    ) : null;
+
+  const refreshControl = (
+    <RefreshControl
+      refreshing={isRefreshing}
+      onRefresh={handleRefresh}
+      colors={[colors.primary]}
+      tintColor={colors.primary}
+    />
+  );
+
+  // --- Loading: first load, before any profile copy exists ------------------
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.centeredRoot} edges={['top']}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </SafeAreaView>
+    );
+  }
+
+  // --- Error: no profile means no name, no company — nothing to show --------
+  if (!profile) {
+    return (
+      <SafeAreaView style={styles.centeredRoot} edges={['top']}>
+        <Text style={styles.errorTitle}>Couldn't load your account</Text>
+        <Text style={styles.errorBody}>
+          {error ?? 'Something went wrong. Please try again.'}
+        </Text>
+        <Button variant="primary" size="lg" onPress={refresh}>
+          Try again
+        </Button>
+      </SafeAreaView>
+    );
+  }
+
+  const ownerFirstName = profile.name.split(' ')[0];
+  const businessName = profile.tenant.companyName;
+  const { jobStatusCounts, technicianCount } = profile;
+  const totalJobs =
+    jobStatusCounts.scheduled +
+    jobStatusCounts.inProgress +
+    jobStatusCounts.completed +
+    jobStatusCounts.cancelled;
+  const hasTechnicians = technicianCount > 0;
+
+  // First-run: simplified Home until the account has a team and a job. Both
+  // facts come from the server, so an account set up on another device shows
+  // the right Home here too.
+  const isSetupComplete = hasTechnicians && totalJobs > 0;
 
   if (!isSetupComplete) {
     return (
       <SafeAreaView style={styles.newUserRoot} edges={['top']}>
         <View style={styles.greetingHeader}>
-          <Text style={styles.greeting}>
-            Good morning, {CURRENT_BUSINESS.ownerName.split(' ')[0]}
-          </Text>
-          <Text style={styles.business}>{CURRENT_BUSINESS.businessName}</Text>
+          <Text style={styles.greeting}>Good morning, {ownerFirstName}</Text>
+          <Text style={styles.business}>{businessName}</Text>
         </View>
 
-        <ScrollView contentContainerStyle={styles.newUserContent}>
-          <GettingStartedCard
-            hasTechnicians={hasTechnicians}
-            hasJobs={hasJobs}
-            onAddTechnician={() => navigation.navigate('Technicians')}
-            onCreateJob={handleCreateJob}
-          />
+        <ScrollView
+          contentContainerStyle={styles.newUserContent}
+          refreshControl={refreshControl}>
+          {errorBanner}
+          {quickActions}
 
           <View style={styles.jobsSection}>
             <Text style={styles.sectionTitle}>Today's jobs</Text>
@@ -65,35 +140,56 @@ export default function HomeScreen({ navigation }: Props) {
   // Established account: full dashboard.
   return (
     <>
-      <HomeHeader />
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <Text style={styles.sectionTitle}>Today's jobs</Text>
+      <HomeHeader
+        ownerName={profile.name}
+        businessName={businessName}
+        technicianCount={technicianCount}
+        jobCounts={jobStatusCounts}
+      />
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.content}
+        refreshControl={refreshControl}>
+        {errorBanner}
+        {quickActions}
 
-        <Card padding="md" style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>AC not cooling</Text>
-            <Badge status="progress" dot>
-              In Progress
-            </Badge>
-          </View>
-          <Text style={styles.cardMeta}>Quarterly service · 10:30 AM</Text>
-        </Card>
-
-        <Button
-          variant="primary"
-          size="lg"
-          fullWidth
-          onPress={() =>
-            navigation.navigate('Details', { itemId: 42, title: 'Hello' })
-          }>
-          Open details
-        </Button>
+        <View style={styles.jobsSection}>
+          <Text style={styles.sectionTitle}>Today's jobs</Text>
+          {/* The profile payload returns a `jobs` page, but its item shape
+              isn't modelled yet — so no list here rather than invented rows.
+              Wire this to `profile.jobs.data` once the job shape is known. */}
+          <Card padding="lg" style={styles.noJobsCard}>
+            <Text style={styles.noJobsTitle}>Nothing scheduled today</Text>
+          </Card>
+        </View>
       </ScrollView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  // --- Loading / error views ---
+  centeredRoot: {
+    flex: 1,
+    backgroundColor: colors.surfacePage,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.s6,
+    gap: spacing.s3,
+  },
+  errorTitle: {
+    ...typography.title,
+    fontSize: 20,
+    color: colors.textStrong,
+    textAlign: 'center',
+  },
+  errorBody: {
+    ...typography.bodySm,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginBottom: spacing.s2,
+  },
+
   // --- New-user view ---
   newUserRoot: {
     flex: 1,
@@ -150,21 +246,5 @@ const styles = StyleSheet.create({
     ...typography.title,
     color: colors.textStrong,
     fontSize: 20,
-  },
-  card: {
-    gap: spacing.s2,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  cardTitle: {
-    ...typography.heading,
-    color: colors.textStrong,
-  },
-  cardMeta: {
-    ...typography.bodySm,
-    color: colors.textMuted,
   },
 });
