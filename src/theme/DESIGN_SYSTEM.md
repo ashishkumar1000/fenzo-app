@@ -89,7 +89,7 @@ down (buttons 0.97, icon buttons 0.92). No bounces, no decorative loops.
 - Speak **to** the user as "you". Warm, direct, plain English. No jargon.
 - **Sentence case** everywhere (headings, buttons, labels). Caps only for tiny
   letter-spaced eyebrow labels.
-- Buttons are 1–2 words ("New Job", "Mark as Done"). Labels are nouns.
+- Buttons are 1–2 words ("New job", "Mark as done"). Labels are nouns.
 - Money: ₹ with Indian grouping ("₹28,600"); 12-hour times ("10:30 AM").
 - **No emoji in product UI.** Meaning is carried by color + icon + word.
 

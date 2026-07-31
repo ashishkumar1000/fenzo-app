@@ -4,8 +4,13 @@
  *
  * Variants: primary | secondary | ghost | danger
  * Sizes:    sm | md | lg   (md/lg meet the 44px touch-target minimum)
+ * Shape:    default (size-matched corner radius) | pill (fully rounded)
  *
  * Press feedback scales the button to 0.97 (matching the DS motion spec).
+ *
+ * NOTE: `style` lands on the outer wrapper, not the pressable surface, so it
+ * cannot change the corner radius or background — use `shape` and `variant`
+ * for those.
  */
 import { useRef, type ReactNode } from 'react';
 import {
@@ -22,11 +27,14 @@ import { colors, radius, shadow, fontSize, weight, motion } from '../../theme';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type Size = 'sm' | 'md' | 'lg';
+type Shape = 'default' | 'pill';
 
 export type ButtonProps = {
   children: ReactNode;
   variant?: Variant;
   size?: Size;
+  /** `pill` fully rounds the ends — for standalone actions like "+ New Job". */
+  shape?: Shape;
   fullWidth?: boolean;
   disabled?: boolean;
   leadingIcon?: ReactNode;
@@ -59,6 +67,7 @@ export function Button({
   children,
   variant = 'primary',
   size = 'md',
+  shape = 'default',
   fullWidth = false,
   disabled = false,
   leadingIcon = null,
@@ -103,7 +112,7 @@ export function Button({
             minWidth: s.height, // square minimum for icon-only buttons
             paddingHorizontal: s.paddingHorizontal,
             gap: s.gap,
-            borderRadius: s.radius,
+            borderRadius: shape === 'pill' ? radius.pill : s.radius,
           },
           variantContainer[variant],
           disabled && styles.disabled,
