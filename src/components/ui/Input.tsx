@@ -31,7 +31,7 @@ export type InputProps = {
   style?: StyleProp<ViewStyle>;
 } & Pick<
   TextInputProps,
-  'keyboardType' | 'autoCapitalize' | 'autoCorrect' | 'secureTextEntry' | 'maxLength' | 'onBlur' | 'onFocus'
+  'keyboardType' | 'autoCapitalize' | 'autoCorrect' | 'secureTextEntry' | 'maxLength' | 'onBlur' | 'onFocus' | 'multiline' | 'numberOfLines'
 >;
 
 export function Input({
@@ -74,6 +74,7 @@ export function Input({
             borderColor,
             backgroundColor: disabled ? colors.surfaceSunken : colors.surfaceCard,
           },
+          rest.multiline ? styles.fieldMultiline : null,
           focused && !invalid ? styles.fieldFocused : null,
         ]}>
         {leadingIcon ? <View style={styles.leading}>{leadingIcon}</View> : null}
@@ -91,7 +92,7 @@ export function Input({
             setFocused(false);
             onBlur?.(e);
           }}
-          style={styles.input}
+          style={[styles.input, rest.multiline ? styles.inputMultiline : null]}
           {...rest}
         />
       </View>
@@ -131,6 +132,16 @@ const styles = StyleSheet.create({
     // cleanly inside a row, so the border carries the focus state).
     borderColor: colors.borderFocus,
   },
+  // Multiline ("textarea") variant: the fixed 48px control height and the
+  // vertically-centred row don't apply — the box grows and text starts at the
+  // top-left. Set via the standard `multiline` TextInput prop, so callers get
+  // this by passing `multiline` and nothing else.
+  fieldMultiline: {
+    height: undefined,
+    minHeight: 96,
+    alignItems: 'flex-start',
+    paddingVertical: spacing.s3,
+  },
   leading: {
     justifyContent: 'center',
   },
@@ -141,6 +152,13 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textStrong,
     marginBottom: 10,
+  },
+  inputMultiline: {
+    // The single-line field nudges text up with a marginBottom to sit on the
+    // optical centre; in a top-aligned box that would just clip the last line.
+    marginBottom: 0,
+    alignSelf: 'stretch',
+    textAlignVertical: 'top',
   },
   helper: {
     ...typography.caption,
