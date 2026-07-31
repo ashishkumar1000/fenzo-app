@@ -30,7 +30,7 @@ import { ArrowLeft, UserPlus } from 'lucide-react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button, Input, Select } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
-import { customerService, jobService, toJobServiceType } from '../../services';
+import { customerService, jobService } from '../../services';
 import type { ApiError } from '../../services';
 import type { RootStackParamList } from '../../navigation/types';
 import {
@@ -46,6 +46,7 @@ import { ServiceTypePicker } from './components/ServiceTypePicker';
 import { TechnicianPicker } from './components/TechnicianPicker';
 import { resolveServiceCategories, technicianHasSkill } from './serviceCategories';
 import type { NewJobDraft, TechnicianOption } from './types';
+import { toJobServiceType } from "../../services/resources/jobs.ts";
 
 type Props = NativeStackScreenProps<RootStackParamList, 'NewJob'>;
 
