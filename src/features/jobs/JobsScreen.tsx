@@ -1,12 +1,25 @@
 /**
- * JobsScreen — full job list with status filter chips and a "+ New Job"
- * action. When the owner has no jobs yet, the filter row is hidden and a
- * first-run empty state is shown instead. Live data via `JOBS` in `data.ts`
- * until `@services/jobService` exists.
+ * JobsScreen — full job list with status filter chips (All / Scheduled /
+ * In Progress / Done) and a "+ New job" action.
+ *
+ * The filter row is always visible, even with no jobs at all, so the four
+ * sections are discoverable from the first launch. Any section with nothing
+ * in it gets the full "No jobs yet" empty state rather than a stray line of
+ * text — with copy that says what would land in *that* section.
+ *
+ * Live data via `JOBS` in `data.ts` until `@services/jobService` exists.
  */
 import { useMemo, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
-import { Briefcase, Plus } from 'lucide-react-native';
+import { Alert, FlatList, StyleSheet, Text, View } from 'react-native';
+import {
+  CalendarClock,
+  CircleCheck,
+  CircleX,
+  ClipboardList,
+  Plus,
+  Wrench,
+  type LucideIcon,
+} from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, EmptyState } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
@@ -15,18 +28,59 @@ import { StatusFilterBar } from './components/StatusFilterBar';
 import { JOBS } from './data';
 import type { Job, JobFilter } from './types';
 
+/**
+ * Empty-state icon and copy per section — the icon hints at the section's
+ * meaning (a calendar for what's booked, a wrench for work underway) so the
+ * four empty pages aren't identical.
+ *
+ * Keyed by `JobFilter`, which includes `cancelled` even though no chip
+ * currently exposes it — the entry is here so adding that chip to
+ * `JOB_FILTERS` needs no change on this side.
+ */
+const EMPTY_BY_FILTER: Record<JobFilter, { icon: LucideIcon; description: string }> = {
+  all: {
+    icon: ClipboardList,
+    description:
+      'Create your first job to assign it to a technician and track it through to completion.',
+  },
+  scheduled: {
+    icon: CalendarClock,
+    description: 'Jobs booked for a future date and time will show up here.',
+  },
+  progress: {
+    icon: Wrench,
+    description:
+      'Jobs a technician has started, but not yet finished, will show up here.',
+  },
+  done: {
+    icon: CircleCheck,
+    description: 'Jobs a technician has marked complete will show up here.',
+  },
+  cancelled: {
+    icon: CircleX,
+    description: 'Jobs called off before completion will show up here.',
+  },
+};
+
 export default function JobsScreen() {
   const [filter, setFilter] = useState<JobFilter>('all');
 
-  const hasJobs = JOBS.length > 0;
-
+  // `JOBS` is a module constant today, so `filter` is the only dependency.
+  // ⚠️ When this moves to `jobService`/state, add the job list to the deps —
+  // otherwise the filtered list won't recompute when new data arrives.
   const jobs = useMemo(
     () => (filter === 'all' ? JOBS : JOBS.filter(j => j.status === filter)),
     [filter],
   );
 
+  const isEmpty = jobs.length === 0;
+  const { icon: EmptyIcon, description: emptyDescription } = EMPTY_BY_FILTER[filter];
+
   const handleNewJob = () => {
-    // TODO(jobService): open the "New job" sheet once it exists (Phase 2).
+    // Until the create-job flow exists, say so rather than swallowing the tap:
+    // this is the only entry point on the screen.
+    // TODO(jobService): open the "New job" sheet instead (Phase 2).
+    Alert.alert('Coming soon', 'Creating jobs will be available in a later update.');
   };
 
   const handleOpenJob = (_job: Job) => {
@@ -40,40 +94,40 @@ export default function JobsScreen() {
         <Button
           variant="primary"
           size="md"
+          shape="pill"
           onPress={handleNewJob}
           leadingIcon={<Plus size={18} color={colors.onPrimary} strokeWidth={2.5} />}>
-          New Job
+          New job
         </Button>
       </View>
 
-      {hasJobs ? (
-        <>
-          <View style={styles.filterWrap}>
-            <StatusFilterBar value={filter} onChange={setFilter} />
-          </View>
+      <View style={styles.filterWrap}>
+        <StatusFilterBar value={filter} onChange={setFilter} />
+      </View>
 
-          <FlatList
-            data={jobs}
-            keyExtractor={item => item.id}
-            renderItem={({ item }) => <JobCard job={item} onPress={handleOpenJob} />}
-            contentContainerStyle={styles.listContent}
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
-            ListEmptyComponent={
-              <Text style={styles.emptyText}>No jobs in this filter yet.</Text>
-            }
-            showsVerticalScrollIndicator={false}
+      <FlatList
+        data={jobs}
+        keyExtractor={item => item.id}
+        renderItem={({ item }) => <JobCard job={item} onPress={handleOpenJob} />}
+        // When empty: flexGrow gives EmptyState's `flex: 1` a height to centre
+        // itself in, and the list padding drops away since EmptyState brings
+        // its own horizontal inset.
+        contentContainerStyle={[
+          styles.listContent,
+          isEmpty && styles.listContentEmpty,
+        ]}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        ListEmptyComponent={
+          // No CTA here — the "New job" button in the header is the single
+          // entry point, so the centre of the page stays informational.
+          <EmptyState
+            icon={<EmptyIcon size={36} color={colors.primary} strokeWidth={1.5} />}
+            title="No jobs yet"
+            description={emptyDescription}
           />
-        </>
-      ) : (
-        <EmptyState
-          icon={<Briefcase size={36} color={colors.primary} strokeWidth={1.5} />}
-          title="No jobs yet"
-          description="Create your first job to assign it to a technician and track it through to completion."
-          ctaLabel="Create first job"
-          ctaIcon={<Plus size={20} color={colors.onPrimary} strokeWidth={2.5} />}
-          onPressCta={handleNewJob}
-        />
-      )}
+        }
+        showsVerticalScrollIndicator={false}
+      />
     </SafeAreaView>
   );
 }
@@ -104,13 +158,11 @@ const styles = StyleSheet.create({
   listContent: {
     padding: spacing.s4,
   },
+  listContentEmpty: {
+    flexGrow: 1,
+    paddingHorizontal: 0,
+  },
   separator: {
     height: spacing.s3,
-  },
-  emptyText: {
-    ...typography.body,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: spacing.s10,
   },
 });

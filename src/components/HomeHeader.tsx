@@ -125,7 +125,7 @@ export default function HomeHeader({
           >
             <View style={styles.buttonContent}>
               <Plus color={colors.surfaceCard} size={20} strokeWidth={2.5} />
-              <Text style={styles.newJobButtonText}>New Job</Text>
+              <Text style={styles.newJobButtonText}>New job</Text>
             </View>
           </Button>
 
@@ -138,7 +138,7 @@ export default function HomeHeader({
           >
             <View style={styles.buttonContent}>
               <ClipboardList color={colors.textStrong} size={20} strokeWidth={1.5} />
-              <Text style={styles.actionButtonText}>All Jobs</Text>
+              <Text style={styles.actionButtonText}>All jobs</Text>
             </View>
           </Button>
 
@@ -265,9 +265,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // `style` on a Button lands on its outer wrapper, so only layout props take
+  // effect here — a borderRadius set this way would be silently ignored. Use
+  // the Button's own `shape` prop for corners.
   newJobButton: {
     flex: 1,
-    borderRadius: 16,
   },
   newJobButtonText: {
     ...typography.labelStrong,
@@ -275,7 +277,6 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
-    borderRadius: 12,
   },
   actionButtonText: {
     ...typography.label,
