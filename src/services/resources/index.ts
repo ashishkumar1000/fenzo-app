@@ -13,6 +13,13 @@
 export { technicianService } from './technicians';
 export { customerService } from './customers';
 export type { ApiCustomer, CreateCustomerRequest, CreatedCustomer } from './customers';
+export { jobService } from './jobs';
+export type {
+  CreateJobRequest,
+  CreatedJob,
+  JobPriority,
+  JobServiceType,
+} from './jobs';
 export { skillService } from './skills';
 export type { Skill, NewSkillInput } from './skills';
 export { authApi } from './authApi';
@@ -20,6 +27,7 @@ export { usersApi } from './users';
 export type {
   MyProfile,
   ProfileTenant,
+  ProfileTechnician,
   JobStatusCounts,
   UserStatus,
 } from './users';

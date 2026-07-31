@@ -65,6 +65,9 @@ export function TechnicianPicker({ options, value, onChange }: Props) {
                   style={[styles.name, isSelected && styles.nameSelected]}>
                   {technician.name}
                 </Text>
+                {technician.isInvited ? (
+                  <Text style={styles.invited}>Invited</Text>
+                ) : null}
               </Pressable>
             );
           })}
@@ -112,5 +115,13 @@ const styles = StyleSheet.create({
   nameSelected: {
     ...typography.labelStrong,
     color: colors.primary,
+  },
+  // Deliberately not a Badge: that component's vocabulary is fixed to job
+  // state (Done / In Progress / Scheduled / Cancelled / neutral) and its doc
+  // says not to invent synonyms. "Invited" is a technician's state, not a
+  // job's.
+  invited: {
+    ...typography.caption,
+    color: colors.textMuted,
   },
 });

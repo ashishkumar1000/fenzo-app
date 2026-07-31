@@ -51,6 +51,40 @@ export interface JobStatusCounts {
   cancelled: number;
 }
 
+/**
+ * A technician on the owner's roster, as embedded in `/users/me`.
+ *
+ * These carry the *server's* technician ids — unlike the local
+ * `useTechnicians` MMKV store, which fabricates `invite_<inviteId>` values.
+ * Anything that sends a technician id to the backend (assigning a job) must
+ * come from here.
+ *
+ * `skills` are the tenant's skill *names* (free text, created via
+ * `POST /skills`), and `skillIds` the matching ids. The two arrays are
+ * parallel.
+ */
+export interface ProfileTechnician {
+  id: string;
+  name: string;
+  /** Dial code with `+`, e.g. `+91`. */
+  countryCode: string;
+  /** Digits only, no country code. */
+  phoneNumber: string;
+  /**
+   * Observed value: `invited`. Deliberately a plain string, not a union — the
+   * backend has never published the full enum, and the technicians feature's
+   * own `TechnicianStatus` (`active`/`offline`) disagrees with this one, so any
+   * union written here would be a guess dressed up as a type.
+   */
+  status: string;
+  /** Skill names, e.g. `['plumber']`. Free text — see `skills.ts`. */
+  skills: string[];
+  /** Ids for the same skills, in the same order. */
+  skillIds: string[];
+  /** ISO timestamp of when the technician was invited. */
+  createdAt: string;
+}
+
 export interface MyProfile {
   id: string;
   name: string;
@@ -62,11 +96,10 @@ export interface MyProfile {
   tenant: ProfileTenant;
   role: UserRole;
   /**
-   * The tenant's technician roster. Left as `unknown[]` until the backend's
-   * technician shape here is confirmed — the sample response returns an empty
-   * array, so there's nothing to model from yet. Same for `customers`/`jobs`.
+   * The tenant's technician roster, with server-issued ids. `customers`/`jobs`
+   * stay `unknown` until their shapes here are confirmed.
    */
-  technicians: unknown[];
+  technicians: ProfileTechnician[];
   technicianCount: number;
   customers: Paginated<unknown>;
   jobs: Paginated<unknown>;
