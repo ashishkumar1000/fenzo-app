@@ -19,6 +19,7 @@ export { apiClient, setOnUnauthorized } from './api/apiClient';
 export type { ApiError } from './api/apiClient';
 export { ApiService, createCancelSignal } from './api/ApiService';
 export type { ListParams } from './api/ApiService';
+export type { Paginated } from './api/pagination';
 export { getAuthToken, setAuthToken, clearAuthToken } from './authToken';
 export { storage } from './storage';
 export * from './resources';

@@ -20,16 +20,8 @@
 import { apiClient } from '../api/apiClient';
 import type { UserRole } from './authApi';
 
-/**
- * The backend's cursor-pagination envelope. `nextCursor` is `null` when
- * `hasMore` is false — pass it back as the `cursor` param to fetch the
- * following page.
- */
-export interface Paginated<T> {
-  data: T[];
-  nextCursor: string | null;
-  hasMore: boolean;
-}
+export type { Paginated } from '../api/pagination';
+import type { Paginated } from '../api/pagination';
 
 /**
  * The tenant as embedded in `/users/me` — the company-level fields only.

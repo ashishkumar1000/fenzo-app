@@ -88,6 +88,21 @@ export const typography = {
     fontWeight: weight.regular,
     lineHeight: Math.round(fontSize.sm * leading.normal),
   },
+  /**
+   * Emphasised body — same size as `body`, semibold. For inline values that
+   * need to stand out from the text around them (the `+91` dial prefix in a
+   * phone field, a highlighted figure mid-sentence).
+   *
+   * Same reasoning as `labelStrong`: pick the role, never patch `fontWeight`
+   * on top of `body`, or the emphasis disappears once the Inter .ttf files
+   * are linked and weight starts coming from the family.
+   */
+  bodyStrong: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.base,
+    fontWeight: weight.semibold,
+    lineHeight: Math.round(fontSize.base * leading.normal),
+  },
   label: {
     fontFamily: fontFamily.medium,
     fontSize: fontSize.sm,

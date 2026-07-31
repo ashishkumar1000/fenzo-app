@@ -9,11 +9,8 @@ export const OTP_LENGTH = 6;
 /** Seconds before "Resend code" becomes available again. */
 export const RESEND_SECONDS = 45;
 
-/** Default dial code (India). Single-country for the pilot. */
-export const DIAL_CODE = '+91';
-
-/** Local mobile number length (without dial code). */
-export const PHONE_LENGTH = 10;
+/** Re-exported app-wide, so every feature agrees on them. */
+export { DIAL_CODE, PHONE_LENGTH } from '../../constants/phone';
 
 /** Total steps in the setup flow — drives the 1—2—3 indicator. */
 export const TOTAL_STEPS = 3;
