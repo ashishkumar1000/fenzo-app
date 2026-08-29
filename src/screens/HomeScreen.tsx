@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { RefreshCw, WifiOff } from 'lucide-react-native';
+import { CloudOff, RefreshCw } from 'lucide-react-native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -86,7 +86,7 @@ export default function HomeScreen({ navigation }: Props) {
     return (
       <SafeAreaView style={styles.centeredRoot} edges={['top']}>
         <EmptyState
-          icon={<WifiOff size={36} color={colors.danger} strokeWidth={1.5} />}
+          icon={<CloudOff size={36} color={colors.danger} strokeWidth={1.5} />}
           title="Couldn't load your account"
           description={error ?? 'Something went wrong. Please try again.'}
           ctaLabel="Try again"
