@@ -8,14 +8,14 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { CloudOff, RefreshCw } from 'lucide-react-native';
+import { Calendar, CloudOff, RefreshCw } from 'lucide-react-native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { MainTabParamList, RootStackParamList } from '../navigation/types';
 import HomeHeader from '../components/HomeHeader';
 import { Card, EmptyState, InlineError } from '../components/ui';
-import { colors, spacing, typography } from '../theme';
+import { colors, radius, spacing, typography } from '../theme';
 import { useMyProfile } from '../features/profile';
 import { QuickActions } from '../features/home';
 
@@ -129,6 +129,9 @@ export default function HomeScreen({ navigation }: Props) {
           <View style={styles.jobsSection}>
             <Text style={styles.sectionTitle}>Today's jobs</Text>
             <Card padding="lg" style={styles.noJobsCard}>
+              <View style={styles.noJobsIconBadge}>
+                <Calendar size={24} color={colors.primary} strokeWidth={1.5} />
+              </View>
               <Text style={styles.noJobsTitle}>No jobs yet</Text>
               <Text style={styles.noJobsBody}>
                 {hasTechnicians
@@ -150,7 +153,6 @@ export default function HomeScreen({ navigation }: Props) {
         businessName={businessName}
         technicianCount={technicianCount}
         jobCounts={jobStatusCounts}
-        onNewJob={handleNewJob}
       />
       <ScrollView
         style={styles.screen}
@@ -165,6 +167,9 @@ export default function HomeScreen({ navigation }: Props) {
               isn't modelled yet — so no list here rather than invented rows.
               Wire this to `profile.jobs.data` once the job shape is known. */}
           <Card padding="lg" style={styles.noJobsCard}>
+            <View style={styles.noJobsIconBadge}>
+              <Calendar size={24} color={colors.primary} strokeWidth={1.5} />
+            </View>
             <Text style={styles.noJobsTitle}>Nothing scheduled today</Text>
           </Card>
         </View>
@@ -213,6 +218,15 @@ const styles = StyleSheet.create({
   noJobsCard: {
     alignItems: 'center',
     gap: spacing.s1,
+  },
+  noJobsIconBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.s1,
   },
   noJobsTitle: {
     ...typography.heading,
