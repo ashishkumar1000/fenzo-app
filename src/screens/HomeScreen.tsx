@@ -8,12 +8,13 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { RefreshCw, WifiOff } from 'lucide-react-native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { MainTabParamList, RootStackParamList } from '../navigation/types';
 import HomeHeader from '../components/HomeHeader';
-import { Button, Card, InlineError } from '../components/ui';
+import { Card, EmptyState, InlineError } from '../components/ui';
 import { colors, spacing, typography } from '../theme';
 import { useMyProfile } from '../features/profile';
 import { QuickActions } from '../features/home';
@@ -84,13 +85,14 @@ export default function HomeScreen({ navigation }: Props) {
   if (!profile) {
     return (
       <SafeAreaView style={styles.centeredRoot} edges={['top']}>
-        <Text style={styles.errorTitle}>Couldn't load your account</Text>
-        <Text style={styles.errorBody}>
-          {error ?? 'Something went wrong. Please try again.'}
-        </Text>
-        <Button variant="primary" size="lg" onPress={refresh}>
-          Try again
-        </Button>
+        <EmptyState
+          icon={<WifiOff size={36} color={colors.danger} strokeWidth={1.5} />}
+          title="Couldn't load your account"
+          description={error ?? 'Something went wrong. Please try again.'}
+          ctaLabel="Try again"
+          ctaIcon={<RefreshCw size={18} color={colors.onPrimary} strokeWidth={2} />}
+          onPressCta={refresh}
+        />
       </SafeAreaView>
     );
   }
@@ -178,20 +180,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfacePage,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.s6,
-    gap: spacing.s3,
-  },
-  errorTitle: {
-    ...typography.title,
-    fontSize: 20,
-    color: colors.textStrong,
-    textAlign: 'center',
-  },
-  errorBody: {
-    ...typography.bodySm,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginBottom: spacing.s2,
   },
 
   // --- New-user view ---

@@ -83,6 +83,7 @@ const styles = StyleSheet.create({
     maxWidth: 300,
   },
   cta: {
+    alignSelf: 'center',
     marginTop: spacing.s6,
   },
 });
