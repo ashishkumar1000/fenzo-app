@@ -7,6 +7,12 @@
 - **401 forced-logout clears no stores** — `setOnUnauthorized` is exported from `src/services/api/apiClient.ts` but never registered anywhere in the app, so an expired session forces nothing. Global session-expiry handling is Story 5.3's scope; when wiring it, clear the jobs store (tenant-scoped data must not survive auth expiry) alongside profile/customers/technicians.
 - **Technician-side screens render placeholder-heavy cards** — TodayScreen/HistoryScreen pass no `customerName`/`technicianName`, so cards fall back to service-type labels and a literal 'Technician' avatar. Story 3.1 owns the technician card variant; the arrays are empty today.
 
+## Deferred from: code review of 1-2-owner-job-detail-screen (2026-09-03)
+
+- **Activity timeline event class is colour-only** — the step/completed/cancelled/neutral distinction on timeline dots is conveyed only by dot colour; no text or accessibility label carries it, which fails colour-blind and screen-reader users. Fix with an `accessibilityLabel` on each timeline row (e.g. include the event class wording) when accessibility polish lands.
+- **Detail dates render in the device timezone** — `dateLine`/`timestampLabel` format UTC `scheduledStart`/`createdAt` via `toLocaleDateString('en-IN', …)` with no timezone pin, so the displayed day can shift on non-IST devices (early-morning IST slots land on the previous day in UTC-land). Decide the canonical display timezone (probably IST) before launch and pin it centrally, not per-call.
+- **Stale technician TODOs now point at an existing screen** — `TodayScreen.tsx:31-33` and `HistoryScreen.tsx:22-24` still say "navigate to a job detail screen once it exists"; that screen now exists (`JobDetail` route). Harmless today (lists are stub-empty), and Story 3.2 owns the technician-side adoption — but the comment should be cleared when that lands so it doesn't mislead.
+
 ## Deferred from: code review of 1-1-wire-jobs-list-to-get-jobs, params-serializer follow-up (2026-09-03)
 
 - ~~**Backend query-parser contract has no pinned test**~~ — **Fixed 2026-09-03** (`fenzit-be/src/jobs/dto/list-jobs-query.dto.spec.ts`, 10 tests). Fastify's `inject()` pins the parser dialect (repeat style → string/array, bracket style survives as a literal `status[]` key), plus end-to-end DTO tests through a pipe config mirroring `main.ts` — including the trap case: `?status[]=bogus` validates as an empty query (200), while `?status=bogus` is a 422. fenzit-be suite: 18 suites, 262 tests green.

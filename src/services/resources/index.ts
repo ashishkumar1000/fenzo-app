@@ -15,8 +15,13 @@ export { customerService } from './customers';
 export type { ApiCustomer, CreateCustomerRequest, CreatedCustomer } from './customers';
 export { jobService } from './jobs';
 export type {
+  ActivityLogEntry,
   ApiJob,
   CreateJobRequest,
+  JobAttachment,
+  JobDetail,
+  JobDetailCustomer,
+  JobDetailTechnician,
   JobPriority,
   JobServiceType,
   JobStatusApi,

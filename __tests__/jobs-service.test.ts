@@ -51,3 +51,14 @@ it('passes cursor, date, technicianId and limit through untouched', async () => 
     },
   });
 });
+
+it('getById hits /jobs/:id and forwards the abort signal', async () => {
+  const controller = new AbortController();
+  await jobService.getById('j-1', controller.signal);
+  expect(get).toHaveBeenCalledWith('/jobs/j-1', { signal: controller.signal });
+});
+
+it('getById works without a signal (no abort requested)', async () => {
+  await jobService.getById('j-1');
+  expect(get).toHaveBeenCalledWith('/jobs/j-1', { signal: undefined });
+});

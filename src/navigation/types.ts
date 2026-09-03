@@ -28,6 +28,8 @@ export type RootStackParamList = {
   MainTabs: undefined;
   Technicians: undefined;
   NewJob: undefined;
+  /** Owner/technician job detail — opened with the job's uuid. */
+  JobDetail: { jobId: string };
 };
 
 declare global {

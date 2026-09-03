@@ -41,8 +41,9 @@ jest.mock('../src/features/customers', () => ({
 }));
 
 import JobsScreen from '../src/features/jobs/JobsScreen';
+import { JobCard } from '../src/features/jobs/components/JobCard';
 import { clearJobs, loadJobs } from '../src/features/jobs/useJobs';
-import { Button, InlineError } from '../src/components/ui';
+import { Button, Card, InlineError } from '../src/components/ui';
 import { jobService } from '../src/services';
 import type { ApiJob, Paginated } from '../src/services';
 
@@ -248,4 +249,17 @@ it('navigates to NewJob from the header button', async () => {
     findButton(renderer, 'New job').props.onPress();
   });
   expect(navigation.navigate).toHaveBeenCalledWith('NewJob');
+});
+
+it('opens JobDetail with the pressed job\'s id when a card is pressed', async () => {
+  list.mockResolvedValue(page([makeJob('job-abc')], null));
+  const renderer = await mountScreen();
+
+  // JobCard wraps `onPress(job)` in its Card; invoke the Card's handler.
+  const card = renderer.root.findAllByType(JobCard)[0];
+  await ReactTestRenderer.act(async () => {
+    card.findAllByType(Card)[0].props.onPress();
+  });
+  expect(navigation.navigate).toHaveBeenCalledTimes(1);
+  expect(navigation.navigate).toHaveBeenCalledWith('JobDetail', { jobId: 'job-abc' });
 });

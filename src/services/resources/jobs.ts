@@ -1,8 +1,8 @@
 /**
  * services/resources/jobs.ts
  * ──────────────────────────
- * Jobs for the signed-in owner's tenant: create (`POST /jobs`) and the
- * paginated list (`GET /jobs`).
+ * Jobs for the signed-in owner's tenant: create (`POST /jobs`), the
+ * paginated list (`GET /jobs`) and the detail (`GET /jobs/:id`).
  *
  * A plain function object on the shared `apiClient` (same shape as
  * `customers.ts`) rather than an `ApiService<T>`.
@@ -103,6 +103,70 @@ export interface ApiJob {
   updatedAt: string;
 }
 
+/**
+ * One entry of the job's activity log (`GET /jobs/:id`). `eventType` is a
+ * free string on the wire — the known values are listed in
+ * api-contracts §4, but anything else must render (raw) rather than crash;
+ * see `eventLabel` in `features/jobDetail/eventLabels.ts`.
+ */
+export interface ActivityLogEntry {
+  /** uuid */
+  id: string;
+  eventType: string;
+  /** uuid, or null for system-emitted events (e.g. an auto photo step). */
+  actorId: string | null;
+  /** Event-specific payload, e.g. previous/new technicianId on `job_reassigned`. */
+  metadata: Record<string, unknown> | null;
+  /** ISO 8601, UTC. */
+  createdAt: string;
+}
+
+/** One uploaded file on the job. `type` is the wire enum, never guessed. */
+export interface JobAttachment {
+  /** uuid */
+  id: string;
+  type: 'photo' | 'signature';
+  /**
+   * Presigned R2 read URL — 1-hour TTL, regenerated on every detail call and
+   * MAY BE NULL on a transient signing failure. NEVER persist it, never
+   * cache it: a refetch is the only retry for a null or expired URL.
+   */
+  url: string | null;
+  /** ISO 8601, UTC. */
+  createdAt: string;
+}
+
+/** The people embedded in a detail response (names joined server-side). */
+export interface JobDetailTechnician {
+  id: string;
+  name: string;
+  countryCode: string;
+  phoneNumber: string;
+  skills: string[];
+}
+
+export interface JobDetailCustomer {
+  id: string;
+  name: string;
+  countryCode: string;
+  phoneNumber: string;
+  /** Null when the customer was created without one. */
+  address: string | null;
+  city: string | null;
+}
+
+/**
+ * The full job as `GET /jobs/:id` returns it — the `ApiJob` row plus the
+ * embedded profiles, the activity log (oldest-first) and the attachments
+ * (oldest-first, presigned URLs fresh per call).
+ */
+export interface JobDetail extends ApiJob {
+  technician: JobDetailTechnician;
+  customer: JobDetailCustomer;
+  activityLog: ActivityLogEntry[];
+  attachments: JobAttachment[];
+}
+
 /** Query accepted by `GET /jobs`. Omitted fields are simply not sent. */
 export interface ListJobsQuery {
   /** YYYY-MM-DD. Omit for the server's default (today IST) — never a guess. */
@@ -150,9 +214,27 @@ async function list(query: ListJobsQuery = {}): Promise<Paginated<ApiJob>> {
   return res.data;
 }
 
+/**
+ * `GET /jobs/:id` — one job with everything: technician and customer
+ * profiles (names/phones/skills embedded), the activity log oldest-first,
+ * and the attachments with fresh presigned read URLs (1-hour TTL, may be
+ * null — a null URL is retried by refetching, never by storing).
+ *
+ * Owner and the assigned technician only. Documented failures, all surfaced
+ * as `ApiError`:
+ *   400 malformed uuid/company · 403 technician not assigned · 404 missing
+ *   or cross-tenant (cross-tenant is deliberately indistinguishable from
+ *   missing — do not leak which)
+ */
+async function getById(id: string, signal?: AbortSignal): Promise<JobDetail> {
+  const res = await apiClient.get<JobDetail>(`/jobs/${id}`, { signal });
+  return res.data;
+}
+
 export const jobService = {
   create,
   list,
+  getById,
 };
 
 /**

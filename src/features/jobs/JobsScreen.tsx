@@ -135,8 +135,8 @@ export default function JobsScreen({ navigation }: Props) {
     navigation.navigate('NewJob');
   };
 
-  const handleOpenJob = (_job: ApiJob) => {
-    // TODO: navigate to a job detail screen once it exists.
+  const handleOpenJob = (job: ApiJob) => {
+    navigation.navigate('JobDetail', { jobId: job.id });
   };
 
   const renderJob = useCallback(
