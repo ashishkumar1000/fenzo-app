@@ -1,7 +1,7 @@
 # Story 2.1: Customer Detail with Job History
 
 Status: ready-for-dev
-Blocked-by: fenzit-be Story 2.4 (customer-detail job history population) for REAL data — screen is buildable now against the final envelope shape.
+Blocked-by: RESOLVED — fenzit-be Story 2.4 is done (2026-09-03, code review passed, live-DB verified). Real `jobHistory` data, `id` on rows, and `?cursor=` all exist in BE now (uncommitted on fenzit-be `main` at time of writing — commit/merge it before running the FE against it). The "optional id / guard" fallbacks below are no longer needed; flip them at build time per the story's own instructions.
 
 ## Story
 
@@ -9,9 +9,9 @@ As an owner,
 I want a customer's full profile and their complete job history,
 so that I can review their service record before creating a new job.
 
-## API Contract (api-contracts.md §13 — includes the BE gap note)
+## API Contract (api-contracts.md §13 — gap closed 2026-09-03)
 
-`GET /customers/:id[?cursor=]` → `CustomerDetail = { id, name, countryCode, phoneNumber, address, city, createdVia, createdAt, tenantId, jobHistory: Paginated<JobHistoryItem> }` with `JobHistoryItem { id, jobNumber, scheduledStart, status, serviceType }` (the `id` field and the `?cursor` param arrive with BE 2.4; until it merges the envelope is always empty). History: `scheduled_start DESC`, page size 20. Errors: 404 cross-tenant/missing, 403 technician.
+`GET /customers/:id[?cursor=]` → `CustomerDetail = { id, name, countryCode, phoneNumber, address, city, createdVia, createdAt, tenantId, jobHistory: Paginated<JobHistoryItem> }` with `JobHistoryItem { id, jobNumber, scheduledStart, status, serviceType }`. History: `scheduled_start DESC`, page size 20, keyset via `?cursor=` (pass `jobHistory.nextCursor` back verbatim). Cursors are endpoint-scoped — a `GET /jobs` cursor is rejected with 400 here. Errors: 404 cross-tenant/missing, 403 technician, 400 malformed/foreign cursor.
 
 ## UI Design (ui-design-spec.md §6, §4)
 

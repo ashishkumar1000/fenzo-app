@@ -144,15 +144,23 @@ Row (`CustomerListItem`): `{ id, name, countryCode, phoneNumber, address, city, 
 
 ## 13. GET /customers/:id — detail (Owner)
 
-Source: customers.service.ts `CustomerDetailResponse` (L63–72).
+Source: customers.service.ts `CustomerDetailResponse` + dto/customer-detail-response.dto.ts.
 ```ts
 interface CustomerDetail extends ApiCustomerProfile {
   // id, name, countryCode, phoneNumber, address, city, createdVia, createdAt, tenantId
   jobHistory: Paginated<JobHistoryItem>;
 }
-interface JobHistoryItem { jobNumber: string; scheduledStart: string; status: string; serviceType: string }
+interface JobHistoryItem {
+  id: string;          // job uuid — use to navigate to job detail
+  jobNumber: string;
+  scheduledStart: string;
+  status: string;
+  serviceType: string;
+}
 ```
-- ⚠️ **BE GAP (open)**: as of 2026-09-01 the service returns `jobHistory: { data: [], nextCursor: null, hasMore: false }` ALWAYS — the Epic-2 placeholder was never wired after jobs landed. BE Story **2.4** (`fenzit-be/_bmad-output/implementation-artifacts/2-4-customer-detail-job-history.md`) fixes it: real query, `scheduled_start DESC`, page size 20, `?cursor=` query param on this endpoint, and adds `id: string` to `JobHistoryItem` so rows can navigate to job detail. **FE Story 2.1 is blocked on BE 2.4 for real data** but can be built against the envelope (shape is final).
+- ✅ **BE GAP closed (2026-09-03, BE Story 2.4 done)**: `jobHistory` is now a real query — `scheduled_start DESC, id DESC`, page size 20, keyset-paginated via `?cursor=` on this same endpoint (pass back `jobHistory.nextCursor` verbatim). Empty history still returns `{ data: [], nextCursor: null, hasMore: false }`.
+- Cursors are endpoint-scoped: a cursor minted by another paginated endpoint (e.g. `GET /jobs`) is rejected with 400. Malformed cursor → 400 `VALIDATION_ERROR`; empty `?cursor=` behaves like no cursor (first page).
+- Ordering note: a 404 (missing/cross-tenant customer) takes precedence over a 400 (malformed cursor) — the customer is the primary resource.
 - 404 cross-tenant/missing; 403 technician.
 
 ## 14. GET /users/me + PATCH /users/me (Owner + Technician)
