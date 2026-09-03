@@ -1,16 +1,22 @@
 /**
  * JobsScreen — full job list with status filter chips (All / Scheduled /
- * In Progress / Done) and a "+ New job" action that pushes the NewJob route.
+ * In progress / Done / Cancelled) and a "+ New job" action that pushes the
+ * NewJob route.
  *
- * The filter row is always visible, even with no jobs at all, so the four
- * sections are discoverable from the first launch. Any section with nothing
- * in it gets the full "No jobs yet" empty state rather than a stray line of
- * text — with copy that says what would land in *that* section.
+ * Live data via the `useJobs` store (`GET /jobs`): loads on mount and on
+ * focus (throttled server-side in the store, so coming back from a created
+ * job refreshes without hammering the endpoint), pages in on scroll-end, and
+ * pulls to refresh. The filter row is always visible, even with no jobs at
+ * all, so the sections are discoverable from the first launch. Any section
+ * with nothing in it gets the full "No jobs yet" empty state rather than a
+ * stray line of text — with copy that says what would land in *that* section.
  *
- * Live data via `JOBS` in `data.ts` until `@services/jobService` exists.
+ * List rows carry only `customerId`/`technicianId`, so display names are
+ * resolved client-side: customers from the customers store, technicians from
+ * the roster in `GET /users/me`.
  */
-import { useMemo, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import {
   CalendarClock,
   CircleCheck,
@@ -21,25 +27,24 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button, EmptyState } from '../../components/ui';
+import { Button, EmptyState, InlineError } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import type { MainTabParamList, RootStackParamList } from '../../navigation/types';
+import { useMyProfile } from '../profile';
+import { useCustomers } from '../customers';
 import { JobCard } from './components/JobCard';
 import { StatusFilterBar } from './components/StatusFilterBar';
-import { JOBS } from './data';
-import type { Job, JobFilter } from './types';
+import { useJobs } from './useJobs';
+import type { ApiJob, JobFilter } from './types';
 
 /**
  * Empty-state icon and copy per section — the icon hints at the section's
  * meaning (a calendar for what's booked, a wrench for work underway) so the
- * four empty pages aren't identical.
- *
- * Keyed by `JobFilter`, which includes `cancelled` even though no chip
- * currently exposes it — the entry is here so adding that chip to
- * `JOB_FILTERS` needs no change on this side.
+ * empty pages aren't identical.
  */
 const EMPTY_BY_FILTER: Record<JobFilter, { icon: LucideIcon; description: string }> = {
   all: {
@@ -51,12 +56,12 @@ const EMPTY_BY_FILTER: Record<JobFilter, { icon: LucideIcon; description: string
     icon: CalendarClock,
     description: 'Jobs booked for a future date and time will show up here.',
   },
-  progress: {
+  in_progress: {
     icon: Wrench,
     description:
       'Jobs a technician has started, but not yet finished, will show up here.',
   },
-  done: {
+  completed: {
     icon: CircleCheck,
     description: 'Jobs a technician has marked complete will show up here.',
   },
@@ -76,26 +81,75 @@ type Props = CompositeScreenProps<
 >;
 
 export default function JobsScreen({ navigation }: Props) {
-  const [filter, setFilter] = useState<JobFilter>('all');
+  const { jobs, filter, isLoading, isLoadingMore, error, loadJobs, loadMoreJobs, refresh, setFilter } =
+    useJobs();
+  const { customers } = useCustomers();
+  const { profile } = useMyProfile();
 
-  // `JOBS` is a module constant today, so `filter` is the only dependency.
-  // ⚠️ When this moves to `jobService`/state, add the job list to the deps —
-  // otherwise the filtered list won't recompute when new data arrives.
-  const jobs = useMemo(
-    () => (filter === 'all' ? JOBS : JOBS.filter(j => j.status === filter)),
-    [filter],
+  // Refetch on every focus — the store throttles (skips within 15s of a
+  // success), so returning from a created job shows it without extra load.
+  useFocusEffect(
+    useCallback(() => {
+      void loadJobs();
+    }, [loadJobs]),
   );
 
-  const isEmpty = jobs.length === 0;
+  // `customerId` → display name, for the card titles.
+  const customerNames = useMemo(
+    () => new Map(customers.map(c => [c.id, c.name])),
+    [customers],
+  );
+
+  // `technicianId` → display name, from the server-issued roster.
+  const technicianNames = useMemo(
+    () => new Map((profile?.technicians ?? []).map(t => [t.id, t.name])),
+    [profile],
+  );
+
+  // A failed refresh keeps its rows on screen behind a dismissible banner;
+  // the dismissal is local (the store's error clears on the next success).
+  const [errorDismissed, setErrorDismissed] = useState(false);
+  useEffect(() => {
+    setErrorDismissed(false);
+  }, [error]);
+
+  const hasData = jobs.length > 0;
+  // A failed load with nothing to show replaces the empty state entirely —
+  // "no jobs yet" would be a lie when the request just failed.
+  const failedWithNoData = Boolean(error) && !isLoading && !hasData;
+  const showBanner = Boolean(error) && hasData && !errorDismissed;
+
+  // Pull-to-refresh runs over rows already on screen, where the store's
+  // `isLoading` deliberately stays false — so the spinner is local state.
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    void refresh().finally(() => setIsRefreshing(false));
+  }, [refresh]);
+
+  const isEmpty = !isLoading && !failedWithNoData && !hasData;
   const { icon: EmptyIcon, description: emptyDescription } = EMPTY_BY_FILTER[filter];
 
   const handleNewJob = () => {
     navigation.navigate('NewJob');
   };
 
-  const handleOpenJob = (_job: Job) => {
+  const handleOpenJob = (_job: ApiJob) => {
     // TODO: navigate to a job detail screen once it exists.
   };
+
+  const renderJob = useCallback(
+    ({ item }: { item: ApiJob }) => (
+      <JobCard
+        job={item}
+        customerName={customerNames.get(item.customerId)}
+        technicianName={technicianNames.get(item.technicianId)}
+        onPress={handleOpenJob}
+      />
+    ),
+    [customerNames, technicianNames],
+  );
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
@@ -115,29 +169,72 @@ export default function JobsScreen({ navigation }: Props) {
         <StatusFilterBar value={filter} onChange={setFilter} />
       </View>
 
-      <FlatList
-        data={jobs}
-        keyExtractor={item => item.id}
-        renderItem={({ item }) => <JobCard job={item} onPress={handleOpenJob} />}
-        // When empty: flexGrow gives EmptyState's `flex: 1` a height to centre
-        // itself in, and the list padding drops away since EmptyState brings
-        // its own horizontal inset.
-        contentContainerStyle={[
-          styles.listContent,
-          isEmpty && styles.listContentEmpty,
-        ]}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        ListEmptyComponent={
-          // No CTA here — the "New job" button in the header is the single
-          // entry point, so the centre of the page stays informational.
-          <EmptyState
-            icon={<EmptyIcon size={36} color={colors.primary} strokeWidth={1.5} />}
-            title="No jobs yet"
-            description={emptyDescription}
+      {isLoading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : failedWithNoData ? (
+        <View style={styles.centered}>
+          {/* No onDismiss: with nothing on screen an X would only hide the
+              message while the store still holds the error — Retry is the
+              way out, so this banner stays non-dismissible. */}
+          <InlineError message={error ?? 'Something went wrong'} />
+          <Button variant="secondary" size="md" onPress={() => void refresh()}>
+            Retry
+          </Button>
+        </View>
+      ) : (
+        <>
+          {/* A failed refresh with rows already on screen: keep the rows,
+              explain why they may be stale. */}
+          {showBanner ? (
+            <View style={styles.bannerWrap}>
+              <InlineError message={error ?? ''} onDismiss={() => setErrorDismissed(true)} />
+            </View>
+          ) : null}
+
+          <FlatList
+            data={jobs}
+            keyExtractor={item => item.id}
+            renderItem={renderJob}
+            onEndReached={() => void loadMoreJobs()}
+            onEndReachedThreshold={0.4}
+            ListFooterComponent={
+              isLoadingMore ? (
+                <View style={styles.footerSpinner}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                </View>
+              ) : null
+            }
+            // When empty: flexGrow gives EmptyState's `flex: 1` a height to
+            // centre itself in, and the list padding drops away since
+            // EmptyState brings its own horizontal inset.
+            contentContainerStyle={[
+              styles.listContent,
+              isEmpty && styles.listContentEmpty,
+            ]}
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
+                colors={[colors.primary]}
+                tintColor={colors.primary}
+              />
+            }
+            ListEmptyComponent={
+              // No CTA here — the "New job" button in the header is the single
+              // entry point, so the centre of the page stays informational.
+              <EmptyState
+                icon={<EmptyIcon size={36} color={colors.primary} strokeWidth={1.5} />}
+                title="No jobs yet"
+                description={emptyDescription}
+              />
+            }
+            showsVerticalScrollIndicator={false}
           />
-        }
-        showsVerticalScrollIndicator={false}
-      />
+        </>
+      )}
     </SafeAreaView>
   );
 }
@@ -164,6 +261,20 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.s3,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderSubtle,
+  },
+  bannerWrap: {
+    paddingHorizontal: spacing.s4,
+    paddingTop: spacing.s3,
+  },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.s3,
+    padding: spacing.s4,
+  },
+  footerSpinner: {
+    paddingVertical: spacing.s4,
   },
   listContent: {
     padding: spacing.s4,

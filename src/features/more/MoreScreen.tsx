@@ -11,6 +11,7 @@ import { Bell, ChevronRight, HardHat, LogOut, Phone, Settings, ShieldCheck } fro
 import { Avatar, Card } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import { useAuth } from '../auth';
+import { clearJobs } from '../jobs';
 import { formatPhone, formatRole, useMyProfile } from '../profile';
 import { useTechnicians } from '../technicians';
 import { MoreTile } from './components/MoreTile';
@@ -39,6 +40,7 @@ export default function MoreScreen() {
         style: 'destructive',
         onPress: () => {
           clearTechnicians();
+          clearJobs();
           clearProfile();
           reset();
         },

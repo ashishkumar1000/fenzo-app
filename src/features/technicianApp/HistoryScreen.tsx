@@ -14,12 +14,12 @@ import { EmptyState } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import { JobCard } from '../jobs/components/JobCard';
 import { JOB_HISTORY } from './data';
-import type { Job } from '../jobs/types';
+import type { ApiJob } from '../jobs/types';
 
 export default function HistoryScreen() {
   const hasHistory = JOB_HISTORY.length > 0;
 
-  const handleOpenJob = (_job: Job) => {
+  const handleOpenJob = (_job: ApiJob) => {
     // TODO: navigate to a job detail screen once it exists.
   };
 

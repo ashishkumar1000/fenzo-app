@@ -1,5 +1,5 @@
 # generated: 2026-09-01
-# last_updated: 2026-09-01  # all 18 story files created — ready-for-dev
+# last_updated: 2026-09-03  # story 1-1 reviewed (all patches applied) — done
 # project: fenzo-app
 # project_key: NOKEY
 # tracking_system: file-system
@@ -13,7 +13,7 @@
 development_status:
   # Epic 1: Owner Live Job Board
   epic-1: in-progress
-  1-1-wire-jobs-list-to-get-jobs: ready-for-dev
+  1-1-wire-jobs-list-to-get-jobs: done
   1-2-owner-job-detail-screen: ready-for-dev
   1-3-edit-reassign-cancel-job: ready-for-dev
   1-4-home-stats-refresh: ready-for-dev

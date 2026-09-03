@@ -15,10 +15,13 @@ export { customerService } from './customers';
 export type { ApiCustomer, CreateCustomerRequest, CreatedCustomer } from './customers';
 export { jobService } from './jobs';
 export type {
+  ApiJob,
   CreateJobRequest,
-  CreatedJob,
   JobPriority,
   JobServiceType,
+  JobStatusApi,
+  ListJobsQuery,
+  WorkflowStepApi,
 } from './jobs';
 export { skillService } from './skills';
 export type { Skill, NewSkillInput } from './skills';

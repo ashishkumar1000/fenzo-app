@@ -32,6 +32,7 @@ import { Button, Input, Select } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import { customerService, jobService } from '../../services';
 import type { ApiError } from '../../services';
+import { upsertJob } from '../jobs';
 import type { RootStackParamList } from '../../navigation/types';
 import {
   AddCustomerSheet,
@@ -218,7 +219,7 @@ export default function NewJobScreen({ navigation }: Props) {
     setSubmitting(true);
     setSubmitError('');
     try {
-      await jobService.create({
+      const job = await jobService.create({
         customerId,
         technicianId,
         serviceType: toJobServiceType(serviceCategory),
@@ -236,6 +237,10 @@ export default function NewJobScreen({ navigation }: Props) {
         // `priority` and `requireCompletionPhoto` are deliberately omitted —
         // no UI for either, so the server's defaults (normal / false) apply.
       });
+      // Drop the created row straight into the Jobs store: the tab's focus
+      // refetch is throttled, so without this a job created within 15s of the
+      // last successful load stays invisible until the throttle expires.
+      upsertJob(job);
       // TODO(jobs): navigate to the new job's detail screen once it exists,
       // rather than dropping back to wherever the owner came from.
       navigation.goBack();

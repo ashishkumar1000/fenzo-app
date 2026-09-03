@@ -1,15 +1,18 @@
 /**
  * services/resources/jobs.ts
  * ──────────────────────────
- * Jobs for the signed-in owner's tenant.
+ * Jobs for the signed-in owner's tenant: create (`POST /jobs`) and the
+ * paginated list (`GET /jobs`).
  *
- * Only `POST /jobs` is wired so far, so this is a plain function object on the
- * shared `apiClient` (same shape as `customers.ts`) rather than an
- * `ApiService<T>` — promote it once the list/detail endpoints land.
+ * A plain function object on the shared `apiClient` (same shape as
+ * `customers.ts`) rather than an `ApiService<T>`.
  *
- * Owner-only: a technician JWT gets 403. Rejects with `ApiError` on failure.
+ * Owner-only list: a technician JWT gets 403 on `GET /jobs` (the technician
+ * variant arrives with the offline-sync epic). Rejects with `ApiError` on
+ * failure.
  */
 import { apiClient } from '../api/apiClient';
+import type { Paginated } from '../api/pagination';
 
 /**
  * The job service-type enum accepted by `POST /jobs`.
@@ -30,6 +33,18 @@ export type JobServiceType =
   | 'other';
 
 export type JobPriority = 'normal' | 'urgent';
+
+/** Status enum as the API spells it (snake_case), per api-contracts §1. */
+export type JobStatusApi = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+
+/** Workflow steps as the API spells them. Fixed order; fresh job has none. */
+export type WorkflowStepApi =
+  | 'on_my_way'
+  | 'arrived'
+  | 'in_progress'
+  | 'photos_uploaded'
+  | 'signature_captured'
+  | 'completed';
 
 export interface CreateJobRequest {
   /** Existing customer UUID. */
@@ -52,29 +67,92 @@ export interface CreateJobRequest {
 }
 
 /**
- * The created job, as returned by `201`.
+ * One job row, exactly as the API returns it — list, create, patch and
+ * workflow responses all share this shape.
  *
- * Only `id` is modelled: the full response shape isn't documented, and callers
- * currently need nothing else. Widen this rather than casting at call sites
- * once a job detail screen needs the rest.
+ * Mirrors the backend's `JobResponse` verbatim: ids only for customer and
+ * technician (names are joined client-side), no amount anywhere, and
+ * `currentStep` is null until a technician starts the workflow.
  */
-export interface CreatedJob {
+export interface ApiJob {
+  /** uuid */
   id: string;
+  /** Human-readable reference, e.g. "JB-2026-0042". */
+  jobNumber: string;
+  tenantId: string;
+  /** uuid — resolve the display name from the customers store, not here. */
+  customerId: string;
+  /** uuid — resolve the display name from the roster, not here. */
+  technicianId: string;
+  serviceLocation: string;
+  serviceType: JobServiceType;
+  /** ISO 8601, UTC. */
+  scheduledStart: string;
+  /** ISO 8601, UTC, or null when the form had no end time. */
+  scheduledEnd: string | null;
+  status: JobStatusApi;
+  /** One of `WorkflowStepApi`, or null before the technician starts. */
+  currentStep: WorkflowStepApi | null;
+  priority: JobPriority;
+  requireCompletionPhoto: boolean;
+  /** Null when the form left it blank. */
+  description: string | null;
+  /** Null when the form left it blank. */
+  notesForTechnician: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Query accepted by `GET /jobs`. Omitted fields are simply not sent. */
+export interface ListJobsQuery {
+  /** YYYY-MM-DD. Omit for the server's default (today IST) — never a guess. */
+  date?: string;
+  /** Repeatable filter; empty/absent means all statuses. */
+  status?: JobStatusApi[];
+  /** Owner-only filter; silently ignored for a technician role. */
+  technicianId?: string;
+  /** Opaque cursor from the previous page — pass back verbatim. */
+  cursor?: string;
+  /** 1–50; server default 50. */
+  limit?: number;
 }
 
 /**
- * `POST /jobs` — creates a job for the owner's tenant.
+ * `POST /jobs` — creates a job for the owner's tenant. `201` returns the full
+ * row, same shape as list responses.
  *
  * Documented failures, all surfaced as `ApiError`:
  *   400 company not set up · 403 technician JWT · 422 validation error
  */
-async function create(input: CreateJobRequest): Promise<CreatedJob> {
-  const res = await apiClient.post<CreatedJob>('/jobs', input);
+async function create(input: CreateJobRequest): Promise<ApiJob> {
+  const res = await apiClient.post<ApiJob>('/jobs', input);
+  return res.data;
+}
+
+/**
+ * `GET /jobs` — the tenant's jobs for one IST day, newest first.
+ *
+ * Sort is `createdAt DESC, id DESC` (NOT by scheduledStart), and the day
+ * window is `scheduledStart` within the IST date. Empty match is a 200 with
+ * `{ data: [], nextCursor: null, hasMore: false }` — not an error.
+ *
+ * Documented failures, all surfaced as `ApiError`:
+ *   400 bad cursor/company · 401 · 422 invalid date/status/limit
+ */
+async function list(query: ListJobsQuery = {}): Promise<Paginated<ApiJob>> {
+  const params: Record<string, unknown> = {};
+  if (query.date) params.date = query.date;
+  if (query.status?.length) params.status = query.status; // axios default serializer emits status[]=a&status[]=b — Fastify/qs parses both bracket and repeat styles into an array; if a 422 ever shows both styles failing, add paramsSerializer joining repeats without brackets
+  if (query.technicianId) params.technicianId = query.technicianId;
+  if (query.cursor) params.cursor = query.cursor;
+  if (query.limit) params.limit = query.limit;
+  const res = await apiClient.get<Paginated<ApiJob>>('/jobs', { params });
   return res.data;
 }
 
 export const jobService = {
   create,
+  list,
 };
 
 /**

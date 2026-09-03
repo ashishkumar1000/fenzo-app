@@ -2,17 +2,14 @@
  * Technician-side job data — a technician's own assigned jobs (Today) and
  * their completed/past ones (History).
  *
- * Both are empty for now: no `GET` endpoint for a technician's jobs is
- * documented yet (only `POST /auth/invite` exists on the technician side so
- * far). Reuses the owner-side `Job` type since the shape (customer, status,
- * time, amount) is identical from either side — swap these for real API
- * calls once the endpoints are given, the same way `features/jobs/data.ts`
- * documents doing for the owner's list.
+ * Both are empty for now: the technician jobs endpoints arrive with the
+ * offline-sync epic. Uses `ApiJob` (the API row shape) — swap these for real
+ * API calls once those stories land.
  */
-import type { Job } from '../jobs/types';
+import type { ApiJob } from '../jobs/types';
 
-/** Live list for the "Today" tab. Empty until the jobs API exists. */
-export const TODAY_JOBS: Job[] = [];
+/** Live list for the "Today" tab. Empty until the technician jobs API exists. */
+export const TODAY_JOBS: ApiJob[] = [];
 
-/** Live list for the "History" tab. Empty until the jobs API exists. */
-export const JOB_HISTORY: Job[] = [];
+/** Live list for the "History" tab. Empty until the technician jobs API exists. */
+export const JOB_HISTORY: ApiJob[] = [];

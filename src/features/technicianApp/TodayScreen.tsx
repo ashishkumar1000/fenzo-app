@@ -21,14 +21,14 @@ import { colors, spacing, typography } from '../../theme';
 import { useMyProfile } from '../profile';
 import { JobCard } from '../jobs/components/JobCard';
 import { TODAY_JOBS } from './data';
-import type { Job } from '../jobs/types';
+import type { ApiJob } from '../jobs/types';
 
 export default function TodayScreen() {
   const { profile } = useMyProfile();
   const firstName = profile?.name.split(' ')[0];
   const hasJobs = TODAY_JOBS.length > 0;
 
-  const handleOpenJob = (_job: Job) => {
+  const handleOpenJob = (_job: ApiJob) => {
     // TODO: navigate to a job detail screen once it exists.
   };
 

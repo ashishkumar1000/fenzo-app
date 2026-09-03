@@ -1,20 +1,32 @@
 /**
  * JobCard — one row in the Jobs list. Composes Card + Badge + Avatar.
- * Customer name + status badge on top, service description + time below,
- * then a divider and the assigned technician + amount.
+ *
+ * Renders `ApiJob` directly: names are passed in as props (list rows carry
+ * only ids — the screen resolves them from the customers store and roster),
+ * and every other piece comes from the formatter layer in `format.ts`.
+ * Header: title + status badge (with an Urgent marker when applicable) ·
+ * meta rows: service + time · footer: the assigned technician. No amount —
+ * jobs don't carry one.
  */
 import { StyleSheet, Text, View } from 'react-native';
 import { Clock, Droplet, Snowflake, Wrench } from 'lucide-react-native';
 import { Avatar, Badge, Card } from '../../../components/ui';
 import { colors, spacing, typography } from '../../../theme';
-import type { Job } from '../types';
+import type { StatusKey } from '../../../theme';
+import type { ApiJob } from '../types';
+import { formatTimeLabel, serviceTypeLabel, serviceTypeToIcon, statusToBadge } from '../format';
 
 type Props = {
-  job: Job;
-  onPress?: (job: Job) => void;
+  job: ApiJob;
+  /** Resolved customer display name; falls back to the service type label. */
+  customerName?: string;
+  /** Resolved technician display name; falls back to a neutral placeholder. */
+  technicianName?: string;
+  onPress?: (job: ApiJob) => void;
 };
 
-const STATUS_LABEL: Record<Job['status'], string> = {
+/** Badge labels — the one title-case exception in the design system. */
+const STATUS_LABEL: Record<Exclude<StatusKey, 'neutral'>, string> = {
   done: 'Done',
   progress: 'In Progress',
   scheduled: 'Scheduled',
@@ -27,11 +39,10 @@ const SERVICE_ICON = {
   snowflake: Snowflake,
 } as const;
 
-const formatRupees = (amount: number) =>
-  amount > 0 ? `₹${amount.toLocaleString('en-IN')}` : '—';
-
-export function JobCard({ job, onPress }: Props) {
-  const ServiceIcon = SERVICE_ICON[job.serviceIcon];
+export function JobCard({ job, customerName, technicianName, onPress }: Props) {
+  const badgeStatus = statusToBadge(job.status);
+  const ServiceIcon = SERVICE_ICON[serviceTypeToIcon(job.serviceType)];
+  const serviceLabel = serviceTypeLabel(job.serviceType);
 
   return (
     <Card
@@ -41,34 +52,42 @@ export function JobCard({ job, onPress }: Props) {
       style={styles.card}>
       <View style={styles.headerRow}>
         <Text style={styles.customerName} numberOfLines={1}>
-          {job.customerName}
+          {customerName ?? serviceLabel}
         </Text>
-        <Badge status={job.status} dot>
-          {STATUS_LABEL[job.status]}
-        </Badge>
+        <View style={styles.badgeRow}>
+          {job.priority === 'urgent' ? (
+            // Urgent borrows the cancelled palette — red communicates urgency
+            // without inventing a new status colour.
+            <Badge status="cancelled" tone="soft" size="sm">
+              Urgent
+            </Badge>
+          ) : null}
+          <Badge status={badgeStatus} dot>
+            {STATUS_LABEL[badgeStatus]}
+          </Badge>
+        </View>
       </View>
 
       <View style={styles.metaRow}>
         <ServiceIcon size={15} color={colors.textMuted} strokeWidth={2} />
         <Text style={styles.metaText} numberOfLines={1}>
-          {job.description}
+          {job.description ?? serviceLabel}
         </Text>
       </View>
       <View style={styles.metaRow}>
         <Clock size={15} color={colors.textMuted} strokeWidth={2} />
-        <Text style={styles.metaText}>{job.timeLabel}</Text>
+        <Text style={styles.metaText}>{formatTimeLabel(job.scheduledStart, job.scheduledEnd)}</Text>
       </View>
 
       <View style={styles.divider} />
 
       <View style={styles.footerRow}>
         <View style={styles.techRow}>
-          <Avatar name={job.technicianName} size="sm" />
+          <Avatar name={technicianName ?? 'Technician'} size="sm" />
           <Text style={styles.techName} numberOfLines={1}>
-            {job.technicianName}
+            {technicianName ?? 'Technician'}
           </Text>
         </View>
-        <Text style={styles.amount}>{formatRupees(job.amount)}</Text>
       </View>
     </Card>
   );
@@ -82,6 +101,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacing.s2,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.s2,
   },
   customerName: {
@@ -104,10 +128,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.borderSubtle,
     marginTop: spacing.s1,
   },
+  // Left-aligned now that the amount is gone — the row keeps the Avatar +
+  // name pattern for when the technician side omits it (Story 3.1).
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
   techRow: {
     flexDirection: 'row',
@@ -118,9 +143,5 @@ const styles = StyleSheet.create({
   techName: {
     ...typography.bodySm,
     color: colors.textBody,
-  },
-  amount: {
-    ...typography.heading,
-    color: colors.textStrong,
   },
 });

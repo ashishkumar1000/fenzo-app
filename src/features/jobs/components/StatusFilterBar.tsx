@@ -1,8 +1,12 @@
 /**
  * StatusFilterBar — horizontally scrollable segmented filter chips
- * (All / Scheduled / In Progress / Done). Matches current filter-UI best
- * practice for status lists: a single always-visible chip row, one active
- * selection, no overflow menu needed for this small a set.
+ * (All / Scheduled / In progress / Done / Cancelled). Matches current
+ * filter-UI best practice for status lists: a single always-visible chip row,
+ * one active selection, no overflow menu needed for this small a set.
+ *
+ * Chip values are the API's status enum (so the store can put them straight
+ * on the wire); the labels are sentence case — these are controls, not Badge
+ * vocabulary.
  *
  * Each chip is a `Pressable` (consistent with every other control in the app)
  * carrying `accessibilityRole="button"` and `accessibilityState.selected`, so
@@ -10,8 +14,16 @@
  */
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { colors, fontSize, radius, spacing, touch, weight } from '../../../theme';
-import { JOB_FILTERS } from '../data';
 import type { JobFilter } from '../types';
+
+/** Chip values are API status enums; `all` sends no status param. */
+const JOB_FILTERS: { value: JobFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'scheduled', label: 'Scheduled' },
+  { value: 'in_progress', label: 'In progress' },
+  { value: 'completed', label: 'Done' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
 
 type Props = {
   value: JobFilter;
