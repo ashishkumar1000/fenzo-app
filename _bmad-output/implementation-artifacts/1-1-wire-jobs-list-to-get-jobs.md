@@ -40,7 +40,8 @@ JobCard v2 keeps the existing card anatomy — deltas only: title line = resolve
     async function list(query: ListJobsQuery = {}): Promise<Paginated<ApiJob>> {
       const params: Record<string, unknown> = {};
       if (query.date) params.date = query.date;
-      if (query.status?.length) params.status = query.status;   // axios default serializer emits status[]=a&status[]=b — Fastify/qs parses both bracket and repeat styles into an array; if a 422 ever shows both styles failing, add paramsSerializer joining repeats without brackets
+      if (query.status?.length) params.status = query.status;   // array passed through as-is — the axios instance serializes arrays repeat-style (?status=a&status=b), which is what the backend's query parser expects (bracket style is silently ignored there)
+      <!-- 2026-09-03: original comment here claimed Fastify/qs parses both bracket and repeat styles; the live smoke test overturned this — bracket style is silently ignored, so the apiClient now sets `paramsSerializer: { indexes: null }` (axios built-in) to emit repeat style. -->
       if (query.technicianId) params.technicianId = query.technicianId;
       if (query.cursor) params.cursor = query.cursor;
       if (query.limit) params.limit = query.limit;
@@ -171,6 +172,8 @@ GLM (Claude Code session, 2026-09-03)
 - 2026-09-03: Story 1-1 implemented — Jobs tab wired to `GET /jobs` via the rewritten `useJobs` store; ApiJob contract types added to the service layer; JobCard v2 (urgent badge, no amount, resolved names); filter chips on API enums; pagination + pull-to-refresh + throttled focus refetch + error/empty handling; `data.ts` deleted; logout clears the jobs store; 25 new tests; jest infra (config, preset, setup) added for the repo.
 - 2026-09-03: Code review (4-layer: blind-hunter, edge-case-hunter, verification-gap, acceptance-auditor) — findings appended below.
 - 2026-09-03: All 15 review patches applied (`useJobs` queue-behind/reset-generation/upsert filter-guard, NewJobScreen inserts the created row, JobCard banner + Retry view, `statusToBadge` fallback, jest preset named directly); new tests for wire params, store races, card rendering; 42 tests pass, tsc clean; 4 items moved to `deferred-work.md`. Status → done.
+- 2026-09-03: Smoke-test follow-up — live testing proved the Task 1 comment's premise wrong: axios's default serializer emits bracket style (`status[]=a`), which Fastify's default parser sees as a literal key and silently ignores. Added `repeatStyleParamsSerializer` (repeat-style arrays), wired into `apiClient`; jobs.ts comment corrected; +6 serializer tests. Second review of this batch appended below.
+- 2026-09-03: Follow-up review decision resolved — the hand-rolled serializer duplicated axios's built-in `paramsSerializer: { indexes: null }` (verified identical wire output on axios 1.19.0, plus correct ISO Date handling). Deleted `paramsSerializer.ts` + its unit test; `apiClient` now sets `paramsSerializer: { indexes: null }` directly; the unit test was replaced by `__tests__/api-client.test.ts` pinning the integrated wire output via `apiClient.getUri(...)` (closes the wire-seam gap). Trailing newlines fixed. 52 tests pass (7 suites), tsc clean.
 
 ## Review Findings (2026-09-03)
 
@@ -203,3 +206,21 @@ GLM (Claude Code session, 2026-09-03)
 - [x] [Review][Defer] `transformIgnorePatterns` allowlist omits other ESM deps (react-native-svg, react-native-mmkv) — surfaces when App.test is repaired [jest.config.js:7] — deferred, pre-existing
 - [x] [Review][Defer] 401 forced-logout clears no stores — `setOnUnauthorized` is exported but never registered; global session-expiry handling is Story 5.3's scope, add `clearJobs` there [src/services/api/apiClient.ts:45] — deferred, pre-existing
 - [x] [Review][Defer] Technician-side screens render placeholder-heavy cards ('Technician' fallback, service-label titles) — Story 3.1 owns the technician card variant; arrays are empty today [src/features/technicianApp/TodayScreen.tsx] — deferred, pre-existing
+
+## Review Findings — follow-up: params-serializer fix (2026-09-03)
+
+Uncommitted fix batch since commit 9af7937 (paramsSerializer.ts, apiClient.ts wiring, jobs.ts comment, 6-test suite), re-reviewed with all 4 layers. Backend parsing claims were re-verified live (axios 1.19.0 default emits `status%5B%5D=`; `paramsSerializer: { indexes: null }` emits repeat style and drops null/undefined/empty params).
+
+### Decision needed
+
+- [x] [Review][Decision] Hand-rolled serializer duplicates an axios built-in — installed axios 1.19.0's `paramsSerializer: { indexes: null }` produces the identical wire output (repeat-style arrays, null/undefined/empty-array dropped) and additionally serializes `Date` params to ISO strings (the custom one stringifies them via `toString`, which would be wrong). Replacing `repeatStyleParamsSerializer` with the one-line built-in option deletes ~71 lines (module + test) and removes the last divergence risk from axios defaults. [src/services/api/paramsSerializer.ts, src/services/api/apiClient.ts:60] — **Resolved (user, 2026-09-03): switch to the built-in.** Applied.
+
+### Patch
+
+- [x] [Review][Patch] Wire seam is untested — every test calls `serialize()` directly or mocks axios entirely, so removing/typo-ing `paramsSerializer` on the axios instance passes all tests while every repeatable filter silently breaks (the exact failure mode this fix addresses). Pin the integrated output: `apiClient.getUri({ url: '/jobs', params: { status: ['scheduled'] } })` → `?status=scheduled`. [src/services/api/apiClient.ts:60] — fixed: `__tests__/api-client.test.ts`
+- [x] [Review][Patch] Missing trailing newlines on both new files — same defect class already patched once in the first review [src/services/api/paramsSerializer.ts, __tests__/params-serializer.test.ts] — fixed: both files deleted in the switch; replacement test file ends with a newline
+- [x] [Review][Patch] Story audit trail not updated for this follow-up — Change Log has no entry for the serializer fix; Completion Notes test count is stale (42 → 48); Task 1's inline comment premise ("Fastify/qs parses both bracket and repeat styles") was overturned by the live smoke test but the spec text still carries it [this file] — fixed: Change Log entries added, Task 1 comment corrected with a dated annotation, current count recorded (52 tests)
+
+### Deferred (cross-repo)
+
+- [x] [Review][Defer] Backend contract untestable from this repo — the "Fastify parses repeat style, silently ignores bracket style" claim is only pinned by a live smoke test; add a fenzit-be test asserting the query parser's array behavior [fenzit-be] — deferred, cross-repo follow-up

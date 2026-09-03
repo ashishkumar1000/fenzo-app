@@ -142,7 +142,7 @@ async function create(input: CreateJobRequest): Promise<ApiJob> {
 async function list(query: ListJobsQuery = {}): Promise<Paginated<ApiJob>> {
   const params: Record<string, unknown> = {};
   if (query.date) params.date = query.date;
-  if (query.status?.length) params.status = query.status; // axios default serializer emits status[]=a&status[]=b — Fastify/qs parses both bracket and repeat styles into an array; if a 422 ever shows both styles failing, add paramsSerializer joining repeats without brackets
+  if (query.status?.length) params.status = query.status; // array passed through as-is — the axios instance serializes arrays repeat-style (?status=a&status=b), which is what the backend's query parser expects (bracket style is silently ignored there)
   if (query.technicianId) params.technicianId = query.technicianId;
   if (query.cursor) params.cursor = query.cursor;
   if (query.limit) params.limit = query.limit;

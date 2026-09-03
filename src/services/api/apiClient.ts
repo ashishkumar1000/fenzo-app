@@ -54,6 +54,13 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // Repeat-style query arrays (`?status=a&status=b`): axios's default emits
+  // bracket style (`?status[]=a`), which this backend's query parser (Fastify's
+  // default) treats as a literal key and silently ignores — proven live
+  // 2026-09-03. `indexes: null` is axios's built-in "arrays without brackets"
+  // mode; it also drops null/undefined/empty-array params and serializes Date
+  // values as ISO strings, so nothing needs to be hand-rolled here.
+  paramsSerializer: { indexes: null },
 });
 
 // --- Request interceptor: attach auth token --------------------------------
