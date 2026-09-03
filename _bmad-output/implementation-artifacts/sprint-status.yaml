@@ -1,0 +1,50 @@
+# generated: 2026-09-01
+# last_updated: 2026-09-01  # all 18 story files created — ready-for-dev
+# project: fenzo-app
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS: same as fenzit-be sprint-status.yaml
+# Epic: backlog | in-progress | done
+# Story: backlog | ready-for-dev | in-progress | review | done
+# Epic moves to in-progress automatically when its first story file is created.
+
+development_status:
+  # Epic 1: Owner Live Job Board
+  epic-1: in-progress
+  1-1-wire-jobs-list-to-get-jobs: ready-for-dev
+  1-2-owner-job-detail-screen: ready-for-dev
+  1-3-edit-reassign-cancel-job: ready-for-dev
+  1-4-home-stats-refresh: ready-for-dev
+  epic-1-retrospective: optional
+
+  # Epic 2: Customer Depth
+  epic-2: in-progress
+  2-1-customer-detail-with-job-history: ready-for-dev  # blocked-by fenzit-be 2-4 for real data; screen buildable now
+  2-2-single-customer-data-path: ready-for-dev
+  epic-2-retrospective: optional
+
+  # Epic 3: Technician Job Execution
+  epic-3: in-progress
+  3-1-today-history-wired-to-get-jobs: ready-for-dev
+  3-2-technician-job-detail: ready-for-dev
+  3-3-workflow-step-advancement: ready-for-dev
+  3-4-photo-capture-upload-r2: ready-for-dev
+  3-5-signature-capture: ready-for-dev
+  epic-3-retrospective: optional
+
+  # Epic 4: Offline-First Sync
+  epic-4: in-progress
+  4-1-delta-sync-hydration-store: ready-for-dev
+  4-2-offline-action-queue-idempotent-replay: ready-for-dev
+  4-3-connectivity-ux: ready-for-dev
+  epic-4-retrospective: optional
+
+  # Epic 5: Account, Session & Polish
+  epic-5: in-progress
+  5-1-skills-management-screen: ready-for-dev
+  5-2-profile-edit: ready-for-dev
+  5-3-session-expiry-global-401: ready-for-dev
+  5-4-error-envelope-consistency: ready-for-dev
+  epic-5-retrospective: optional

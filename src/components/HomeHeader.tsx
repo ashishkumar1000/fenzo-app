@@ -16,7 +16,7 @@ interface StatCardProps {
 /**
  * The Jobs tile's details string ("0 done · 0 active · 3 sched.") is longer
  * than a half-width tile fits at full size — shrink rather than truncate
- * mid-word, same technique QuickActions uses for its tile labels.
+ * mid-word, the same technique QuickActions uses for its tile labels.
  */
 const STAT_DETAILS_MIN_FONT_SCALE = 0.7;
 
@@ -74,7 +74,7 @@ export default function HomeHeader({
   const { width: screenWidth } = useWindowDimensions();
   const cardSize = (screenWidth - spacing.s4 * 2 - spacing.s3) / 2;
 
-  // Deliberately labelled "Jobs", not "Jobs today": `jobStatusCounts` is a
+  // Deliberately labeled "Jobs", not "Jobs today": `jobStatusCounts` is a
   // total across the account, and the API has no today-scoped counts yet.
   const totalJobs =
     jobCounts.scheduled +
@@ -110,7 +110,7 @@ export default function HomeHeader({
           </View>
         </View>
 
-        {/* Stats Grid — each row is a Card holder for its two compact stat tiles */}
+        {/* Stat Grid — each row is a cardholder for its two compact stat tiles */}
         <View style={styles.statsGrid}>
           <Card padding="none" elevated={false} style={styles.statsRow}>
             <StatCard
@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     gap: spacing.s3,
-    // The Card holder for the row is invisible: no surface, no border.
+    // The cardholder for the row is invisible: no surface, no border.
     backgroundColor: 'transparent',
     borderWidth: 0,
   },
