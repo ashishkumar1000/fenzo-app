@@ -1,5 +1,5 @@
 # generated: 2026-09-01
-# last_updated: 2026-09-04  # 2-2 → done (review closed); 3-1 → review
+# last_updated: 2026-09-04  # 2-2 → done (review closed); 3-1 → done (review round 1 applied, committed c1debd1)
 # project: fenzo-app
 # project_key: NOKEY
 # tracking_system: file-system
@@ -28,7 +28,7 @@ development_status:
 
   # Epic 3: Technician Job Execution
   epic-3: in-progress
-  3-1-today-history-wired-to-get-jobs: review
+  3-1-today-history-wired-to-get-jobs: done  # review round 1 (10 findings) applied; committed c1debd1
   3-2-technician-job-detail: ready-for-dev
   3-3-workflow-step-advancement: ready-for-dev
   3-4-photo-capture-upload-r2: ready-for-dev
