@@ -43,10 +43,17 @@ export interface ProfileTenant {
 
 export type UserStatus = 'active' | 'inactive';
 
-/** Open counts per job status, for the Home header stat tiles. */
-export interface JobStatusCounts {
-  scheduled: number;
-  inProgress: number;
+/**
+ * Dashboard job counts, for the Home header stat tiles. Mirrors the backend's
+ * `JobCounts` (fenzit-be Story 3-7): today/upcoming/overdue are mutually
+ * exclusive IST day-buckets over active jobs, completed/cancelled are the
+ * all-time totals — so their sum is every job in the account. There is no
+ * plain per-status (scheduled/inProgress) breakdown in the payload.
+ */
+export interface JobCounts {
+  today: number;
+  upcoming: number;
+  overdue: number;
   completed: number;
   cancelled: number;
 }
@@ -103,7 +110,7 @@ export interface MyProfile {
   technicianCount: number;
   customers: Paginated<unknown>;
   jobs: Paginated<unknown>;
-  jobStatusCounts: JobStatusCounts;
+  jobCounts: JobCounts;
 }
 
 /** `GET /users/me` — requires auth. Returns the signed-in user's profile. */

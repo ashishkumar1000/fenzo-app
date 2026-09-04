@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, Pressable, StatusBar, useWindowDimensions } fro
 import { Bell, Calendar, HardHat } from 'lucide-react-native';
 import { Card } from './ui';
 import { colors, palette, radius, spacing, typography } from '../theme';
-import type { JobStatusCounts } from '../services';
+import type { JobCounts } from '../services';
 
 interface StatCardProps {
   icon: React.ReactNode;
@@ -59,8 +59,8 @@ export interface HomeHeaderProps {
   businessName: string;
   /** From the profile's `technicianCount`. */
   technicianCount: number;
-  /** From the profile's `jobStatusCounts`. */
-  jobCounts: JobStatusCounts;
+  /** From the profile's `jobCounts` (the `/users/me` dashboard counts). */
+  jobCounts: JobCounts;
 }
 
 export default function HomeHeader({
@@ -74,11 +74,12 @@ export default function HomeHeader({
   const { width: screenWidth } = useWindowDimensions();
   const cardSize = (screenWidth - spacing.s4 * 2 - spacing.s3) / 2;
 
-  // Deliberately labeled "Jobs", not "Jobs today": `jobStatusCounts` is a
-  // total across the account, and the API has no today-scoped counts yet.
+  // Deliberately labeled "Jobs", not "Jobs today": the payload's counts span
+  // the whole account (three day-buckets + the all-time finished totals).
   const totalJobs =
-    jobCounts.scheduled +
-    jobCounts.inProgress +
+    jobCounts.today +
+    jobCounts.upcoming +
+    jobCounts.overdue +
     jobCounts.completed +
     jobCounts.cancelled;
 
@@ -118,7 +119,7 @@ export default function HomeHeader({
                 bgColor={colors.status.progress.bg}
                 title={String(totalJobs)}
                 subtitle="Jobs"
-                details={`${jobCounts.completed} done · ${jobCounts.inProgress} active · ${jobCounts.scheduled} sched.`}
+                details={`${jobCounts.completed} done · ${jobCounts.today} today · ${jobCounts.upcoming} sched.`}
                 size={cardSize}
             />
 

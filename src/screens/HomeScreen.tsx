@@ -99,12 +99,15 @@ export default function HomeScreen({ navigation }: Props) {
 
   const ownerFirstName = profile.name.split(' ')[0];
   const businessName = profile.tenant.companyName;
-  const { jobStatusCounts, technicianCount } = profile;
+  const { jobCounts, technicianCount } = profile;
+  // The five buckets are mutually exclusive (three IST day-buckets + two
+  // all-time finished totals), so their sum is every job in the account.
   const totalJobs =
-    jobStatusCounts.scheduled +
-    jobStatusCounts.inProgress +
-    jobStatusCounts.completed +
-    jobStatusCounts.cancelled;
+    jobCounts.today +
+    jobCounts.upcoming +
+    jobCounts.overdue +
+    jobCounts.completed +
+    jobCounts.cancelled;
   const hasTechnicians = technicianCount > 0;
 
   // First-run: simplified Home until the account has a team and a job. Both
@@ -152,7 +155,7 @@ export default function HomeScreen({ navigation }: Props) {
         ownerName={profile.name}
         businessName={businessName}
         technicianCount={technicianCount}
-        jobCounts={jobStatusCounts}
+        jobCounts={jobCounts}
       />
       <ScrollView
         style={styles.screen}

@@ -12,6 +12,8 @@ so that the dashboard is trustworthy rather than a snapshot from login.
 
 `GET /users/me` (already wired in `useMyProfile`) returns `jobStatusCounts { scheduled, inProgress, completed, cancelled }` plus the roster. There is NO separate counts endpoint (dashboard aggregations deferred to BE Phase 2) — this payload is the only source.
 
+> **UPDATE 2026-09-04 — stale premise.** fenzit-be Story 3-7 replaced that shape: the payload now returns `jobCounts { today, upcoming, overdue, completed, cancelled }` (three mutually exclusive IST day-buckets + all-time finished totals; no per-status breakdown). The app was already switched over with the HomeScreen crash fix (fenzo-app commit `921e012` follow-up) — `MyProfile.jobCounts`, HomeScreen's total and HomeHeader's details line all read the new buckets. Write this story against `jobCounts`.
+
 ## UI Design
 
 No visual change. Existing Home tiles/banner/loading states stay exactly as they are; the only observable difference is data freshness (AC 5's no-flicker rule).

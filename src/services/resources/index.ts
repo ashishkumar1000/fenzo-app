@@ -38,7 +38,7 @@ export type {
   MyProfile,
   ProfileTenant,
   ProfileTechnician,
-  JobStatusCounts,
+  JobCounts,
   UserStatus,
 } from './users';
 export type {

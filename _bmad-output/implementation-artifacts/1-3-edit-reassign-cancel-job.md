@@ -124,7 +124,7 @@ Claude Code (GLM 5.3 Flash, cloud)
 - [x] [Review][Patch] `UpdateJobRequest` flat interface allows `{ status: 'cancelled', ...fields }` (server 422s it) — use a discriminated union [src/services/resources/jobs.ts:80] **APPLIED:** `UpdateJobRequest` is now `UpdateJobEditFields | { status: 'cancelled' }` — mixing cancel with edit fields is a type error; model guards narrow with `'status' in patch`.
 - [x] [Review][Patch] Five new files missing a trailing newline [editJobModel.ts, editJobModel.test.ts, EditJobSheet.tsx, TechnicianPicker.tsx, edit-job-sheet.test.tsx] **APPLIED:** all five files end with a newline (verified with `od -c`).
 - [x] [Review][Patch] Sheet subtitle uses `typography.body` — §5 specifies bodySm muted [src/features/jobDetail/components/EditJobSheet.tsx:298] **APPLIED:** subtitle and hint now use `typography.bodySm` in the muted text color.
-- [ ] [Review][Patch] USER-REPORTED (fix after review + commit): HomeScreen render crash "Cannot read property 'scheduled' of undefined" — `profile.jobStatusCounts` undefined on the /users/me payload [src/screens/HomeScreen.tsx:104]
+- [ ] [Review][Patch] USER-REPORTED (fix after review + commit): HomeScreen render crash "Cannot read property 'scheduled' of undefined" — `profile.jobStatusCounts` undefined on the /users/me payload [src/screens/HomeScreen.tsx:104] **FIXED (follow-up commit 0a6c041):** the field wasn't missing from the server — the app's `MyProfile` type was stale. `/users/me` now returns `jobCounts { today, upcoming, overdue, completed, cancelled }` (fenzit-be Story 3-7); the app was switched over.
 
 #### Deferred
 
