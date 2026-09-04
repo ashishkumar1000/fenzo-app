@@ -43,7 +43,7 @@ jest.mock('../src/features/customers', () => ({
 import JobsScreen from '../src/features/jobs/JobsScreen';
 import { JobCard } from '../src/features/jobs/components/JobCard';
 import { clearJobs, loadJobs } from '../src/features/jobs/useJobs';
-import { Button, Card, InlineError, ScopeSelector } from '../src/components/ui';
+import { Button, Card, InlineError, SegmentedControl } from '../src/components/ui';
 import { StatusFilterBar } from '../src/features/jobs/components/StatusFilterBar';
 import { jobService } from '../src/services';
 import type { ApiJob, Paginated } from '../src/services';
@@ -293,15 +293,31 @@ it('consumes a one-shot scope param: loads that scope and clears the param (AC #
   expect(navigation.setParams).toHaveBeenCalledWith({ scope: undefined });
 });
 
-it('pressing a scope chip loads that scope and shows its empty state', async () => {
+it('renders the four timeline scopes, in order, on the segmented control', async () => {
+  list.mockResolvedValue(page([], null));
+  const renderer = await mountScreen();
+
+  // Pins SCOPES content: a dropped or mislabelled scope fails here even
+  // though it would compile fine.
+  const control = renderer.root.findByType(SegmentedControl);
+  expect(control.props.options).toEqual([
+    { value: 'today', label: 'Today' },
+    { value: 'upcoming', label: 'Upcoming' },
+    { value: 'overdue', label: 'Overdue' },
+    { value: 'history', label: 'History' },
+  ]);
+  expect(control.props.value).toBe('today');
+});
+
+it('pressing a scope segment loads that scope and shows its empty state', async () => {
   list.mockResolvedValue(page([], null));
   const renderer = await mountScreen();
 
   await ReactTestRenderer.act(async () => {
-    renderer.root.findByType(ScopeSelector).props.onChange('upcoming');
+    renderer.root.findByType(SegmentedControl).props.onChange('upcoming');
   });
 
-  expect(list).toHaveBeenLastCalledWith({ scope: 'upcoming' }); // chip reset → no status param
+  expect(list).toHaveBeenLastCalledWith({ scope: 'upcoming' }); // filter reset → no status param
   const text = renderedText(renderer);
   expect(text).toContain('No upcoming jobs');
   expect(text).toContain('Jobs booked for tomorrow or later will show up here.');
@@ -314,7 +330,7 @@ it('shows the overdue empty state on the overdue scope', async () => {
   const renderer = await mountScreen();
 
   await ReactTestRenderer.act(async () => {
-    renderer.root.findByType(ScopeSelector).props.onChange('overdue');
+    renderer.root.findByType(SegmentedControl).props.onChange('overdue');
   });
 
   expect(list).toHaveBeenLastCalledWith({ scope: 'overdue' });
@@ -329,7 +345,7 @@ it('History narrows the chip row to its three chips', async () => {
   const renderer = await mountScreen();
 
   await ReactTestRenderer.act(async () => {
-    renderer.root.findByType(ScopeSelector).props.onChange('history');
+    renderer.root.findByType(SegmentedControl).props.onChange('history');
   });
 
   expect(list).toHaveBeenLastCalledWith({ scope: 'history' }); // all kept → no status param
@@ -348,7 +364,7 @@ it('keeps the Done chip across a Today → History switch, on screen and on the 
   expect(list).toHaveBeenLastCalledWith({ scope: 'today', status: ['completed'] });
 
   await ReactTestRenderer.act(async () => {
-    renderer.root.findByType(ScopeSelector).props.onChange('history');
+    renderer.root.findByType(SegmentedControl).props.onChange('history');
   });
   // filterForScope keeps a chip History can still show — both on the wire...
   expect(list).toHaveBeenLastCalledWith({ scope: 'history', status: ['completed'] });

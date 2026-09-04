@@ -32,7 +32,7 @@ function StatCard({ icon, bgColor, title, subtitle, size, onPress }: StatCardPro
       accessibilityLabel={`${subtitle} ${title}`}
       onPress={onPress}
       disabled={!onPress}
-      // Pressed dim (0.8, same as ScopeSelector's chips) — these are Home's
+      // Pressed dim (0.8, same as the app's chip rows) — these are Home's
       // primary tap targets, so a tap must feel responsive.
       style={({ pressed }) => [{ width: size, opacity: pressed ? 0.8 : 1 }]}>
       <Card padding="sm" style={styles.statCard}>

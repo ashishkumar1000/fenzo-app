@@ -25,6 +25,7 @@ src/components/ui/         the component library (compose these in screens)
   Button, IconButton       core actions
   Badge, Card, Avatar      feedback / surfaces / identity
   Input, Select, Switch    forms
+  SegmentedControl         view switching (sunken track, raised active card)
   index.ts                 barrel — import { Button, Badge, ... }
 src/assets/fonts/          Inter .ttf files (see README there)
 ```
@@ -51,6 +52,15 @@ raw `palette.*` scales, except inside the token files themselves.
 **Status vocabulary (fixed — do not invent synonyms).** Job state maps 1:1 to a
 badge color: **Done / In Progress / Scheduled / Cancelled** (+ neutral = Draft).
 Use `<Badge status="done|progress|scheduled|cancelled|neutral">`.
+
+**Selection controls — navigation vs filter.** `SegmentedControl` (sunken
+track, raised card on the active segment) is for **view switching**: 2–5 short,
+mutually exclusive choices that change what you're looking at. Chip rows
+(filter chip bars, e.g. `StatusFilterBar`) are for **narrowing a list**; their
+active state is a soft tint (`primarySoft` bg + `primary` border +
+`primaryHover` label), never a solid primary fill — solid primary stays
+reserved for primary actions (e.g. "New job"). When both appear on one screen
+the control owns "you are here" and the chips own "what's filtered".
 
 **Type.** A single typeface — **Inter** (weights 400–800). No serif, no second
 family. Mobile-first scale: body 16px (never smaller on inputs, to avoid iOS

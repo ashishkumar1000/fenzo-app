@@ -33,9 +33,18 @@ Keeps the existing anatomy (header row / meta rows / divider / footer) — delta
 - Service type → label map: ac_service "AC service", ac_installation "AC installation", pest_control "Pest control", plumbing "Plumbing", electrical "Electrical", other "Service". Icon map: plumbing→Droplet, ac_*→Snowflake, else→Wrench.
 - statusToBadge: scheduled→scheduled, in_progress→**progress**, completed→done, cancelled→cancelled. Labels come from the existing STATUS_LABEL map.
 
-## §2 Jobs filter chips (Story 1.1)
+## §2 Jobs filters (Story 1.1; revised by the 2026-09-04 chip-clutter redesign)
 
-Existing StatusFilterBar stays visually identical; only the value set changes to API enums. Chip labels: All / Scheduled / In progress / Done / Cancelled (chips are sentence case — they are controls, not the Badge vocabulary). Selected chip: `colors.primary` bg, `textOnColor` label, pill; unselected: surfaceCard bg, borderDefault, textBody.
+Two rows, strict hierarchy — never two shouting rows:
+
+1. **Scope (view switching)** — `SegmentedControl`: sunken `surfaceSunken` track, `radius.md`, 4 equal segments (`radius.sm`, `touch.min` 44px each), raised `surfaceCard` + `shadow.sm` on the active segment, `textStrong` label. Today · Upcoming · Overdue · History. Pressing the active segment is a no-op.
+2. **Status (filter)** — `StatusFilterBar` chip row: pill chips, `surfaceCard` bg + `borderDefault` when unselected; active chip is a **soft tint** (`primarySoft` bg, `primary` border, `primaryHover` label) — never solid `primary`, which stays reserved for primary actions (New job). Labels All / Scheduled / In progress / Done / Cancelled (sentence case — controls, not the Badge vocabulary).
+
+Row visibility per scope: all five status chips under Today; All/Done/Cancelled under History; **no status row under Upcoming/Overdue** (the server pre-narrows status there — chips would lie). Never show more than one chip row at a time.
+
+Contrast (WCAG AA, verified 2026-09-04): `primaryHover #1645B2` on `primarySoft #EFF4FE` ≈ 7.6:1; `textBody #4B5563` on `surfaceSunken #F3F4F6` ≈ 7.4:1 — both pass for the 14px semibold labels.
+
+Decision record (2026-09-04): three mockup options were explored and **A** (segmented control + contextual chips) was chosen over **B** (two tamed rows — still two stacked rows, clutter remains) and **C** (one merged row — mixes view switching with filtering, breaks at 4+4 options and hides scopes from Upcoming/Overdue). The mockup file was deleted after the decision; this record is why A won.
 
 ## §3 Owner Job Detail screen (Story 1.2)
 

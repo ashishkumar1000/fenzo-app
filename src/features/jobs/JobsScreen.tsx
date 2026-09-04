@@ -1,5 +1,5 @@
 /**
- * JobsScreen — the owner's full job timeline: a scope selector
+ * JobsScreen — the owner's full job timeline: a segmented scope control
  * (Today · Upcoming · Overdue · History) over the status filter chips, plus a
  * "+ New job" action that pushes the NewJob route.
  *
@@ -36,7 +36,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button, EmptyState, InlineError, ScopeSelector } from '../../components/ui';
+import { Button, EmptyState, InlineError, SegmentedControl } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import type { MainTabParamList, RootStackParamList } from '../../navigation/types';
 import { useMyProfile } from '../profile';
@@ -247,12 +247,14 @@ export default function JobsScreen({ navigation, route }: Props) {
       </View>
 
       <View style={styles.filterWrap}>
-        <ScopeSelector options={SCOPES} value={scope} onChange={handleScopeChange} />
-        {/* Chips only where status is user-selectable: all five under Today
-            (the 1.1 baseline), All/Done/Cancelled under History. Upcoming and
-            Overdue hide the row — the server pre-narrows status there, so
-            chips would lie. The row stays visible even with no jobs, as in
-            Story 1.1, so the sections stay discoverable. */}
+        <SegmentedControl options={SCOPES} value={scope} onChange={handleScopeChange} />
+        {/* Chips only where status is user-selectable: all five under Today,
+            All/Done/Cancelled under History. Upcoming and Overdue hide the
+            row — the server pre-narrows status there, so chips would lie.
+            The row stays visible even with no jobs, as in Story 1.1, so the
+            sections stay discoverable. Visual hierarchy: the segmented
+            control owns "you are here" (view switching); these chips are a
+            filter and use a soft-tint active state (StatusFilterBar). */}
         {scope === 'today' || scope === 'history' ? (
           <StatusFilterBar
             value={filter}
@@ -351,7 +353,11 @@ const styles = StyleSheet.create({
   },
   filterWrap: {
     paddingLeft: spacing.s4,
+    paddingRight: spacing.s4,
     paddingBottom: spacing.s3,
+    // Gap between the segmented control and the status chip row (s3 = 12).
+    // No-op on Upcoming/Overdue, where the chip row is hidden.
+    gap: spacing.s3,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderSubtle,
   },

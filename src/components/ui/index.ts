@@ -41,5 +41,5 @@ export type { EmptyStateProps } from './EmptyState';
 export { InlineError } from './InlineError';
 export type { InlineErrorProps } from './InlineError';
 
-export { ScopeSelector } from './ScopeSelector';
-export type { ScopeOption } from './ScopeSelector';
+export { SegmentedControl } from './SegmentedControl';
+export type { SegmentOption } from './SegmentedControl';

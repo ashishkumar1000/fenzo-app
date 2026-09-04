@@ -11,6 +11,11 @@
  * Each chip is a `Pressable` (consistent with every other control in the app)
  * carrying `accessibilityRole="button"` and `accessibilityState.selected`, so
  * screen readers announce which filter is active — colour alone doesn't.
+ *
+ * Active styling is a soft tint (`primarySoft` bg + primary border), not a
+ * solid fill: this is a filter, not navigation. View switching belongs to
+ * `SegmentedControl` — that's what keeps the raised/active visual language
+ * unambiguous when both rows sit on the same screen.
  */
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { colors, fontSize, radius, spacing, touch, weight } from '../../../theme';
@@ -86,7 +91,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chipActive: {
-    backgroundColor: colors.primary,
+    // Soft tint, not solid primary: this row filters the result set, it
+    // doesn't switch views — a filled tint reads as "filter is applied" and
+    // keeps solid primary reserved for primary actions (New job). Matches
+    // the SegmentedControl/StatusFilterBar hierarchy split (2026-09-04).
+    backgroundColor: colors.primarySoft,
     borderColor: colors.primary,
   },
   chipPressed: {
@@ -98,6 +107,6 @@ const styles = StyleSheet.create({
     color: colors.textBody,
   },
   labelActive: {
-    color: colors.onPrimary,
+    color: colors.primaryHover,
   },
 });
