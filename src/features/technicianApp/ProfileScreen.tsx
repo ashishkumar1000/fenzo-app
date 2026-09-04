@@ -48,7 +48,7 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       <View style={styles.header}>
-        <Avatar name={name} size="xl" />
+        <Avatar name={name ?? undefined} size="xl" />
         <Text style={styles.name}>{name}</Text>
         <Text style={styles.role}>Technician</Text>
       </View>

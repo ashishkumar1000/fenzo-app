@@ -18,14 +18,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CalendarCheck } from 'lucide-react-native';
 import { EmptyState } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
-import { useMyProfile } from '../profile';
+import { firstName, useMyProfile } from '../profile';
 import { JobCard } from '../jobs/components/JobCard';
 import { TODAY_JOBS } from './data';
 import type { ApiJob } from '../jobs/types';
 
 export default function TodayScreen() {
   const { profile } = useMyProfile();
-  const firstName = profile?.name.split(' ')[0];
+  // `name` is nullable on the wire (see `MyProfile`); the greeting falls back
+  // to a nameless form when it's missing.
+  const name = firstName(profile?.name ?? null);
   const hasJobs = TODAY_JOBS.length > 0;
 
   const handleOpenJob = (_job: ApiJob) => {
@@ -36,7 +38,7 @@ export default function TodayScreen() {
     <SafeAreaView style={styles.root} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.greeting}>
-          {firstName ? `Good morning, ${firstName}` : 'Good morning'}
+          {name ? `Good morning, ${name}` : 'Good morning'}
         </Text>
       </View>
 

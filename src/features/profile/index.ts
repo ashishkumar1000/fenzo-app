@@ -4,4 +4,4 @@
  */
 export { useMyProfile, loadMyProfile } from './useMyProfile';
 export type { MyProfileState } from './useMyProfile';
-export { formatPhone, formatRole } from './format';
+export { firstName, formatPhone, formatRole } from './format';

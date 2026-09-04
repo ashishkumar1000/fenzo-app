@@ -7,6 +7,15 @@
  */
 import type { MyProfile } from '../../services';
 
+/**
+ * First word of a name, or `null` when there is no name — profiles can have
+ * `name: null` (a fresh owner account has no name until Profile Edit saves
+ * one), so callers must render the no-name branch themselves.
+ */
+export function firstName(name: string | null): string | null {
+  return name?.split(' ')[0] ?? null;
+}
+
 /** `+91 2121212121` — dial code and number, single space between. */
 export function formatPhone(
   profile: Pick<MyProfile, 'countryCode' | 'phoneNumber'>,

@@ -94,7 +94,12 @@ export interface ProfileTechnician {
 
 export interface MyProfile {
   id: string;
-  name: string;
+  /**
+   * Nullable to match the backend (`UserProfileBase.name: string | null`):
+   * `POST /auth/company` never collects a name, so a fresh owner's profile
+   * has `name: null` until Profile Edit saves one. Never assume a string.
+   */
+  name: string | null;
   /** Dial code with `+`, e.g. `+91`. */
   countryCode: string;
   /** Digits only, no country code. */

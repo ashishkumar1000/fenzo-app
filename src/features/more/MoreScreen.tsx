@@ -101,7 +101,7 @@ export default function MoreScreen() {
 
         <Card padding="none" style={styles.accountCard}>
           <View style={styles.accountRow}>
-            <Avatar name={profile.name} size="lg" />
+            <Avatar name={profile.name ?? undefined} size="lg" />
             <View style={styles.rowInfo}>
               <Text style={styles.rowTitle}>{profile.name}</Text>
 

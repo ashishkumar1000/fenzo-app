@@ -18,7 +18,7 @@ import type { JobScope } from '../services';
 import HomeHeader from '../components/HomeHeader';
 import { Card, EmptyState, InlineError } from '../components/ui';
 import { colors, radius, spacing, typography } from '../theme';
-import { loadMyProfile, useMyProfile } from '../features/profile';
+import { firstName, loadMyProfile, useMyProfile } from '../features/profile';
 import { QuickActions, hasAnyJobCount } from '../features/home';
 
 type Props = CompositeScreenProps<
@@ -121,7 +121,9 @@ export default function HomeScreen({ navigation }: Props) {
     );
   }
 
-  const ownerFirstName = profile.name.split(' ')[0];
+  // `name` can be null (fresh owner account — company setup never collects a
+  // name), so the greeting degrades to a nameless form instead of crashing.
+  const ownerFirstName = firstName(profile.name);
   const businessName = profile.tenant.companyName;
   const { jobCounts, technicianCount } = profile;
   const hasTechnicians = technicianCount > 0;
@@ -137,7 +139,9 @@ export default function HomeScreen({ navigation }: Props) {
     return (
       <SafeAreaView style={styles.newUserRoot} edges={['top']}>
         <View style={styles.greetingHeader}>
-          <Text style={styles.greeting}>Good morning, {ownerFirstName}</Text>
+          <Text style={styles.greeting}>
+            {ownerFirstName ? `Good morning, ${ownerFirstName}` : 'Good morning'}
+          </Text>
           <Text style={styles.business}>{businessName}</Text>
         </View>
 
@@ -170,7 +174,7 @@ export default function HomeScreen({ navigation }: Props) {
   return (
     <>
       <HomeHeader
-        ownerName={profile.name}
+        ownerName={ownerFirstName ?? ''}
         businessName={businessName}
         technicianCount={technicianCount}
         jobCounts={jobCounts}

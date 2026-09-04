@@ -85,6 +85,8 @@ async function verifyOtp(input: VerifyOtpRequest): Promise<VerifyOtpResponse> {
 // ── Company setup ────────────────────────────────────────────────────────────
 
 export interface SetupCompanyRequest {
+  /** The owner's display name — saved on their users row, shown on Home/More. */
+  name: string;
   companyName: string;
   /** 2-letter uppercase ISO 3166-2:IN code, e.g. `KA`. */
   stateCode: string;

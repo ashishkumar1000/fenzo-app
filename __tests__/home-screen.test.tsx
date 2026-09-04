@@ -28,6 +28,9 @@ jest.mock('@react-navigation/native', () => ({
 jest.mock('../src/features/profile', () => ({
   useMyProfile: jest.fn(),
   loadMyProfile: jest.fn(),
+  // HomeScreen consumes this to null-safe the greeting — keep the real
+  // implementation so a null name still renders the nameless form in tests.
+  firstName: jest.requireActual('../src/features/profile').firstName,
 }));
 
 jest.mock('../src/features/home', () => ({

@@ -50,7 +50,11 @@ function StatCard({ icon, bgColor, title, subtitle, size, onPress }: StatCardPro
 }
 
 export interface HomeHeaderProps {
-  /** Full name of the signed-in owner, from `GET /users/me`. Only the first word is shown. */
+  /**
+   * First name of the signed-in owner (already extracted by the caller), from
+   * `GET /users/me`. May be empty when the profile has `name: null` (fresh
+   * owner account) — the greeting then drops the name entirely.
+   */
   ownerName: string;
   /** Company name, from the profile's `tenant.companyName`. */
   businessName: string;
@@ -89,7 +93,9 @@ export default function HomeHeader({
           {/* Header Top - Greeting + Notification */}
           <View style={styles.headerContent}>
             <View style={styles.greetingSection}>
-              <Text style={styles.greetingText}>Good morning, {ownerName.split(' ')[0]}</Text>
+              <Text style={styles.greetingText}>
+                {ownerName ? `Good morning, ${ownerName}` : 'Good morning'}
+              </Text>
               <Text style={styles.serviceText}>{businessName}</Text>
             </View>
 

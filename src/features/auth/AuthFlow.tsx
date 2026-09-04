@@ -180,10 +180,14 @@ export default function AuthFlow({ onComplete }: Props) {
 
   // --- Step 3: finish setup ----------------------------------------------
   const finish = useCallback(async () => {
-    // Belt-and-braces: the profile screen already requires at least one
-    // business type before calling this, but guard here too in case that
-    // validation is ever bypassed or this function is called from
+    // Belt-and-braces: the profile screen already requires a name and at
+    // least one business type before calling this, but guard here too in
+    // case that validation is ever bypassed or this function is called from
     // somewhere else in the future.
+    if (!profile.ownerName.trim()) {
+      setProfileError('Enter your name.');
+      return;
+    }
     if (profile.businessTypes.length === 0) {
       setProfileError('Select at least one business type.');
       return;
@@ -193,8 +197,7 @@ export default function AuthFlow({ onComplete }: Props) {
     setProfileError('');
     try {
       const res = await authApi.setupCompany({
-
-
+        name: profile.ownerName.trim(),
         companyName: profile.businessName,
         stateCode: profile.stateCode,
         gstin: profile.gstNumber || undefined,
@@ -212,7 +215,9 @@ export default function AuthFlow({ onComplete }: Props) {
         phone: `${DIAL_CODE}${phone}`,
         profile,
         role: 'owner',
-        name: null,
+        // The name the owner just entered — the backend saved it on their
+        // users row, and GET /users/me returns it from now on.
+        name: profile.ownerName.trim(),
         tenantId: res.tenant.id,
       });
     } catch (err) {
