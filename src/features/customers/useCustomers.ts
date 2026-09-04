@@ -157,6 +157,16 @@ export function loadCustomers(opts: { force?: boolean } = {}): Promise<void> {
 }
 
 /**
+ * A row for `upsertCustomer`. The POST /customers response carries no derived
+ * `jobCount` / `lastJobDate` (see `CreatedCustomer`), so both are optional
+ * here — a caller inserting a freshly created row has nothing to supply.
+ */
+export type UpsertCustomerInput = Omit<Customer, 'jobCount' | 'lastJobDate'> & {
+  jobCount?: number;
+  lastJobDate?: string | null;
+};
+
+/**
  * Inserts (or replaces) one customer without a round trip.
  *
  * For the create-then-select flow: a caller that has just POSTed a customer
@@ -165,11 +175,20 @@ export function loadCustomers(opts: { force?: boolean } = {}): Promise<void> {
  * permanent state — where the new customer is selected but missing from the
  * list, which renders as an empty picker over a non-empty selection.
  *
+ * Missing derived fields are defaulted (`jobCount` 0, `lastJobDate` null — a
+ * fresh customer has no jobs), so the create path can pass the response
+ * through verbatim instead of fabricating numbers the wire never sent.
+ *
  * Newest first, matching what the endpoint returns.
  */
-export function upsertCustomer(customer: Customer): void {
-  const rest = state.customers.filter(c => c.id !== customer.id);
-  setState({ customers: [customer, ...rest], hasLoaded: true });
+export function upsertCustomer(customer: UpsertCustomerInput): void {
+  const row: Customer = {
+    ...customer,
+    jobCount: customer.jobCount ?? 0,
+    lastJobDate: customer.lastJobDate ?? null,
+  };
+  const rest = state.customers.filter(c => c.id !== row.id);
+  setState({ customers: [row, ...rest], hasLoaded: true });
 }
 
 export function useCustomers() {

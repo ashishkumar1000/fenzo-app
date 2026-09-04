@@ -25,9 +25,13 @@ export interface CreateCustomerRequest {
 }
 
 /**
- * The created customer, as returned by `201`. Same shape as a list row.
+ * The created customer, as returned by `201`. NOT a list row: the create
+ * response (backend `CustomerResponse`) carries no derived `jobCount` /
+ * `lastJobDate` — those come from `GET /customers` only. Callers that insert
+ * the row straight into a list store must default them (a fresh customer has
+ * no jobs), e.g. `upsertCustomer`.
  */
-export type CreatedCustomer = ApiCustomer;
+export type CreatedCustomer = Omit<ApiCustomer, 'jobCount' | 'lastJobDate'>;
 
 /**
  * `POST /customers` — creates a customer for the owner's tenant.

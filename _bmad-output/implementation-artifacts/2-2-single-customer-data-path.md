@@ -4,7 +4,7 @@ baseline_commit: 641d2fc27421e957ecdc4628aba61893ce7c3408
 
 # Story 2.2: One Data Path for the Customer List
 
-Status: review
+Status: done
 
 ## Story
 
