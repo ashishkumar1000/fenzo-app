@@ -115,7 +115,11 @@ export function toApiError(error: AxiosError, onUnauthorized?: () => void): ApiE
  */
 function flattenErrorMessage(message?: string | string[]): string | undefined {
   if (message === undefined) return undefined;
-  return Array.isArray(message) ? message.join('. ') : message;
+  if (Array.isArray(message)) {
+    // An empty array must fall back to the status default, not render ''.
+    return message.length ? message.join('. ') : undefined;
+  }
+  return message;
 }
 
 
