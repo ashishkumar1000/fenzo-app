@@ -64,3 +64,14 @@
 - **Relative imports repo-wide** — CLAUDE.md mandates the `@components`/`@theme` alias imports, but every
   feature file (pre-existing) uses relative paths; Story 2-1 followed precedent. Repo-wide alias migration
   is a standalone cleanup, not a per-story fix.
+
+## Deferred from: code review of 3-2-technician-job-detail (2026-09-04)
+
+- **No accessibilityLiveRegion / image accessibility roles on new surfaces** — the photos grid and
+  signature tile render images without `accessibilityRole="image"` / meaningful labels, and state
+  transitions (loading → error → loaded) have no live region. Same gap family as the 1-2 deferred
+  "timeline event class is colour-only" item — fix accessibility polish repo-wide in one pass.
+- **No testIDs on new interactive surfaces** — stepper rows (inert this story, pressable in 3.3),
+  History disclosure header, maps row, and error-view Retry have no `testID` hooks. Add them when
+  Story 3.3 wires interactivity and the rows need to be driven in tests (same pattern as the 1-3
+  EditJobSheet hooks).
