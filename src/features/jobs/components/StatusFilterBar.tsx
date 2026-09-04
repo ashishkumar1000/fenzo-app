@@ -28,15 +28,24 @@ const JOB_FILTERS: { value: JobFilter; label: string }[] = [
 type Props = {
   value: JobFilter;
   onChange: (next: JobFilter) => void;
+  /**
+   * Which chips to show, in `JOB_FILTERS` order. Defaults to all five —
+   * the Today-scope baseline. Scopes where the server pre-narrows status
+   * (History) pass a subset (`all` → no status param → both finished
+   * statuses; Upcoming/Overdue hide the row entirely — chips there would
+   * lie about a status set the caller can't change).
+   */
+  filters?: JobFilter[];
 };
 
-export function StatusFilterBar({ value, onChange }: Props) {
+export function StatusFilterBar({ value, onChange, filters }: Props) {
+  const shown = filters ? JOB_FILTERS.filter(f => filters.includes(f.value)) : JOB_FILTERS;
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.row}>
-      {JOB_FILTERS.map(filter => {
+      {shown.map(filter => {
         const active = filter.value === value;
         return (
           <Pressable

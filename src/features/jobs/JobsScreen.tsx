@@ -1,15 +1,19 @@
 /**
- * JobsScreen — full job list with status filter chips (All / Scheduled /
- * In progress / Done / Cancelled) and a "+ New job" action that pushes the
- * NewJob route.
+ * JobsScreen — the owner's full job timeline: a scope selector
+ * (Today · Upcoming · Overdue · History) over the status filter chips, plus a
+ * "+ New job" action that pushes the NewJob route.
  *
- * Live data via the `useJobs` store (`GET /jobs`): loads on mount and on
- * focus (throttled server-side in the store, so coming back from a created
+ * Live data via the `useJobs` store (`GET /jobs?scope=…`): loads on mount and
+ * on focus (throttled server-side in the store, so coming back from a created
  * job refreshes without hammering the endpoint), pages in on scroll-end, and
- * pulls to refresh. The filter row is always visible, even with no jobs at
- * all, so the sections are discoverable from the first launch. Any section
- * with nothing in it gets the full "No jobs yet" empty state rather than a
- * stray line of text — with copy that says what would land in *that* section.
+ * pulls to refresh. Home's stat tiles navigate here pre-set to a scope — the
+ * one-shot `scope` route param is consumed then cleared on focus (tab params
+ * persist, so an uncleared param would re-apply on every tab-bar focus).
+ *
+ * Chips are visible only where status is user-selectable: all five under
+ * Today, All/Done/Cancelled under History. Upcoming and Overdue hide the row —
+ * the server pre-narrows status there, so chips would lie. Every
+ * scope × chip combination gets its own real empty-state copy.
  *
  * List rows carry only `customerId`/`technicianId`, so display names are
  * resolved client-side: customers from the customers store, technicians from
@@ -19,6 +23,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import {
   CalendarClock,
+  CircleAlert,
   CircleCheck,
   CircleX,
   ClipboardList,
@@ -31,7 +36,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button, EmptyState, InlineError } from '../../components/ui';
+import { Button, EmptyState, InlineError, ScopeSelector } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import type { MainTabParamList, RootStackParamList } from '../../navigation/types';
 import { useMyProfile } from '../profile';
@@ -39,13 +44,24 @@ import { useCustomers } from '../customers';
 import { JobCard } from './components/JobCard';
 import { StatusFilterBar } from './components/StatusFilterBar';
 import { useJobs } from './useJobs';
-import type { ApiJob, JobFilter } from './types';
+import { filterForScope, HISTORY_FILTERS } from './scopeFilters';
+import type { ApiJob, JobFilter, JobScope } from './types';
+
+/** Scope selector labels — the four timeline buckets. */
+const SCOPES: { value: JobScope; label: string }[] = [
+  { value: 'today', label: 'Today' },
+  { value: 'upcoming', label: 'Upcoming' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'history', label: 'History' },
+];
 
 /**
- * Empty-state icon and copy per section — the icon hints at the section's
- * meaning (a calendar for what's booked, a wrench for work underway) so the
- * empty pages aren't identical.
+ * Empty-state icon + copy per scope × chip — the icon hints at the section's
+ * meaning so empty pages aren't identical. Today keeps the original per-chip
+ * entries (the Story 1.1 baseline); the other scopes get their own.
  */
+type EmptyStateSpec = { icon: LucideIcon; title: string; description: string };
+
 const EMPTY_BY_FILTER: Record<JobFilter, { icon: LucideIcon; description: string }> = {
   all: {
     icon: ClipboardList,
@@ -71,6 +87,37 @@ const EMPTY_BY_FILTER: Record<JobFilter, { icon: LucideIcon; description: string
   },
 };
 
+function emptyStateFor(scope: JobScope, filter: JobFilter): EmptyStateSpec {
+  if (scope === 'today') {
+    return { title: 'No jobs yet', ...EMPTY_BY_FILTER[filter] };
+  }
+  if (scope === 'upcoming') {
+    return {
+      icon: CalendarClock,
+      title: 'No upcoming jobs',
+      description: 'Jobs booked for tomorrow or later will show up here.',
+    };
+  }
+  if (scope === 'overdue') {
+    return {
+      icon: CircleAlert,
+      title: 'Nothing overdue',
+      description: 'Jobs past their date that were never finished will show up here.',
+    };
+  }
+  if (filter === 'completed') {
+    return { title: 'No history yet', ...EMPTY_BY_FILTER.completed };
+  }
+  if (filter === 'cancelled') {
+    return { title: 'No history yet', ...EMPTY_BY_FILTER.cancelled };
+  }
+  return {
+    icon: ClipboardList,
+    title: 'No history yet',
+    description: 'Jobs marked complete or cancelled will show up here.',
+  };
+}
+
 /**
  * Jobs is a tab screen, but "New job" is a full-screen route on the root
  * stack — hence the composite props rather than plain tab props.
@@ -80,18 +127,50 @@ type Props = CompositeScreenProps<
   NativeStackScreenProps<RootStackParamList>
 >;
 
-export default function JobsScreen({ navigation }: Props) {
-  const { jobs, filter, isLoading, isLoadingMore, error, loadJobs, loadMoreJobs, refresh, setFilter } =
-    useJobs();
+export default function JobsScreen({ navigation, route }: Props) {
+  const {
+    jobs,
+    filter,
+    scope,
+    isLoading,
+    isLoadingMore,
+    error,
+    loadJobs,
+    loadMoreJobs,
+    refresh,
+    setFilter,
+  } = useJobs();
   const { customers } = useCustomers();
   const { profile } = useMyProfile();
 
   // Refetch on every focus — the store throttles (skips within 15s of a
   // success), so returning from a created job shows it without extra load.
+  // Home's tiles land here with a one-shot `scope` param: applied when it
+  // differs from the store's scope, then cleared immediately — tab params
+  // persist across navigations, so leaving it would re-apply on every later
+  // tab-bar focus and fight a scope the user picked manually. Param
+  // consumption happens BEFORE the focus refetch, inside the same effect, so
+  // the param's load and the focus refetch are one query, not a race.
   useFocusEffect(
     useCallback(() => {
+      const paramScope = route.params?.scope;
+      if (paramScope && paramScope !== scope) {
+        void loadJobs(paramScope, filterForScope(filter, paramScope));
+      }
+      if (paramScope) {
+        navigation.setParams({ scope: undefined });
+      }
       void loadJobs();
-    }, [loadJobs]),
+    }, [route.params?.scope, scope, filter, loadJobs, navigation]),
+  );
+
+  /** Scope selector handler — one `loadJobs` with the reset/kept filter. */
+  const handleScopeChange = useCallback(
+    (next: JobScope) => {
+      if (next === scope) return;
+      void loadJobs(next, filterForScope(filter, next));
+    },
+    [scope, filter, loadJobs],
   );
 
   // `customerId` → display name, for the card titles.
@@ -129,7 +208,8 @@ export default function JobsScreen({ navigation }: Props) {
   }, [refresh]);
 
   const isEmpty = !isLoading && !failedWithNoData && !hasData;
-  const { icon: EmptyIcon, description: emptyDescription } = EMPTY_BY_FILTER[filter];
+  const { icon: EmptyIcon, title: emptyTitle, description: emptyDescription } =
+    emptyStateFor(scope, filter);
 
   const handleNewJob = () => {
     navigation.navigate('NewJob');
@@ -143,12 +223,13 @@ export default function JobsScreen({ navigation }: Props) {
     ({ item }: { item: ApiJob }) => (
       <JobCard
         job={item}
+        scope={scope}
         customerName={customerNames.get(item.customerId)}
         technicianName={technicianNames.get(item.technicianId)}
         onPress={handleOpenJob}
       />
     ),
-    [customerNames, technicianNames],
+    [customerNames, technicianNames, scope],
   );
 
   return (
@@ -166,7 +247,19 @@ export default function JobsScreen({ navigation }: Props) {
       </View>
 
       <View style={styles.filterWrap}>
-        <StatusFilterBar value={filter} onChange={setFilter} />
+        <ScopeSelector options={SCOPES} value={scope} onChange={handleScopeChange} />
+        {/* Chips only where status is user-selectable: all five under Today
+            (the 1.1 baseline), All/Done/Cancelled under History. Upcoming and
+            Overdue hide the row — the server pre-narrows status there, so
+            chips would lie. The row stays visible even with no jobs, as in
+            Story 1.1, so the sections stay discoverable. */}
+        {scope === 'today' || scope === 'history' ? (
+          <StatusFilterBar
+            value={filter}
+            onChange={setFilter}
+            filters={scope === 'history' ? HISTORY_FILTERS : undefined}
+          />
+        ) : null}
       </View>
 
       {isLoading ? (
@@ -227,7 +320,7 @@ export default function JobsScreen({ navigation }: Props) {
               // entry point, so the centre of the page stays informational.
               <EmptyState
                 icon={<EmptyIcon size={36} color={colors.primary} strokeWidth={1.5} />}
-                title="No jobs yet"
+                title={emptyTitle}
                 description={emptyDescription}
               />
             }

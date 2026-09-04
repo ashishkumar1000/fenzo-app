@@ -43,6 +43,7 @@ const BASE_JOB: JobDetail = {
   description: 'AC not cooling',
   notesForTechnician: 'Gate code 1234',
   createdAt: '2026-09-01T06:00:00.000Z',
+  completedAt: null,
   updatedAt: '2026-09-01T06:00:00.000Z',
   technician: {
     id: 'tech-1',

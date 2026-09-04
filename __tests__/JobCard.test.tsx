@@ -8,6 +8,8 @@ import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 
 import { JobCard } from '../src/features/jobs/components/JobCard';
+import { formatTimeLabel } from '../src/features/jobs/format';
+import { daysOverdue, formatIstDateLabel } from '../src/utils';
 import type { ApiJob } from '../src/services';
 
 function makeJob(overrides: Partial<ApiJob> = {}): ApiJob {
@@ -28,6 +30,7 @@ function makeJob(overrides: Partial<ApiJob> = {}): ApiJob {
     description: null,
     notesForTechnician: null,
     createdAt: '2026-09-03T09:00:00Z',
+    completedAt: null,
     updatedAt: '2026-09-03T09:00:00Z',
     ...overrides,
   };
@@ -53,11 +56,16 @@ function renderedText(renderer: ReactTestRenderer.ReactTestRenderer): string[] {
   return out;
 }
 
-function renderCard(job: ApiJob, customerName?: string, technicianName?: string) {
+function renderCard(
+  job: ApiJob,
+  customerName?: string,
+  technicianName?: string,
+  scope?: 'today' | 'upcoming' | 'overdue' | 'history',
+) {
   let renderer!: ReactTestRenderer.ReactTestRenderer;
   ReactTestRenderer.act(() => {
     renderer = ReactTestRenderer.create(
-      React.createElement(JobCard, { job, customerName, technicianName }),
+      React.createElement(JobCard, { job, customerName, technicianName, scope }),
     );
   });
   return renderedText(renderer);
@@ -106,5 +114,62 @@ describe('JobCard', () => {
   it('shows no amount anywhere', () => {
     const text = renderCard(makeJob());
     expect(text.some(t => /₹|Rs\.?\s*\d/.test(t))).toBe(false);
+  });
+
+  // --- Per-scope meta rows (Story 1.5) ---------------------------------------
+  // The expected labels are recomputed with the same formatters the card
+  // calls — the formatters' math has its own unit tests; these pin the WIRING
+  // (which field feeds which row in which scope).
+
+  it('prefixes the upcoming row with the scheduled IST date', () => {
+    const job = makeJob();
+    const text = renderCard(job, 'Ravi', 'Anil', 'upcoming');
+    const expected = `${formatIstDateLabel(job.scheduledStart)} · ${formatTimeLabel(
+      job.scheduledStart,
+      job.scheduledEnd,
+    )}`;
+    expect(text).toContain(expected);
+  });
+
+  it('shows the overdue badge in the overdue scope only, singular and plural', () => {
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    expect(daysOverdue(threeDaysAgo)).toBe(3);
+    const text3 = renderCard(makeJob({ scheduledStart: threeDaysAgo }), 'Ravi', 'Anil', 'overdue');
+    expect(text3).toContain('3 days overdue');
+
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    expect(daysOverdue(yesterday)).toBe(1);
+    const text1 = renderCard(makeJob({ scheduledStart: yesterday }), 'Ravi', 'Anil', 'overdue');
+    expect(text1).toContain('1 day overdue');
+
+    // The badge is overdue-scope only — the same row in Today must not show it.
+    const todayText = renderCard(makeJob({ scheduledStart: threeDaysAgo }));
+    expect(todayText.some(t => t.includes('overdue'))).toBe(false);
+  });
+
+  it('history shows the completion date/time from completedAt', () => {
+    const job = makeJob({ status: 'completed', completedAt: '2026-09-03T14:30:00Z' });
+    const text = renderCard(job, 'Ravi', 'Anil', 'history');
+    const expected = `${formatIstDateLabel(job.completedAt!)} · ${formatTimeLabel(
+      job.completedAt!,
+      null,
+    )}`;
+    expect(text).toContain(expected);
+  });
+
+  it('history shows the literal Cancelled row for a cancelled job (not the scheduled slot)', () => {
+    const job = makeJob({ status: 'cancelled' });
+    const text = renderCard(job, 'Ravi', 'Anil', 'history');
+    // The badge also reads "Cancelled" — the time row must be a second,
+    // separate occurrence of exactly that string.
+    expect(text.filter(t => t === 'Cancelled').length).toBeGreaterThanOrEqual(2);
+    expect(text.some(t => /\d{1,2}:\d{2}/.test(t))).toBe(false); // no time row at all
+  });
+
+  it('history falls back to the scheduled slot when completedAt is null', () => {
+    const job = makeJob({ status: 'completed', completedAt: null });
+    const text = renderCard(job, 'Ravi', 'Anil', 'history');
+    // Unreachable via current BE payloads; the fallback keeps a sensible row.
+    expect(text).toContain(formatTimeLabel(job.scheduledStart, job.scheduledEnd));
   });
 });

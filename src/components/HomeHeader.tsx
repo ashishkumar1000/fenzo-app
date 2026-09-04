@@ -1,54 +1,51 @@
 import { View, Text, StyleSheet, Pressable, StatusBar, useWindowDimensions } from 'react-native';
-import { Bell, Calendar, HardHat } from 'lucide-react-native';
+import { Bell, Calendar, CalendarClock, CircleAlert, HardHat } from 'lucide-react-native';
 import { Card } from './ui';
 import { colors, palette, radius, spacing, typography } from '../theme';
-import type { JobCounts } from '../services';
+import type { JobCounts, JobScope } from '../services';
 
 interface StatCardProps {
   icon: React.ReactNode;
   bgColor: string;
   title: string;
   subtitle: string;
-  details?: string;
   size: number;
+  /** Present only on job tiles: deep-links the Jobs tab to this tile's scope. */
+  onPress?: () => void;
 }
 
 /**
- * The Jobs tile's details string ("0 done · 0 active · 3 sched.") is longer
- * than a half-width tile fits at full size — shrink rather than truncate
- * mid-word, the same technique QuickActions uses for its tile labels.
+ * A KPI stat tile: icon+label row, then the value — never a forced square.
+ * `size` only fixes the *width* (so the row splits evenly); height follows
+ * content, and `statsRow`'s default stretch keeps both tiles in a row the
+ * same height without either one padding itself out with dead space.
+ *
+ * Job tiles are pressable (Today/Upcoming/Overdue each jump to the Jobs tab
+ * pre-set to their scope) — Technicians has no destination and stays inert.
  */
-const STAT_DETAILS_MIN_FONT_SCALE = 0.7;
-
-/**
- * A KPI stat tile: icon+label row, then the value, then an optional detail
- * line — never a forced square. `size` only fixes the *width* (so the row
- * splits evenly); height follows content, and `statsRow`'s default stretch
- * keeps both tiles in a row the same height without either one padding
- * itself out with dead space.
- */
-function StatCard({ icon, bgColor, title, subtitle, details, size }: StatCardProps) {
+function StatCard({ icon, bgColor, title, subtitle, size, onPress }: StatCardProps) {
   return (
-    <Card padding="sm" style={[styles.statCard, { width: size }]}>
-      <View style={styles.statLabelRow}>
-        <View style={[styles.statIconChip, { backgroundColor: bgColor }]}>
-          {icon}
+    <Pressable
+      accessibilityRole="button"
+      // Subtitle first ("Today 3") — the natural announcement order for a
+      // labelled value, and it lets tests key tiles by their label.
+      accessibilityLabel={`${subtitle} ${title}`}
+      onPress={onPress}
+      disabled={!onPress}
+      // Pressed dim (0.8, same as ScopeSelector's chips) — these are Home's
+      // primary tap targets, so a tap must feel responsive.
+      style={({ pressed }) => [{ width: size, opacity: pressed ? 0.8 : 1 }]}>
+      <Card padding="sm" style={styles.statCard}>
+        <View style={styles.statLabelRow}>
+          <View style={[styles.statIconChip, { backgroundColor: bgColor }]}>
+            {icon}
+          </View>
+          <Text style={styles.statSubtitle} numberOfLines={1}>{subtitle}</Text>
         </View>
-        <Text style={styles.statSubtitle} numberOfLines={1}>{subtitle}</Text>
-      </View>
 
-      <Text style={styles.statTitle} numberOfLines={1}>{title}</Text>
-
-      {details && (
-        <Text
-          style={styles.statDetails}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={STAT_DETAILS_MIN_FONT_SCALE}>
-          {details}
-        </Text>
-      )}
-    </Card>
+        <Text style={styles.statTitle} numberOfLines={1}>{title}</Text>
+      </Card>
+    </Pressable>
   );
 }
 
@@ -61,6 +58,8 @@ export interface HomeHeaderProps {
   technicianCount: number;
   /** From the profile's `jobCounts` (the `/users/me` dashboard counts). */
   jobCounts: JobCounts;
+  /** Pressing a job tile navigates to the Jobs tab pre-set to that scope. */
+  onTilePress: (scope: JobScope) => void;
 }
 
 export default function HomeHeader({
@@ -68,20 +67,12 @@ export default function HomeHeader({
   businessName,
   technicianCount,
   jobCounts,
+  onTilePress,
 }: HomeHeaderProps) {
   // Card side = (screen width - horizontal gutters - inter-card gap) / 2
   // Recalculated on every render so it stays correct on rotation / split-screen.
   const { width: screenWidth } = useWindowDimensions();
   const cardSize = (screenWidth - spacing.s4 * 2 - spacing.s3) / 2;
-
-  // Deliberately labeled "Jobs", not "Jobs today": the payload's counts span
-  // the whole account (three day-buckets + the all-time finished totals).
-  const totalJobs =
-    jobCounts.today +
-    jobCounts.upcoming +
-    jobCounts.overdue +
-    jobCounts.completed +
-    jobCounts.cancelled;
 
   return (
     <>
@@ -111,16 +102,40 @@ export default function HomeHeader({
           </View>
         </View>
 
-        {/* Stat Grid — each row is a cardholder for its two compact stat tiles */}
+        {/* Stat Grid — two rows of two half-width tiles each. The three job
+            tiles are the actionable counts (`jobCounts`) and each deep-links
+            the Jobs tab to its scope; Technicians has no destination. */}
         <View style={styles.statsGrid}>
           <Card padding="none" elevated={false} style={styles.statsRow}>
             <StatCard
-                icon={<Calendar color={colors.status.progress.solid} size={16} strokeWidth={1.75} />}
-                bgColor={colors.status.progress.bg}
-                title={String(totalJobs)}
-                subtitle="Jobs"
-                details={`${jobCounts.completed} done · ${jobCounts.today} today · ${jobCounts.upcoming} sched.`}
+                icon={<Calendar color={colors.primary} size={16} strokeWidth={1.75} />}
+                bgColor={colors.primarySoft}
+                title={String(jobCounts.today)}
+                subtitle="Today"
                 size={cardSize}
+                onPress={() => onTilePress('today')}
+            />
+
+            <StatCard
+                icon={<CalendarClock color={colors.status.scheduled.solid} size={16} strokeWidth={1.75} />}
+                bgColor={colors.status.scheduled.bg}
+                title={String(jobCounts.upcoming)}
+                subtitle="Upcoming"
+                size={cardSize}
+                onPress={() => onTilePress('upcoming')}
+            />
+          </Card>
+          <Card padding="none" elevated={false} style={styles.statsRow}>
+            {/* Overdue uses the neutral palette, matching JobCard's overdue
+                badge — the DS forbids a new status colour for overdue
+                (Cancelled's red must stay unambiguous). */}
+            <StatCard
+                icon={<CircleAlert color={colors.status.neutral.solid} size={16} strokeWidth={1.75} />}
+                bgColor={colors.status.neutral.bg}
+                title={String(jobCounts.overdue)}
+                subtitle="Overdue"
+                size={cardSize}
+                onPress={() => onTilePress('overdue')}
             />
 
             {/* No active/offline split: the API returns a count only, so the
@@ -203,6 +218,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderWidth: 0,
   },
+  // The Pressable owns the width (passed via `size`) so the split stays even;
+  // the Card fills it. Tap area: the card's height clears the 44px DS floor.
   statCard: {
     gap: spacing.s1,
     overflow: 'hidden',
@@ -228,10 +245,5 @@ const styles = StyleSheet.create({
   statSubtitle: {
     ...typography.label,
     color: colors.textMuted,
-  },
-  statDetails: {
-    ...typography.bodySm,
-    color: colors.textMuted,
-    marginTop: spacing.s1,
   },
 });

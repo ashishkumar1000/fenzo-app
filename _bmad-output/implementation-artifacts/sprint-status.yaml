@@ -1,5 +1,5 @@
 # generated: 2026-09-01
-# last_updated: 2026-09-04  # story 1-4 implemented, in review (bmad-dev)
+# last_updated: 2026-09-04  # 1-5 → done (code review complete: decisions + patches applied, 200/200 tests, tsc clean; not yet committed)
 # project: fenzo-app
 # project_key: NOKEY
 # tracking_system: file-system
@@ -16,8 +16,8 @@ development_status:
   1-1-wire-jobs-list-to-get-jobs: done
   1-2-owner-job-detail-screen: done
   1-3-edit-reassign-cancel-job: done
-  1-4-home-stats-refresh: review
-  1-5-jobs-timeline-scopes: ready-for-dev  # blocked-by fenzit-be 3-7 (BE deploys first); implement after 1-3 and 1-4
+  1-4-home-stats-refresh: done  # review complete (follow-up commit 98ba957); story file already says done
+  1-5-jobs-timeline-scopes: done  # code review complete (3 decisions + 10 patches + 3 defers); not yet committed
   epic-1-retrospective: optional
 
   # Epic 2: Customer Depth

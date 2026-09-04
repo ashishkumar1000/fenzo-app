@@ -14,11 +14,12 @@ import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { MainTabParamList, RootStackParamList } from '../navigation/types';
+import type { JobScope } from '../services';
 import HomeHeader from '../components/HomeHeader';
 import { Card, EmptyState, InlineError } from '../components/ui';
 import { colors, radius, spacing, typography } from '../theme';
 import { loadMyProfile, useMyProfile } from '../features/profile';
-import { QuickActions } from '../features/home';
+import { QuickActions, hasAnyJobCount } from '../features/home';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Home'>,
@@ -59,9 +60,21 @@ export default function HomeScreen({ navigation }: Props) {
   const quickActions = (
     <QuickActions
       onNewJob={handleNewJob}
-      onAllJobs={() => navigation.navigate('Jobs')}
+      // The scope param is load-bearing: the jobs store remembers the last
+      // scope viewed (it's module-level state), so a bare navigate('Jobs')
+      // would land under "Today's jobs" showing e.g. Overdue.
+      onTodayJobs={() => navigation.navigate('Jobs', { scope: 'today' })}
       onCustomers={() => navigation.navigate('Customers')}
     />
+  );
+
+  /** A stat tile press lands on the Jobs tab pre-set to that scope. The
+   * screen consumes and clears the one-shot param (JobsScreen, AC #10). */
+  const handleTilePress = useCallback(
+    (scope: JobScope) => {
+      navigation.navigate('Jobs', { scope });
+    },
+    [navigation],
   );
 
   /**
@@ -111,20 +124,14 @@ export default function HomeScreen({ navigation }: Props) {
   const ownerFirstName = profile.name.split(' ')[0];
   const businessName = profile.tenant.companyName;
   const { jobCounts, technicianCount } = profile;
-  // The five buckets are mutually exclusive (three IST day-buckets + two
-  // all-time finished totals), so their sum is every job in the account.
-  const totalJobs =
-    jobCounts.today +
-    jobCounts.upcoming +
-    jobCounts.overdue +
-    jobCounts.completed +
-    jobCounts.cancelled;
   const hasTechnicians = technicianCount > 0;
 
   // First-run: simplified Home until the account has a team and a job. Both
   // facts come from the server, so an account set up on another device shows
-  // the right Home here too.
-  const isSetupComplete = hasTechnicians && totalJobs > 0;
+  // the right Home here too. `hasAnyJobCount` is the extracted pure helper
+  // (any of the five buckets > 0) — the `hasTechnicians` conjunct is
+  // load-bearing: no technician, no assignable jobs.
+  const isSetupComplete = hasTechnicians && hasAnyJobCount(jobCounts);
 
   if (!isSetupComplete) {
     return (
@@ -167,6 +174,7 @@ export default function HomeScreen({ navigation }: Props) {
         businessName={businessName}
         technicianCount={technicianCount}
         jobCounts={jobCounts}
+        onTilePress={handleTilePress}
       />
       <ScrollView
         style={styles.screen}

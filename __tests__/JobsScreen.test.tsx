@@ -43,7 +43,8 @@ jest.mock('../src/features/customers', () => ({
 import JobsScreen from '../src/features/jobs/JobsScreen';
 import { JobCard } from '../src/features/jobs/components/JobCard';
 import { clearJobs, loadJobs } from '../src/features/jobs/useJobs';
-import { Button, Card, InlineError } from '../src/components/ui';
+import { Button, Card, InlineError, ScopeSelector } from '../src/components/ui';
+import { StatusFilterBar } from '../src/features/jobs/components/StatusFilterBar';
 import { jobService } from '../src/services';
 import type { ApiJob, Paginated } from '../src/services';
 
@@ -51,9 +52,10 @@ const list = jobService.list as jest.Mock;
 
 /** Mount the screen with a navigation stub; returns the renderer. */
 const Screen = JobsScreen as unknown as React.FC<{
-  navigation: { navigate: jest.Mock };
+  navigation: { navigate: jest.Mock; setParams: jest.Mock };
+  route: { params: undefined };
 }>;
-const navigation = { navigate: jest.fn() };
+const navigation = { navigate: jest.fn(), setParams: jest.fn() };
 
 function makeJob(id: string, overrides: Partial<ApiJob> = {}): ApiJob {
   return {
@@ -73,6 +75,7 @@ function makeJob(id: string, overrides: Partial<ApiJob> = {}): ApiJob {
     description: `Description ${id}`,
     notesForTechnician: null,
     createdAt: '2026-09-03T09:00:00Z',
+    completedAt: null,
     updatedAt: '2026-09-03T09:00:00Z',
     ...overrides,
   };
@@ -125,7 +128,23 @@ const mounted: ReactTestRenderer.ReactTestRenderer[] = [];
 async function mountScreen(): Promise<ReactTestRenderer.ReactTestRenderer> {
   let renderer!: ReactTestRenderer.ReactTestRenderer;
   await ReactTestRenderer.act(async () => {
-    renderer = ReactTestRenderer.create(React.createElement(Screen, { navigation }));
+    renderer = ReactTestRenderer.create(
+      React.createElement(Screen, { navigation, route: { params: undefined } }),
+    );
+  });
+  mounted.push(renderer);
+  return renderer;
+}
+
+/** Mount with one-shot route params (e.g. Home's tile deep link, AC #10). */
+async function mountScreenWithParams(
+  params: { scope: 'today' | 'upcoming' | 'overdue' | 'history' },
+): Promise<ReactTestRenderer.ReactTestRenderer> {
+  let renderer!: ReactTestRenderer.ReactTestRenderer;
+  await ReactTestRenderer.act(async () => {
+    renderer = ReactTestRenderer.create(
+      React.createElement(Screen, { navigation, route: { params } } as never),
+    );
   });
   mounted.push(renderer);
   return renderer;
@@ -219,7 +238,7 @@ it('shows the per-filter empty state copy', async () => {
   const renderer = await mountScreen();
 
   await ReactTestRenderer.act(async () => {
-    loadJobs('completed');
+    loadJobs('today', 'completed');
   });
 
   const text = renderedText(renderer);
@@ -237,7 +256,7 @@ it('loads the next page when the list reaches its end', async () => {
   });
 
   expect(list).toHaveBeenCalledTimes(2);
-  expect(list).toHaveBeenLastCalledWith({ cursor: 'cursor-1' });
+  expect(list).toHaveBeenLastCalledWith({ scope: 'today', status: undefined, cursor: 'cursor-1' });
   expect(renderedText(renderer)).toContain('Description c'); // appended
 });
 
@@ -262,4 +281,80 @@ it('opens JobDetail with the pressed job\'s id when a card is pressed', async ()
   });
   expect(navigation.navigate).toHaveBeenCalledTimes(1);
   expect(navigation.navigate).toHaveBeenCalledWith('JobDetail', { jobId: 'job-abc' });
+});
+
+// --- Scope switching (Story 1.5) ---------------------------------------------
+
+it('consumes a one-shot scope param: loads that scope and clears the param (AC #10)', async () => {
+  list.mockResolvedValue(page([], null));
+  await mountScreenWithParams({ scope: 'overdue' });
+
+  expect(list).toHaveBeenCalledWith({ scope: 'overdue' });
+  expect(navigation.setParams).toHaveBeenCalledWith({ scope: undefined });
+});
+
+it('pressing a scope chip loads that scope and shows its empty state', async () => {
+  list.mockResolvedValue(page([], null));
+  const renderer = await mountScreen();
+
+  await ReactTestRenderer.act(async () => {
+    renderer.root.findByType(ScopeSelector).props.onChange('upcoming');
+  });
+
+  expect(list).toHaveBeenLastCalledWith({ scope: 'upcoming' }); // chip reset → no status param
+  const text = renderedText(renderer);
+  expect(text).toContain('No upcoming jobs');
+  expect(text).toContain('Jobs booked for tomorrow or later will show up here.');
+  // Upcoming hides the chip row entirely — the server pre-narrows status there.
+  expect(renderer.root.findAllByType(StatusFilterBar).length).toBe(0);
+});
+
+it('shows the overdue empty state on the overdue scope', async () => {
+  list.mockResolvedValue(page([], null));
+  const renderer = await mountScreen();
+
+  await ReactTestRenderer.act(async () => {
+    renderer.root.findByType(ScopeSelector).props.onChange('overdue');
+  });
+
+  expect(list).toHaveBeenLastCalledWith({ scope: 'overdue' });
+  const text = renderedText(renderer);
+  expect(text).toContain('Nothing overdue');
+  expect(text).toContain('Jobs past their date that were never finished will show up here.');
+  expect(renderer.root.findAllByType(StatusFilterBar).length).toBe(0);
+});
+
+it('History narrows the chip row to its three chips', async () => {
+  list.mockResolvedValue(page([], null));
+  const renderer = await mountScreen();
+
+  await ReactTestRenderer.act(async () => {
+    renderer.root.findByType(ScopeSelector).props.onChange('history');
+  });
+
+  expect(list).toHaveBeenLastCalledWith({ scope: 'history' }); // all kept → no status param
+  const bar = renderer.root.findByType(StatusFilterBar);
+  expect(bar.props.filters).toEqual(['all', 'completed', 'cancelled']);
+  expect(bar.props.value).toBe('all');
+});
+
+it('keeps the Done chip across a Today → History switch, on screen and on the wire', async () => {
+  list.mockResolvedValue(page([], null));
+  const renderer = await mountScreen();
+
+  await ReactTestRenderer.act(async () => {
+    renderer.root.findByType(StatusFilterBar).props.onChange('completed');
+  });
+  expect(list).toHaveBeenLastCalledWith({ scope: 'today', status: ['completed'] });
+
+  await ReactTestRenderer.act(async () => {
+    renderer.root.findByType(ScopeSelector).props.onChange('history');
+  });
+  // filterForScope keeps a chip History can still show — both on the wire...
+  expect(list).toHaveBeenLastCalledWith({ scope: 'history', status: ['completed'] });
+  // ...and in the narrowed chip row.
+  const bar = renderer.root.findByType(StatusFilterBar);
+  expect(bar.props.filters).toEqual(['all', 'completed', 'cancelled']);
+  expect(bar.props.value).toBe('completed');
+  expect(renderedText(renderer)).toContain('No history yet');
 });

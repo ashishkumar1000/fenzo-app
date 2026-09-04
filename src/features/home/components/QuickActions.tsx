@@ -1,6 +1,6 @@
 /**
  * QuickActions — the three tap targets that sit above Today's jobs on Home:
- * New job (primary), All jobs, and Customers.
+ * New job (primary), Today's jobs, and Customers.
  *
  * Purely presentational: the screen owns navigation and passes the handlers.
  * Each tile is an interactive `Card`, so press feedback and the surface
@@ -19,7 +19,9 @@ import { colors, spacing, typography } from '../../../theme';
 
 export type QuickActionsProps = {
   onNewJob: () => void;
-  onAllJobs: () => void;
+  /** Navigates to the Jobs tab on its Today scope — there is no all-time
+   * job view to point at since Story 1.5, hence the "Today's jobs" label. */
+  onTodayJobs: () => void;
   onCustomers: () => void;
 };
 
@@ -35,7 +37,7 @@ const MIN_FONT_SCALE = 0.85;
 
 export function QuickActions({
   onNewJob,
-  onAllJobs,
+  onTodayJobs,
   onCustomers,
 }: QuickActionsProps) {
   return (
@@ -62,7 +64,7 @@ export function QuickActions({
       </View>
 
       <View style={styles.tileWrap}>
-        <Card interactive padding="sm" onPress={onAllJobs} style={styles.tile}>
+        <Card interactive padding="sm" onPress={onTodayJobs} style={styles.tile}>
           <ClipboardList
             color={colors.primary}
             size={ICON_SIZE}
@@ -73,7 +75,7 @@ export function QuickActions({
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={MIN_FONT_SCALE}>
-            All jobs
+            Today's jobs
           </Text>
         </Card>
       </View>

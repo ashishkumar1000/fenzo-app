@@ -8,9 +8,18 @@
  * call site.
  */
 
+import type { JobScope } from '../services';
+
 export type MainTabParamList = {
   Home: undefined;
-  Jobs: undefined;
+  /**
+   * One-shot scope pre-selection for the Jobs tab — Home's stat tiles
+   * navigate here with `scope` (e.g. the Overdue tile → `overdue`). JobsScreen
+   * consumes the param and clears it (`setParams({ scope: undefined })`):
+   * tab params persist across navigations, so an uncleared param would
+   * re-apply on every later tab-bar focus and fight a manually picked scope.
+   */
+  Jobs: { scope?: JobScope } | undefined;
   Customers: undefined;
   More: undefined;
 };

@@ -3,3 +3,4 @@
  */
 export { QuickActions } from './components/QuickActions';
 export type { QuickActionsProps } from './components/QuickActions';
+export { hasAnyJobCount } from './hasAnyJobCount';

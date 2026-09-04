@@ -23,6 +23,7 @@ export type {
   JobDetailCustomer,
   JobDetailTechnician,
   JobPriority,
+  JobScope,
   JobServiceType,
   JobStatusApi,
   ListJobsQuery,

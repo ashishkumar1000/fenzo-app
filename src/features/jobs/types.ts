@@ -9,3 +9,9 @@ export type { ApiJob } from '../../services';
  * put them straight on the wire. `all` sends no status param.
  */
 export type JobFilter = 'all' | 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+
+/**
+ * The Jobs tab's timeline bucket — re-exported from the services layer, where
+ * the wire contract (`GET /jobs?scope=…`) defines it.
+ */
+export type { JobScope } from '../../services';

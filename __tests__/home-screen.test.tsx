@@ -7,7 +7,7 @@
  * without crashing, on both first-run and normal Home.
  */
 import React from 'react';
-import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 import { ScrollView } from 'react-native';
 
 const mockNavigation = { navigate: jest.fn(), goBack: jest.fn(), canGoBack: jest.fn(() => false) };
@@ -32,6 +32,7 @@ jest.mock('../src/features/profile', () => ({
 
 jest.mock('../src/features/home', () => ({
   QuickActions: () => null,
+  hasAnyJobCount: jest.requireActual('../src/features/home').hasAnyJobCount,
 }));
 
 import HomeScreen from '../src/screens/HomeScreen';
@@ -112,9 +113,11 @@ it('renders the greeting and header stats from the jobCounts buckets', async () 
   const text = allText(renderer);
   expect(text).toContain('Good morning,');
   expect(text).toContain('Fenzit Services');
-  // 1+2+0+3+1 = 7 total jobs; 3 done · 1 today · 2 sched.
-  expect(text).toContain('7');
-  expect(text).toContain('3 done · 1 today · 2 sched.');
+  // Story 1.5: the tiles show the jobCounts buckets directly (Today 1,
+  // Upcoming 2, Overdue 0) — there is no all-time total row any more.
+  expect(text).toContain('Today');
+  expect(text).toContain('Upcoming');
+  expect(text).toContain('Overdue');
   expect(text).toContain('Technicians');
   expect(text).toContain('2');
 });
@@ -170,4 +173,66 @@ it('refreshes the profile on focus (unforced — the store throttle decides)', a
   await act(async () => {
     renderer.unmount();
   });
+});
+
+// --- Stat tiles (Story 1.5) ---------------------------------------------------
+
+/** Finds a header stat tile by the start of its accessibility label. */
+function tileFor(renderer: ReactTestRenderer, label: string): ReactTestInstance {
+  const match = renderer.root
+    .findAllByProps({ accessibilityRole: 'button' })
+    .find(p => typeof p.props.accessibilityLabel === 'string' &&
+      (p.props.accessibilityLabel as string).startsWith(label));
+  if (!match) throw new Error(`stat tile "${label}" not rendered`);
+  return match;
+}
+
+function mountWithProfile(overrides: Partial<MyProfile> = {}): Promise<ReactTestRenderer> {
+  useMyProfileMock.mockReturnValue({
+    profile: makeProfile(overrides),
+    isLoading: false,
+    error: null,
+    refresh: jest.fn(),
+    dismissError: jest.fn(),
+  });
+  return mountScreen();
+}
+
+it('each job tile carries its count in the accessibility label (subtitle first)', async () => {
+  const renderer = await mountWithProfile();
+
+  expect(tileFor(renderer, 'Today').props.accessibilityLabel).toBe('Today 1');
+  expect(tileFor(renderer, 'Upcoming').props.accessibilityLabel).toBe('Upcoming 2');
+  expect(tileFor(renderer, 'Overdue').props.accessibilityLabel).toBe('Overdue 0');
+  expect(tileFor(renderer, 'Technicians').props.accessibilityLabel).toBe('Technicians 2');
+});
+
+it('pressing a job tile lands on the Jobs tab pre-set to that scope', async () => {
+  const renderer = await mountWithProfile();
+
+  await act(async () => {
+    tileFor(renderer, 'Today').props.onPress();
+  });
+  expect(mockNavigation.navigate).toHaveBeenCalledWith('Jobs', { scope: 'today' });
+
+  await act(async () => {
+    tileFor(renderer, 'Upcoming').props.onPress();
+  });
+  expect(mockNavigation.navigate).toHaveBeenCalledWith('Jobs', { scope: 'upcoming' });
+
+  await act(async () => {
+    tileFor(renderer, 'Overdue').props.onPress();
+  });
+  expect(mockNavigation.navigate).toHaveBeenCalledWith('Jobs', { scope: 'overdue' });
+});
+
+it('the Technicians tile is inert (disabled, no Jobs navigation)', async () => {
+  const renderer = await mountWithProfile();
+
+  const tile = tileFor(renderer, 'Technicians');
+  expect(tile.props.disabled).toBe(true);
+  await act(async () => {
+    tile.props.onPress?.(); // no-op even if invoked
+  });
+  expect(mockNavigation.navigate).not.toHaveBeenCalled();
 });

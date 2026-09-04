@@ -13,11 +13,24 @@ import { Clock, Droplet, Snowflake, Wrench } from 'lucide-react-native';
 import { Avatar, Badge, Card } from '../../../components/ui';
 import { colors, spacing, typography } from '../../../theme';
 import type { StatusKey } from '../../../theme';
-import type { ApiJob } from '../types';
+import { daysOverdue, formatIstDateLabel } from '../../../utils';
+import type { ApiJob, JobScope } from '../types';
 import { formatTimeLabel, serviceTypeLabel, serviceTypeToIcon, statusToBadge } from '../format';
 
 type Props = {
   job: ApiJob;
+  /**
+   * Which timeline scope the row is rendered in — drives the scheduled-time
+   * meta row. Defaults to `today`, whose rendering is the original
+   * time-only one: the technician screens (`TodayScreen`, `HistoryScreen`)
+   * pass nothing and must render byte-identical to before Story 1.5.
+   *   upcoming — prefixed with the scheduled IST date (times alone aren't
+   *              enough when rows span days).
+   *   overdue  — time label plus a neutral "N days overdue" badge (attention,
+   *              NOT a status-colour badge competing with the fixed vocabulary).
+   *   history  — completion date/time from `completedAt`, or "Cancelled".
+   */
+  scope?: JobScope;
   /** Resolved customer display name; falls back to the service type label. */
   customerName?: string;
   /** Resolved technician display name; falls back to a neutral placeholder. */
@@ -39,10 +52,26 @@ const SERVICE_ICON = {
   snowflake: Snowflake,
 } as const;
 
-export function JobCard({ job, customerName, technicianName, onPress }: Props) {
+export function JobCard({ job, scope = 'today', customerName, technicianName, onPress }: Props) {
   const badgeStatus = statusToBadge(job.status);
   const ServiceIcon = SERVICE_ICON[serviceTypeToIcon(job.serviceType)];
   const serviceLabel = serviceTypeLabel(job.serviceType);
+
+  // The scheduled-time meta row, per scope. Today keeps the original
+  // time-only rendering byte-for-byte. In history, a completed row with a
+  // null completedAt falls back to the scheduled slot — unreachable via the
+  // current BE payloads (completion stamps completedAt), kept so the row
+  // still shows a sensible time if the stamp is ever absent.
+  const timeText =
+    scope === 'upcoming'
+      ? `${formatIstDateLabel(job.scheduledStart)} · ${formatTimeLabel(job.scheduledStart, job.scheduledEnd)}`
+      : scope === 'history' && job.status === 'cancelled'
+        ? 'Cancelled'
+        : scope === 'history' && job.completedAt
+          ? `${formatIstDateLabel(job.completedAt)} · ${formatTimeLabel(job.completedAt, null)}`
+          : formatTimeLabel(job.scheduledStart, job.scheduledEnd);
+  // Only computed in the overdue scope (IST day-diff vs today).
+  const overdueDays = scope === 'overdue' ? daysOverdue(job.scheduledStart) : 0;
 
   return (
     <Card
@@ -76,7 +105,15 @@ export function JobCard({ job, customerName, technicianName, onPress }: Props) {
       </View>
       <View style={styles.metaRow}>
         <Clock size={15} color={colors.textMuted} strokeWidth={2} />
-        <Text style={styles.metaText}>{formatTimeLabel(job.scheduledStart, job.scheduledEnd)}</Text>
+        <Text style={styles.metaText}>{timeText}</Text>
+        {scope === 'overdue' ? (
+          // Neutral badge on purpose: overdue is an attention marker, not one
+          // of the four job statuses — a new colour would break the fixed
+          // status vocabulary (DESIGN_SYSTEM.md).
+          <Badge status="neutral" tone="soft" size="sm">
+            {`${overdueDays} ${overdueDays === 1 ? 'day' : 'days'} overdue`}
+          </Badge>
+        ) : null}
       </View>
 
       <View style={styles.divider} />

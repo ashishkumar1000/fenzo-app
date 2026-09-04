@@ -4,8 +4,8 @@
  * Same API-backed shared-store pattern as `useMyProfile`/`useCustomers`:
  * one module-level state object, any number of subscribers via
  * `useSyncExternalStore`, in-flight requests de-duplicated. Unlike those,
- * this store holds only one day's window per filter and pages, so the state
- * carries the cursor alongside the rows.
+ * this store holds only one timeline scope's window per filter and pages, so
+ * the state carries the cursor alongside the rows.
  *
  * Not MMKV-persisted: the list is server truth for the day, and a stale cache
  * would show jobs that were reassigned or cancelled elsewhere. `GET /users/me`'s
@@ -18,10 +18,14 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { jobService } from '../../services';
 import type { ApiError, ApiJob } from '../../services';
-import type { JobFilter } from './types';
+import { isSameIstDay } from '../../utils';
+import { filterForScope } from './scopeFilters';
+import type { JobFilter, JobScope } from './types';
 
 interface JobsState {
   jobs: ApiJob[];
+  /** Timeline bucket on screen (Today · Upcoming · Overdue · History). */
+  scope: JobScope;
   filter: JobFilter;
   /** True while the *first* load is in flight (i.e. there's nothing to show yet). */
   isLoading: boolean;
@@ -39,6 +43,7 @@ interface JobsState {
 
 const INITIAL: JobsState = {
   jobs: [],
+  scope: 'today',
   filter: 'all',
   isLoading: true,
   isLoadingMore: false,
@@ -61,6 +66,7 @@ let state: JobsState = INITIAL;
  */
 let inFlight: Promise<void> | null = null;
 let inFlightKind: 'load' | 'more' = 'load';
+let inFlightScope: JobScope = 'today';
 let inFlightFilter: JobFilter = 'all';
 
 /**
@@ -93,37 +99,50 @@ function getSnapshot() {
 const filterToStatuses = (f: JobFilter) => (f === 'all' ? undefined : [f]);
 
 /**
- * Loads page 1 for `filter` (default: the filter already on screen).
+ * Loads page 1 for `scope` + `filter` (defaults: whatever is on screen).
  *
- * Same-query callers share the request already running; a different filter
- * or a forced refresh queues behind it instead of being dropped — whichever
- * request happens to be running (even a page-2 fetch) must not swallow them.
- * Also skipped when a success for this same filter landed less than 15s ago,
- * unless `opts.force` (pull-to-refresh). A filter change always loads fresh:
- * it's a different query, not a refresh.
+ * Same-query callers share the request already running; a different scope,
+ * a different filter, or a forced refresh queues behind it instead of being
+ * dropped — whichever request happens to be running (even a page-2 fetch)
+ * must not swallow them. Also skipped when a success for this same
+ * (scope, filter) pair landed less than 15s ago, unless `opts.force`
+ * (pull-to-refresh). A scope or filter change always loads fresh: it's a
+ * different query, not a refresh.
+ *
+ * A scope change behaves exactly like a filter change: the loader shows over
+ * the old rows (they are NOT cleared eagerly), the previous scope's cursor is
+ * dropped, and a failure clears rows/cursor so the old scope's rows never
+ * render under the new scope (a cursor replayed across scopes 400s).
  */
-export function loadJobs(filter = state.filter, opts: { force?: boolean } = {}): Promise<void> {
+export function loadJobs(
+  scope: JobScope = state.scope,
+  filter: JobFilter = state.filter,
+  opts: { force?: boolean } = {},
+): Promise<void> {
   if (inFlight) {
-    if (inFlightKind === 'load' && filter === inFlightFilter && !opts.force) {
+    if (inFlightKind === 'load' && scope === inFlightScope && filter === inFlightFilter && !opts.force) {
       return inFlight;
     }
-    return inFlight.then(() => loadJobs(filter, opts));
+    return inFlight.then(() => loadJobs(scope, filter, opts));
   }
   const fresh = state.lastLoadedAt && Date.now() - state.lastLoadedAt < 15_000;
-  if (!opts.force && fresh && filter === state.filter && state.hasLoaded) {
+  if (!opts.force && fresh && scope === state.scope && filter === state.filter && state.hasLoaded) {
     return Promise.resolve();
   }
+  const changedScope = scope !== state.scope;
   const changedFilter = filter !== state.filter;
+  const changedQuery = changedScope || changedFilter;
   const gen = resetGen;
-  // Show the loader only when there's nothing on screen yet (or the filter
+  // Show the loader only when there's nothing on screen yet (or the query
   // just changed) — a refresh over existing rows must not blank them out.
   // Clearing `error` here also makes every attempt transition the error
   // through null, so a repeat failure re-shows a dismissed banner.
-  setState({ filter, isLoading: !state.hasLoaded || changedFilter, error: null });
+  setState({ scope, filter, isLoading: !state.hasLoaded || changedQuery, error: null });
   inFlightKind = 'load';
+  inFlightScope = scope;
   inFlightFilter = filter;
   inFlight = jobService
-    .list({ status: filterToStatuses(filter) })
+    .list({ scope, status: filterToStatuses(filter) })
     .then(page => {
       if (gen !== resetGen) return; // store was cleared while we were away
       setState({
@@ -140,12 +159,12 @@ export function loadJobs(filter = state.filter, opts: { force?: boolean } = {}):
       if (gen !== resetGen) return;
       console.warn('[useJobs] GET /jobs failed →', error);
       // Keep prior rows on screen: a failed refresh must not empty the list.
-      // But a failed *filter change* must not show the old filter's rows
-      // under the new chip — drop them and surface the full error view.
+      // But a failed *scope/filter change* must not show the old query's rows
+      // under the new one — drop them and surface the full error view.
       setState({
         isLoading: false,
         error: error.message,
-        ...(changedFilter ? { jobs: [], nextCursor: null, hasMore: false } : {}),
+        ...(changedQuery ? { jobs: [], nextCursor: null, hasMore: false } : {}),
       });
     })
     .finally(() => {
@@ -165,9 +184,10 @@ export function loadMoreJobs(): Promise<void> {
   const gen = resetGen;
   setState({ isLoadingMore: true, error: null });
   inFlightKind = 'more';
+  inFlightScope = state.scope;
   inFlightFilter = state.filter;
   inFlight = jobService
-    .list({ status: filterToStatuses(state.filter), cursor: state.nextCursor })
+    .list({ scope: state.scope, status: filterToStatuses(state.filter), cursor: state.nextCursor })
     .then(page => {
       if (gen !== resetGen) return; // store was cleared while we were away
       const existingIds = new Set(state.jobs.map(j => j.id));
@@ -194,11 +214,22 @@ export function loadMoreJobs(): Promise<void> {
 
 /**
  * Puts one row at the top of the list without a round trip — for a caller
- * that just created the job and already holds the full row. Skipped when the
- * active filter excludes the job's status: a freshly created (scheduled) job
- * must not appear under a Done chip.
+ * that just created the job and already holds the full row. Two guards,
+ * both required:
+ *   - Scope: prepend must preserve the server's sort. Today is the only scope
+ *     sorted `created_at DESC` (newest first), so prepending is correct there.
+ *     Upcoming/Overdue sort `scheduled_start ASC` and History
+ *     `scheduled_start DESC` — there is no correct insert position without
+ *     re-sorting, so for those scopes this is a NO-OP; the throttled focus
+ *     refetch picks the row up.
+ *   - Day: the job's `scheduledStart` must fall on today's IST day — Today's
+ *     window is day-scoped, so a job booked three days out must not appear
+ *     in today's list before the server has ever been asked for it.
+ *   - Filter: skipped when the active chip excludes the job's status — a
+ *     freshly created (scheduled) job must not appear under a Done chip.
  */
 export function upsertJob(job: ApiJob): void {
+  if (state.scope !== 'today' || !isSameIstDay(job.scheduledStart)) return;
   const statuses = filterToStatuses(state.filter);
   if (statuses && !statuses.includes(job.status)) return;
   const rest = state.jobs.filter(j => j.id !== job.id);
@@ -226,17 +257,29 @@ export function useJobs() {
   }, [snapshot.hasLoaded]);
 
   /** Re-fetch page 1 — for pull-to-refresh and the error view's retry. */
-  const refresh = useCallback(() => loadJobs(state.filter, { force: true }), []);
+  const refresh = useCallback(() => loadJobs(state.scope, state.filter, { force: true }), []);
 
   /** Switches the active chip and loads that filter fresh. */
   const setFilter = useCallback((next: JobFilter) => {
     if (next === state.filter) return;
-    void loadJobs(next);
+    void loadJobs(undefined, next);
+  }, []);
+
+  /**
+   * Switches the timeline scope and loads it fresh (Today · Upcoming · …).
+   * Applies the shared scope→chip rule (see `scopeFilters.ts`) so an
+   * incompatible chip can never ride along — the server would silently
+   * intersect it into an empty result. Same rule the screen applies.
+   */
+  const setScope = useCallback((next: JobScope) => {
+    if (next === state.scope) return;
+    void loadJobs(next, filterForScope(state.filter, next));
   }, []);
 
   return {
     jobs: snapshot.jobs,
     filter: snapshot.filter,
+    scope: snapshot.scope,
     isLoading: snapshot.isLoading,
     isLoadingMore: snapshot.isLoadingMore,
     error: snapshot.error,
@@ -246,5 +289,6 @@ export function useJobs() {
     loadMoreJobs,
     refresh,
     setFilter,
+    setScope,
   };
 }

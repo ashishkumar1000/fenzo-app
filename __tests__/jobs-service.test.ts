@@ -43,6 +43,25 @@ it('drops an empty status array rather than sending an empty param', async () =>
   expect(get).toHaveBeenCalledWith('/jobs', { params: {} });
 });
 
+it('passes the scope through untouched when given', async () => {
+  await jobService.list({ scope: 'overdue' });
+  expect(get).toHaveBeenCalledWith('/jobs', { params: { scope: 'overdue' } });
+});
+
+it('sends scope + status together for a filtered scope query (as the store does)', async () => {
+  await jobService.list({ scope: 'today', status: ['completed'] });
+  expect(get).toHaveBeenCalledWith('/jobs', {
+    params: { scope: 'today', status: ['completed'] },
+  });
+});
+
+it('sends scope + date together for today (date is server-rejected for other scopes)', async () => {
+  await jobService.list({ scope: 'today', date: '2026-09-03' });
+  expect(get).toHaveBeenCalledWith('/jobs', {
+    params: { scope: 'today', date: '2026-09-03' },
+  });
+});
+
 it('passes cursor, date, technicianId and limit through untouched', async () => {
   await jobService.list({
     date: '2026-09-03',
@@ -88,6 +107,7 @@ it('update PATCHes /jobs/:id with the cancel payload verbatim', async () => {
     description: null,
     notesForTechnician: null,
     createdAt: '2026-09-03T09:00:00Z',
+    completedAt: null,
     updatedAt: '2026-09-03T11:00:00Z',
   };
   patch.mockResolvedValueOnce({ data: cancelled });

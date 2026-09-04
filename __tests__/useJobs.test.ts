@@ -17,10 +17,23 @@ jest.mock('../src/services', () => ({
 import { clearJobs, loadJobs, loadMoreJobs, upsertJob, useJobs } from '../src/features/jobs/useJobs';
 import { jobService } from '../src/services';
 import type { ApiJob, Paginated } from '../src/services';
+import { istDayStartMs } from '../src/utils';
 
 const list = jobService.list as jest.Mock;
 
-function makeJob(id: string): ApiJob {
+const MS_PER_HOUR = 60 * 60 * 1000;
+const MS_PER_DAY = 24 * MS_PER_HOUR;
+
+/**
+ * scheduledStart fixtures built from the IST util itself (not the host
+ * machine's clock/timezone): 10:00 IST today, or N days from today's IST
+ * midnight.
+ */
+const scheduledTodayIst = () => new Date(istDayStartMs() + 10 * MS_PER_HOUR).toISOString();
+const scheduledInDays = (days: number) =>
+  new Date(istDayStartMs() + days * MS_PER_DAY + 10 * MS_PER_HOUR).toISOString();
+
+function makeJob(id: string, overrides: Partial<ApiJob> = {}): ApiJob {
   return {
     id,
     jobNumber: `JB-2026-${id}`,
@@ -29,7 +42,7 @@ function makeJob(id: string): ApiJob {
     technicianId: `tech-${id}`,
     serviceLocation: 'Chennai',
     serviceType: 'plumbing',
-    scheduledStart: '2026-09-03T10:00:00Z',
+    scheduledStart: scheduledTodayIst(),
     scheduledEnd: null,
     status: 'scheduled',
     currentStep: null,
@@ -39,6 +52,8 @@ function makeJob(id: string): ApiJob {
     notesForTechnician: null,
     createdAt: '2026-09-03T09:00:00Z',
     updatedAt: '2026-09-03T09:00:00Z',
+    completedAt: null,
+    ...overrides,
   };
 }
 
@@ -102,11 +117,23 @@ it('bypasses the throttle when the filter changes', async () => {
   await mountProbe();
 
   await ReactTestRenderer.act(async () => {
-    await loadJobs('completed'); // a different query, not a refresh
+    await loadJobs('today', 'completed'); // a different query, not a refresh
   });
 
   expect(list).toHaveBeenCalledTimes(2);
-  expect(list).toHaveBeenLastCalledWith({ status: ['completed'] });
+  expect(list).toHaveBeenLastCalledWith({ scope: 'today', status: ['completed'] });
+});
+
+it('bypasses the throttle when the scope changes', async () => {
+  list.mockResolvedValue(page([], null));
+  await mountProbe();
+
+  await ReactTestRenderer.act(async () => {
+    await loadJobs('upcoming'); // a different scope is a different query
+  });
+
+  expect(list).toHaveBeenCalledTimes(2);
+  expect(list).toHaveBeenLastCalledWith({ scope: 'upcoming' });
 });
 
 it('bypasses the throttle when forced (pull-to-refresh)', async () => {
@@ -114,7 +141,7 @@ it('bypasses the throttle when forced (pull-to-refresh)', async () => {
   await mountProbe();
 
   await ReactTestRenderer.act(async () => {
-    await loadJobs('all', { force: true });
+    await loadJobs('today', 'all', { force: true });
   });
 
   expect(list).toHaveBeenCalledTimes(2);
@@ -124,7 +151,24 @@ it('omits the status param for the all filter', async () => {
   list.mockResolvedValue(page([], null));
   await mountProbe();
 
-  expect(list).toHaveBeenCalledWith({});
+  expect(list).toHaveBeenCalledWith({ scope: 'today' });
+});
+
+it('throttles per (scope, filter), not globally', async () => {
+  list.mockResolvedValue(page([], null));
+  await mountProbe();
+
+  await run(() => loadJobs('today', 'completed')); // success stamps (today, completed)
+  expect(list).toHaveBeenCalledTimes(2);
+
+  await run(() => loadJobs('today', 'completed')); // same pair, fresh — throttled
+  expect(list).toHaveBeenCalledTimes(2);
+
+  await run(() => loadJobs('upcoming', 'completed')); // same filter, new scope — loads
+  expect(list).toHaveBeenCalledTimes(3);
+
+  await run(() => loadJobs('upcoming', 'all')); // same scope, new filter — loads
+  expect(list).toHaveBeenCalledTimes(4);
 });
 
 it('appends the next page without duplicate ids', async () => {
@@ -137,7 +181,7 @@ it('appends the next page without duplicate ids', async () => {
   });
 
   expect(probe?.jobs.map(j => j.id)).toEqual(['a', 'b', 'c']);
-  expect(list).toHaveBeenLastCalledWith({ cursor: 'cursor-1' });
+  expect(list).toHaveBeenLastCalledWith({ scope: 'today', cursor: 'cursor-1' });
 });
 
 it('keeps prior jobs and records the error when a load fails', async () => {
@@ -181,15 +225,72 @@ it('queues a filter change behind an in-flight page fetch instead of dropping it
     void loadMoreJobs(); // page-2 fetch now in flight (hangs until released)
     return Promise.resolve();
   });
-  const queued = loadJobs('completed'); // must queue, not return the page-2 promise
+  const queued = loadJobs('today', 'completed'); // must queue, not return the page-2 promise
 
   expect(list).toHaveBeenCalledTimes(2); // no third request until page 2 lands
 
   releasePage2();
   await run(() => queued);
   expect(list).toHaveBeenCalledTimes(3);
-  expect(list).toHaveBeenLastCalledWith({ status: ['completed'] });
+  expect(list).toHaveBeenLastCalledWith({ scope: 'today', status: ['completed'] });
   expect(probe?.filter).toBe('completed');
+});
+
+it('hook setScope switches the scope and loads it fresh', async () => {
+  list.mockResolvedValue(page([], null));
+  await mountProbe();
+
+  await run(async () => probe!.setScope('history'));
+
+  expect(probe?.scope).toBe('history');
+  expect(list).toHaveBeenLastCalledWith({ scope: 'history' });
+});
+
+it('hook setScope resets an incompatible chip (the server intersects status into an empty scope)', async () => {
+  list.mockResolvedValue(page([], null));
+  await mountProbe();
+
+  await run(async () => probe!.setFilter('completed')); // chip active on Today
+  await run(async () => probe!.setScope('upcoming')); // Upcoming fixes status server-side
+
+  expect(probe?.scope).toBe('upcoming');
+  expect(probe?.filter).toBe('all'); // the chip must not ride along
+  expect(list).toHaveBeenLastCalledWith({ scope: 'upcoming' }); // no status param
+});
+
+it('hook setScope keeps a chip History can still show', async () => {
+  list.mockResolvedValue(page([], null));
+  await mountProbe();
+
+  await run(async () => probe!.setFilter('completed'));
+  await run(async () => probe!.setScope('history'));
+
+  expect(probe?.scope).toBe('history');
+  expect(probe?.filter).toBe('completed');
+  expect(list).toHaveBeenLastCalledWith({ scope: 'history', status: ['completed'] });
+});
+
+it('hook setFilter re-anchors to the current scope and no-ops on the same chip', async () => {
+  list.mockResolvedValue(page([], null));
+  await mountProbe();
+
+  await run(async () => probe!.setFilter('completed'));
+
+  expect(probe?.filter).toBe('completed');
+  expect(list).toHaveBeenLastCalledWith({ scope: 'today', status: ['completed'] });
+
+  await run(async () => probe!.setFilter('completed')); // same chip → no refetch
+  expect(list).toHaveBeenCalledTimes(2);
+});
+
+it('hook refresh forces the current scope+filter (opts must not land in the filter slot)', async () => {
+  list.mockResolvedValue(page([makeJob('a')], null));
+  await mountProbe();
+
+  await run(() => probe!.refresh());
+
+  expect(list).toHaveBeenCalledTimes(2); // force bypasses the throttle
+  expect(list).toHaveBeenLastCalledWith({ scope: 'today' }); // same query, forced
 });
 
 it('clears stale rows when a filter change fails', async () => {
@@ -198,12 +299,62 @@ it('clears stale rows when a filter change fails', async () => {
   await mountProbe();
 
   await ReactTestRenderer.act(async () => {
-    await loadJobs('completed');
+    await loadJobs('today', 'completed');
   });
 
   expect(probe?.jobs).toEqual([]); // old filter's rows must not linger
   expect(probe?.filter).toBe('completed');
   expect(probe?.error).toBe('boom');
+});
+
+it('drops the previous scope cursor when the scope changes', async () => {
+  list.mockResolvedValueOnce(page([makeJob('a')], 'cursor-today'))
+      .mockResolvedValueOnce(page([makeJob('b')], null)); // upcoming page 1
+  await mountProbe();
+
+  await run(() => loadJobs('upcoming'));
+
+  expect(probe?.scope).toBe('upcoming');
+  expect(probe?.hasMore).toBe(false); // the today cursor is gone: nothing left to page
+  expect(list).toHaveBeenLastCalledWith({ scope: 'upcoming' });
+
+  await run(() => loadMoreJobs()); // no cursor → no page-2 request
+  expect(list).toHaveBeenCalledTimes(2);
+});
+
+it('clears stale rows when a scope change fails', async () => {
+  list.mockResolvedValueOnce(page([makeJob('a')], null))
+      .mockRejectedValueOnce(Object.assign(new Error('boom')));
+  await mountProbe();
+
+  await run(() => loadJobs('history'));
+
+  expect(probe?.jobs).toEqual([]); // old scope's rows must not linger
+  expect(probe?.scope).toBe('history');
+  expect(probe?.error).toBe('boom');
+});
+
+it('keeps prior rows when a failed refresh lands in the same scope', async () => {
+  list.mockResolvedValueOnce(page([makeJob('a')], null))
+      .mockRejectedValueOnce(Object.assign(new Error('boom')));
+  await mountProbe();
+
+  await run(() => loadJobs('today', 'all', { force: true })); // refresh, not a change
+
+  expect(probe?.jobs.map(j => j.id)).toEqual(['a']); // failed refresh keeps rows
+  expect(probe?.error).toBe('boom');
+});
+
+it('never re-sends the previous scope cursor with the new scope', async () => {
+  list.mockResolvedValueOnce(page([makeJob('a')], 'cursor-today'))
+      .mockResolvedValueOnce(page([], null));
+  await mountProbe();
+
+  await run(() => loadJobs('overdue'));
+  await run(() => loadMoreJobs()); // must send scope=overdue, never the old cursor
+
+  expect(list).toHaveBeenLastCalledWith({ scope: 'overdue' });
+  expect(list.mock.calls[1][0]).not.toHaveProperty('cursor', 'cursor-today');
 });
 
 it('ignores a response that lands after clearJobs (logout race)', async () => {
@@ -238,10 +389,44 @@ it('prepends a created job via upsertJob and honours the active filter', async (
   expect(probe?.jobs.map(j => j.id)).toEqual(['z', 'a']);
 
   await ReactTestRenderer.act(async () => {
-    await loadJobs('completed'); // empty Done list
+    await loadJobs('today', 'completed'); // empty Done list
   });
   ReactTestRenderer.act(() => {
     upsertJob(makeJob('z2')); // a scheduled job must not appear under Done
   });
   expect(probe?.jobs).toEqual([]);
+});
+
+it('upsertJob is a no-op outside the today scope (server sorts must hold)', async () => {
+  list.mockResolvedValueOnce(page([makeJob('a')], null)) // today mount load
+      .mockResolvedValueOnce(page([makeJob('b')], null)); // upcoming load
+  await mountProbe();
+
+  await run(() => loadJobs('upcoming'));
+
+  ReactTestRenderer.act(() => {
+    upsertJob(makeJob('z')); // would violate upcoming's scheduled_start ASC sort
+  });
+  expect(probe?.jobs.map(j => j.id)).toEqual(['b']); // unchanged
+});
+
+it('upsertJob skips a job scheduled for a future day (Today is day-scoped)', async () => {
+  list.mockResolvedValueOnce(page([], null));
+  await mountProbe();
+
+  ReactTestRenderer.act(() => {
+    upsertJob(makeJob('z', { scheduledStart: scheduledInDays(3) }));
+  });
+  expect(probe?.jobs).toEqual([]); // booked three days out → not in today's window
+});
+
+it('upsertJob skips a job scheduled outside today, even under the all filter', async () => {
+  list.mockResolvedValueOnce(page([makeJob('a')], null));
+  await mountProbe();
+
+  ReactTestRenderer.act(() => {
+    upsertJob(makeJob('z', { status: 'cancelled', scheduledStart: scheduledInDays(-1) }));
+  });
+  // Day guard: a job scheduled yesterday is NOT today's window — no prepend.
+  expect(probe?.jobs.map(j => j.id)).toEqual(['a']);
 });

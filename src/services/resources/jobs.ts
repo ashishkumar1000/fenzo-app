@@ -47,6 +47,17 @@ export type WorkflowStepApi =
   | 'signature_captured'
   | 'completed';
 
+/**
+ * Timeline buckets `GET /jobs` splits the tenant's jobs into (fenzit-be
+ * Story 3-7). The four are mutually exclusive by construction: Upcoming starts
+ * at tomorrow's IST boundary (so a job booked for today is ONLY in Today) and
+ * History is the finished set (completed/cancelled) the active buckets exclude.
+ *
+ * Each scope also fixes the sort server-side, which is why the FE must never
+ * re-sort rows client-side — see `useJobs`' today-only `upsertJob` guard.
+ */
+export type JobScope = 'today' | 'upcoming' | 'overdue' | 'history';
+
 export interface CreateJobRequest {
   /** Existing customer UUID. */
   customerId: string;
@@ -118,6 +129,17 @@ export interface ApiJob {
   /** ISO 8601, UTC, or null when the form had no end time. */
   scheduledEnd: string | null;
   status: JobStatusApi;
+  /**
+   * ISO 8601, UTC — when the job completed. Null until status becomes
+   * `completed` (a cancelled job stays null).
+   *
+   * ⚠️ Two BE payloads deliberately OMIT this field for now (delta-sync rows
+   * and customer-detail job history, per fenzit-be 3-7 AC #10): absent at
+   * runtime means "not provided", not "not completed". Nothing consumes those
+   * as `ApiJob` today; when the offline-sync / customer stories wire them,
+   * treat missing rows as lacking the field rather than asserting it exists.
+   */
+  completedAt: string | null;
   /** One of `WorkflowStepApi`, or null before the technician starts. */
   currentStep: WorkflowStepApi | null;
   priority: JobPriority;
@@ -196,7 +218,25 @@ export interface JobDetail extends ApiJob {
 
 /** Query accepted by `GET /jobs`. Omitted fields are simply not sent. */
 export interface ListJobsQuery {
-  /** YYYY-MM-DD. Omit for the server's default (today IST) — never a guess. */
+  /**
+   * Timeline bucket (default `today`). The sort is fixed per scope server-side:
+   *   today — any status in today's IST window, `created_at DESC`; the
+   *           repeatable `status` filter still applies (the existing chips).
+   *   upcoming — scheduled from tomorrow IST, `scheduled_start ASC` (soonest
+   *           first), status fixed to `scheduled`.
+   *   overdue — scheduled before today IST and not finished, `scheduled_start
+   *           ASC` (oldest problem first), status fixed server-side.
+   *   history — completed/cancelled by default, `scheduled_start DESC`; the
+   *           repeatable `status` filter narrows it.
+   *
+   * Cursor is scope-tagged server-side — one minted under another scope 400s.
+   */
+  scope?: JobScope;
+  /**
+   * YYYY-MM-DD, re-anchors Today's IST window. Only legal with `scope`
+   * omitted or `scope='today'` — any non-today scope combined with `date`
+   * is a 422 (today is the default scope, so `today` + `date` is allowed).
+   */
   date?: string;
   /** Repeatable filter; empty/absent means all statuses. */
   status?: JobStatusApi[];
@@ -221,17 +261,20 @@ async function create(input: CreateJobRequest): Promise<ApiJob> {
 }
 
 /**
- * `GET /jobs` — the tenant's jobs for one IST day, newest first.
+ * `GET /jobs` — the tenant's jobs, bucketed by `scope` (default `today`).
  *
- * Sort is `createdAt DESC, id DESC` (NOT by scheduledStart), and the day
- * window is `scheduledStart` within the IST date. Empty match is a 200 with
- * `{ data: [], nextCursor: null, hasMore: false }` — not an error.
+ * Sort and window are fixed per scope server-side (see `JobScope`): today is
+ * `createdAt DESC` over the day's window; upcoming/overdue sort by
+ * `scheduled_start ASC`; history by `scheduled_start DESC`. Empty match is a
+ * 200 with `{ data: [], nextCursor: null, hasMore: false }` — not an error.
  *
  * Documented failures, all surfaced as `ApiError`:
- *   400 bad cursor/company · 401 · 422 invalid date/status/limit
+ *   400 bad cursor/company · 401 · 422 invalid date/status/scope/limit
+ *   (`date` + any non-today scope)
  */
 async function list(query: ListJobsQuery = {}): Promise<Paginated<ApiJob>> {
   const params: Record<string, unknown> = {};
+  if (query.scope) params.scope = query.scope;
   if (query.date) params.date = query.date;
   if (query.status?.length) params.status = query.status; // array passed through as-is — the axios instance serializes arrays repeat-style (?status=a&status=b), which is what the backend's query parser expects (bracket style is silently ignored there)
   if (query.technicianId) params.technicianId = query.technicianId;

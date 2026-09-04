@@ -29,3 +29,21 @@
 - **Repo has no ESLint config** — `bun run lint` fails with "couldn't find a configuration file" for every story, so lint is never a real gate. Set up an ESLint (or Biome) config once, repo-wide.
 
 - **`totalJobs` sum duplicated between HomeScreen and HomeHeader** — `src/screens/HomeScreen.tsx` (~L114) and `src/components/HomeHeader.tsx` (~L33) each independently sum the same five `jobCounts` buckets; a bucket added later in only one copy would drift the header total from the tiles. Pass the precomputed total into `HomeHeader` instead.
+
+## Deferred from: code review of 1-5-jobs-timeline-scopes (2026-09-04)
+
+- **`upsertJob` row can be overwritten by an in-flight page-1 response** —
+  `src/features/jobs/useJobs.ts` (~L230-236): a create/cancel triggers `upsertJob` (prepend for
+  today-scope rows) while a page-1 refetch is still in flight; when the stale response lands it
+  replaces the list and drops the upserted row. Pre-existing pattern, not introduced by this
+  story. Mitigation today: the throttled focus refetch picks the row back up on next focus.
+  Fix direction: version/generation-tag in-flight fetches so stale responses can't clobber.
+- **`upsertJob` IST-midnight boundary edge** — `src/features/jobs/useJobs.ts` (~L231): a job
+  confirmed right at the IST day boundary is guard-rejected (correctly, per the day guard) and
+  vanishes from Today until the next focus refetch triggers a reload. Same pre-existing
+  pattern family as the race above; fix both together if ever worth it.
+- **`list()` sends `date` alongside a non-today scope unguarded** —
+  `src/services/resources/jobs.ts` (~L275-284): the client-side type permits `date` with
+  `scope=upcoming|overdue|history`, which the server 422s. The store never sends `date`, so
+  it's unreachable today; note it as a contract shape to tighten (client-side type narrowing)
+  if a caller ever combines the two.

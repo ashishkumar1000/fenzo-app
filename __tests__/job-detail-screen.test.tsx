@@ -67,6 +67,7 @@ function makeDetail(overrides: Partial<JobDetail> = {}): JobDetail {
     description: 'Leaking tap in the kitchen',
     notesForTechnician: 'Ring the bell twice',
     createdAt: '2026-09-03T09:00:00Z',
+    completedAt: null,
     updatedAt: '2026-09-03T09:30:00Z',
     technician: {
       id: 't1',
@@ -177,6 +178,7 @@ function toApiJob(detail: JobDetail): ApiJob {
     description: detail.description,
     notesForTechnician: detail.notesForTechnician,
     createdAt: detail.createdAt,
+    completedAt: detail.completedAt,
     updatedAt: detail.updatedAt,
   };
 }
