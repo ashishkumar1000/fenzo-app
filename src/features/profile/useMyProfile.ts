@@ -55,6 +55,13 @@ let state: MyProfileState = INITIAL;
  */
 let inFlight: Promise<void> | null = null;
 
+/**
+ * Monotonic id per request. A forced refresh runs *alongside* an older
+ * in-flight request (see `loadMyProfile`), so an older response can settle
+ * after a newer one — and must not overwrite the newer state.
+ */
+let requestSeq = 0;
+
 function setState(next: Partial<MyProfileState>) {
   state = { ...state, ...next };
   subscribers.forEach(notify => notify());
@@ -72,21 +79,34 @@ function getSnapshot() {
 }
 
 async function fetchProfile(): Promise<void> {
+  const seq = ++requestSeq;
   // Only flip the loading flag when there's nothing on screen yet; a refresh
   // over existing data should not blank the screen out (no flicker on a
   // background focus refresh — only the FIRST load shows the spinner).
   setState({ isLoading: state.profile === null, error: null });
   try {
     const profile = await usersApi.getMe();
+    // A forced request can supersede this one (both run in parallel); a late
+    // settling response from the older request must not overwrite the newer
+    // state or stamp an older success.
+    if (seq !== requestSeq) return;
     // `lastLoadedAt` records SUCCESS only: a failed refresh must leave the
     // throttle window based on the data actually on screen, so the next
     // focus (or pull-to-refresh) can retry immediately if it wants to.
     setState({ profile, isLoading: false, error: null, lastLoadedAt: Date.now() });
   } catch (error) {
     console.warn('[useMyProfile] GET /users/me failed →', error);
+    if (seq !== requestSeq) return;
     // `profile` is deliberately retained: a failed refresh keeps the stale
     // data on screen and surfaces `error` as the dismissible banner.
-    setState({ isLoading: false, error: (error as ApiError).message });
+    // The rejection isn't always an `ApiError` (aborted request, network
+    // TypeError, malformed response) — fall back to generic copy when the
+    // rejection carries no usable message, so the failure still renders a
+    // banner instead of silently looking like success.
+    setState({
+      isLoading: false,
+      error: (error as ApiError)?.message || 'Something went wrong',
+    });
   }
 }
 

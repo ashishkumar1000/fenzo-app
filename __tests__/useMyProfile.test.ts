@@ -251,6 +251,37 @@ it('a forced call issues its own request instead of joining a stale in-flight on
   expect(getMe).toHaveBeenCalledTimes(2);
 });
 
+it('a late-resolving superseded request does not overwrite the forced refresh', async () => {
+  getMe.mockResolvedValueOnce(makeProfile({ name: 'Before' }));
+  await mountProbeAt(T0);
+
+  // Slow unforced focus load in flight — its response is pre-mutation data
+  // and will settle LAST.
+  let resolveSlow!: (p: MyProfile) => void;
+  getMe.mockImplementationOnce(
+    () => new Promise<MyProfile>(res => (resolveSlow = res)),
+  );
+  jest.setSystemTime(T0 + TTL); // outside the window so the unforced load runs
+  await act(async () => {
+    loadMyProfile();
+  });
+  expect(getMe).toHaveBeenCalledTimes(2);
+
+  // Forced (post-mutation) refresh runs alongside and settles FIRST.
+  getMe.mockResolvedValueOnce(makeProfile({ name: 'Fresh' }));
+  await run(() => loadMyProfile({ force: true }));
+  expect(probe?.profile?.name).toBe('Fresh');
+  expect(getMe).toHaveBeenCalledTimes(3);
+
+  // The older request settling late must not overwrite the newer state
+  // (previously it reverted the tiles to stale counts and re-stamped
+  // lastLoadedAt with the pre-mutation success).
+  await act(async () => {
+    resolveSlow(makeProfile({ name: 'Stale' }));
+  });
+  expect(probe?.profile?.name).toBe('Fresh');
+});
+
 it('a clock moved backwards reads as stale, not fresh', async () => {
   getMe.mockResolvedValueOnce(makeProfile());
   await mountProbeAt(T0);
@@ -274,6 +305,26 @@ it('a failed refresh retains the profile and sets error, without blanking (AC 3)
   expect(probe?.profile).toEqual(makeProfile()); // stale data stays rendered
   expect(probe?.error).toBe('Network down');
   expect(probe?.isLoading).toBe(false);
+});
+
+it('a non-ApiError rejection still surfaces a banner (generic fallback)', async () => {
+  // Not every rejection is an ApiError — an undefined rejection, an empty
+  // message, or a bare object must still produce a truthy error, never a
+  // silently-passing falsy one.
+  getMe
+    .mockResolvedValueOnce(makeProfile())
+    .mockRejectedValueOnce(new TypeError('Network request failed'));
+  await mountProbeAt(T0);
+
+  await run(() => loadMyProfile({ force: true }));
+  expect(probe?.profile).toEqual(makeProfile()); // stale data stays rendered
+  expect(probe?.error).toBe('Network request failed');
+  expect(probe?.isLoading).toBe(false);
+
+  // A rejection with NO message at all gets the generic copy.
+  getMe.mockRejectedValueOnce(undefined);
+  await run(() => loadMyProfile({ force: true }));
+  expect(probe?.error).toBe('Something went wrong');
 });
 
 it('a failed refresh does not refresh the throttle window (lastLoadedAt = success only)', async () => {
