@@ -21,9 +21,9 @@ type Props = {
   job: ApiJob;
   /**
    * Which timeline scope the row is rendered in — drives the scheduled-time
-   * meta row. Defaults to `today`, whose rendering is the original
-   * time-only one: the technician screens (`TodayScreen`, `HistoryScreen`)
-   * pass nothing and must render byte-identical to before Story 1.5.
+   * meta row. Defaults to `today` (time-only rendering): the owner screens
+   * must render byte-identical to before Story 1.5, and the technician's
+   * `TodayScreen` passes nothing too; `HistoryScreen` passes `history`.
    *   upcoming — prefixed with the scheduled IST date (times alone aren't
    *              enough when rows span days).
    *   overdue  — time label plus a neutral "N days overdue" badge (attention,
@@ -35,6 +35,12 @@ type Props = {
   customerName?: string;
   /** Resolved technician display name; falls back to a neutral placeholder. */
   technicianName?: string;
+  /**
+   * Owner lists render the footer (Avatar + technician name). The technician
+   * side omits it — the technician is themselves — via `showFooter={false}`
+   * (ui-design-spec §1, Story 3.1).
+   */
+  showFooter?: boolean;
   onPress?: (job: ApiJob) => void;
 };
 
@@ -52,7 +58,14 @@ const SERVICE_ICON = {
   snowflake: Snowflake,
 } as const;
 
-export function JobCard({ job, scope = 'today', customerName, technicianName, onPress }: Props) {
+export function JobCard({
+  job,
+  scope = 'today',
+  customerName,
+  technicianName,
+  showFooter = true,
+  onPress,
+}: Props) {
   const badgeStatus = statusToBadge(job.status);
   const ServiceIcon = SERVICE_ICON[serviceTypeToIcon(job.serviceType)];
   const serviceLabel = serviceTypeLabel(job.serviceType);
@@ -116,16 +129,20 @@ export function JobCard({ job, scope = 'today', customerName, technicianName, on
         ) : null}
       </View>
 
-      <View style={styles.divider} />
+      {showFooter ? (
+        <>
+          <View style={styles.divider} />
 
-      <View style={styles.footerRow}>
-        <View style={styles.techRow}>
-          <Avatar name={technicianName ?? 'Technician'} size="sm" />
-          <Text style={styles.techName} numberOfLines={1}>
-            {technicianName ?? 'Technician'}
-          </Text>
-        </View>
-      </View>
+          <View style={styles.footerRow}>
+            <View style={styles.techRow}>
+              <Avatar name={technicianName ?? 'Technician'} size="sm" />
+              <Text style={styles.techName} numberOfLines={1}>
+                {technicianName ?? 'Technician'}
+              </Text>
+            </View>
+          </View>
+        </>
+      ) : null}
     </Card>
   );
 }

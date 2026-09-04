@@ -4,11 +4,10 @@
  * routes entirely) rather than a variant of it — a technician never sees
  * Jobs-management, Customers, or More/Settings.
  *
- * Mounted directly as the root of its own `NavigationContainer` in
- * `App.tsx` (no wrapping stack yet, unlike the owner side's `RootNavigator`)
- * — there are no full-screen routes to push over these tabs for a
- * technician yet. Add one here, the same way `RootNavigator` does for the
- * owner side, if that changes.
+ * Mounted inside `TechnicianRootNavigator` (App.tsx's native stack) as the
+ * tabs screen, the same way the owner side's `MainTabs` sits inside
+ * `RootNavigator` — full-screen routes (`TechJobDetail`, and later
+ * `Signature`) push over the tabs from that stack.
  */
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { TodayScreen, HistoryScreen, ProfileScreen } from '../features/technicianApp';

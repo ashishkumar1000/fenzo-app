@@ -1,5 +1,5 @@
 # generated: 2026-09-01
-# last_updated: 2026-09-04  # 2-2 → review (Task 4 on-device pass done)
+# last_updated: 2026-09-04  # 2-2 → done (review closed); 3-1 → review
 # project: fenzo-app
 # project_key: NOKEY
 # tracking_system: file-system
@@ -23,12 +23,12 @@ development_status:
   # Epic 2: Customer Depth
   epic-2: in-progress
   2-1-customer-detail-with-job-history: done
-  2-2-single-customer-data-path: review
+  2-2-single-customer-data-path: done  # review closed 2026-09-04 (type lie: CreatedCustomer claimed jobCount/lastJobDate the wire never sends — fixed)
   epic-2-retrospective: optional
 
   # Epic 3: Technician Job Execution
   epic-3: in-progress
-  3-1-today-history-wired-to-get-jobs: ready-for-dev
+  3-1-today-history-wired-to-get-jobs: review
   3-2-technician-job-detail: ready-for-dev
   3-3-workflow-step-advancement: ready-for-dev
   3-4-photo-capture-upload-r2: ready-for-dev

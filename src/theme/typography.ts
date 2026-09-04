@@ -131,4 +131,18 @@ export const typography = {
     fontWeight: weight.regular,
     lineHeight: Math.round(fontSize.xs * leading.snug),
   },
+  /**
+   * Emphasised caption — same size as `caption`, one weight up. For the tiny
+   * letter-spaced eyebrow labels (technician Today's section headers).
+   *
+   * Same reasoning as `labelStrong`: pick the role, never patch `fontWeight`
+   * on top of `caption`, or the emphasis disappears once the Inter .ttf files
+   * are linked and weight starts coming from the family.
+   */
+  captionStrong: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.xs,
+    fontWeight: weight.semibold,
+    lineHeight: Math.round(fontSize.xs * leading.snug),
+  },
 } as const;

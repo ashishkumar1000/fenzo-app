@@ -43,6 +43,20 @@ export type RootStackParamList = {
   CustomerDetail: { customerId: string };
 };
 
+/**
+ * Technician full-screen routes pushed over `TechnicianTabs` by
+ * `TechnicianRootNavigator`. Technician screens type navigation against THIS
+ * list locally (`NativeStackScreenProps<TechnicianRootStackParamList, …>`) —
+ * it is deliberately NOT merged into the global `RootParamList` augmentation
+ * above, which stays the owner-side list.
+ */
+export type TechnicianRootStackParamList = {
+  TechnicianTabs: undefined;
+  TechJobDetail: { jobId: string };
+  /** Registered in Story 3.5 — the type is declared now so nav params are stable. */
+  Signature: { jobId: string };
+};
+
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace ReactNavigation {

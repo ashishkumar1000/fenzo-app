@@ -11,7 +11,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { AnimatedBootSplash } from './features/splash';
 import RootNavigator from './navigation/RootNavigator';
-import TechnicianTabs from './navigation/TechnicianTabs';
+import TechnicianRootNavigator from './navigation/TechnicianRootNavigator';
 import { navigationRef } from './navigation/navigationRef';
 import { OnboardingScreen, useOnboarding } from './features/onboarding';
 import { AuthFlow, useAuth } from './features/auth';
@@ -44,7 +44,7 @@ function App() {
     // MainTabs' Jobs/Customers/More routes or RootNavigator's Technicians stack.
     content = (
       <NavigationContainer ref={navigationRef}>
-        <TechnicianTabs />
+        <TechnicianRootNavigator />
       </NavigationContainer>
     );
   } else {

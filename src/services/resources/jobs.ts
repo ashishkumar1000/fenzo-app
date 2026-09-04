@@ -1,16 +1,19 @@
 /**
  * services/resources/jobs.ts
  * ──────────────────────────
- * Jobs for the signed-in owner's tenant: create (`POST /jobs`), the
+ * Jobs for the signed-in user's tenant: create (`POST /jobs`), the
  * paginated list (`GET /jobs`), the detail (`GET /jobs/:id`) and the
  * edit/reassign/cancel patch (`PATCH /jobs/:id`).
  *
  * A plain function object on the shared `apiClient` (same shape as
  * `customers.ts`) rather than an `ApiService<T>`.
  *
- * Owner-only list: a technician JWT gets 403 on `GET /jobs` (the technician
- * variant arrives with the offline-sync epic). Rejects with `ApiError` on
- * failure.
+ * `GET /jobs` serves both roles from one endpoint: an owner JWT gets the
+ * tenant-wide list; a technician JWT gets only their own rows (the server
+ * ignores any `technicianId` param sent by the caller). Who calls it and
+ * with which params is decided by the store layer — `features/jobs` (owner)
+ * and `features/technicianApp/useTechnicianJobs` (technician). Rejects with
+ * `ApiError` on failure.
  */
 import { apiClient } from '../api/apiClient';
 import type { Paginated } from '../api/pagination';

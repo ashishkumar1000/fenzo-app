@@ -15,6 +15,7 @@ import { Avatar, Card } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import { useAuth } from '../auth';
 import { formatPhone, useMyProfile } from '../profile';
+import { clearTechnicianJobs } from './useTechnicianJobs';
 
 export default function ProfileScreen() {
   const { reset } = useAuth();
@@ -29,6 +30,9 @@ export default function ProfileScreen() {
         onPress: () => {
           reset();
           clearProfile();
+          // The technician jobs store outlives the session in memory — reset
+          // it so the next login starts from a clean (not-fetched) state.
+          clearTechnicianJobs();
         },
       },
     ]);
