@@ -15,10 +15,12 @@ export type EmptyStateProps = {
   icon: ReactNode;
   title: string;
   description?: string;
-  /** When both ctaLabel and onPressCta are set, a primary button is shown. */
+  /** When both ctaLabel and onPressCta are set, a button is shown. */
   ctaLabel?: string;
   ctaIcon?: ReactNode;
   onPressCta?: () => void;
+  /** CTA emphasis — secondary suits "Go back"-style exits, primary invites. */
+  ctaVariant?: 'primary' | 'secondary';
   style?: StyleProp<ViewStyle>;
 };
 
@@ -29,6 +31,7 @@ export function EmptyState({
   ctaLabel,
   ctaIcon = null,
   onPressCta,
+  ctaVariant = 'primary',
   style,
 }: EmptyStateProps) {
   return (
@@ -41,7 +44,7 @@ export function EmptyState({
 
       {ctaLabel && onPressCta ? (
         <Button
-          variant="primary"
+          variant={ctaVariant}
           size="lg"
           onPress={onPressCta}
           leadingIcon={ctaIcon}
