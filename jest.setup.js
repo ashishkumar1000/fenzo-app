@@ -17,3 +17,9 @@ jest.mock('react-native-reanimated/src/css/native/proxy', () => ({
 }));
 
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
+
+// Pin the test timezone: the screens format dates with toLocaleDateString
+// ('en-IN', …) on UTC timestamps, which shifts a day in behind-UTC timezones
+// — assertions like "12 Aug 2026" must not depend on the host TZ. IST is the
+// product's home timezone, so it is the deterministic choice for tests.
+process.env.TZ = 'Asia/Kolkata';

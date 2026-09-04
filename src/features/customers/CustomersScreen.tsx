@@ -24,13 +24,19 @@ import { Button, EmptyState, InlineError } from '../../components/ui';
 import { colors, radius, spacing, touch, typography } from '../../theme';
 import { customerService } from '../../services';
 import type { ApiError } from '../../services';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../navigation/types';
 import { AddCustomerSheet } from './components/AddCustomerSheet';
 import { CustomerRow } from './components/CustomerRow';
 import { customerLocation } from './format';
 import { DIAL_CODE } from './constants';
 import type { Customer, NewCustomerInput } from './types';
 
+type Navigation = NativeStackNavigationProp<RootStackParamList, 'MainTabs'>;
+
 export default function CustomersScreen() {
+  const navigation = useNavigation<Navigation>();
   const [query, setQuery] = useState('');
   const [sheetVisible, setSheetVisible] = useState(false);
 
@@ -125,8 +131,8 @@ export default function CustomersScreen() {
     await fetchCustomers();
   };
 
-  const handleOpenCustomer = (_customer: Customer) => {
-    // TODO: navigate to a customer detail screen once it exists.
+  const handleOpenCustomer = (customer: Customer) => {
+    navigation.navigate('CustomerDetail', { customerId: customer.id });
   };
 
   const hasCustomers = customers.length > 0;

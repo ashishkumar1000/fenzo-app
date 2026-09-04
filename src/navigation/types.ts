@@ -39,6 +39,8 @@ export type RootStackParamList = {
   NewJob: undefined;
   /** Owner/technician job detail — opened with the job's uuid. */
   JobDetail: { jobId: string };
+  /** Owner-only customer profile + job history — opened with the customer's uuid. */
+  CustomerDetail: { customerId: string };
 };
 
 declare global {

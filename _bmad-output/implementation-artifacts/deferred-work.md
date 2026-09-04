@@ -47,3 +47,20 @@
   `scope=upcoming|overdue|history`, which the server 422s. The store never sends `date`, so
   it's unreachable today; note it as a contract shape to tighten (client-side type narrowing)
   if a caller ever combines the two.
+
+## Deferred from: code review of 2-1-customer-detail-with-job-history (2026-09-04)
+
+- **`dateLine` is now copy-pasted in three screens** — `JobDetailScreen` started it ("12 Aug 2026" via
+  `toLocaleDateString('en-IN', …)`), and Story 2-1's `CustomerDetailScreen` + `HistoryRow` followed the
+  precedent. Unify into one shared formatter (e.g. `src/utils` or `features/jobs/format.ts`) and pin the
+  display timezone in the same move — same family as the 1-2 deferred "detail dates render in the device
+  timezone" item.
+- **Test coverage beyond Task 5's scope** — the call action (`openTel`), the back button and its
+  `canGoBack() === false` → MainTabs fallback, 403-as-not-found, and the load-more failure branch are
+  untested in `__tests__/customer-detail-screen.test.tsx`. Add when the screen is next touched.
+- **History rows carry no accessibility role/label** — a tap target announcing only its text children;
+  include jobNumber + status in an `accessibilityLabel` when accessibility polish lands (same family as
+  the 1-2 timeline-label item).
+- **Relative imports repo-wide** — CLAUDE.md mandates the `@components`/`@theme` alias imports, but every
+  feature file (pre-existing) uses relative paths; Story 2-1 followed precedent. Repo-wide alias migration
+  is a standalone cleanup, not a per-story fix.

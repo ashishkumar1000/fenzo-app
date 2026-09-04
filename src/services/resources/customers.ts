@@ -3,15 +3,16 @@
  * ────────────────────────────────
  * Customers for the signed-in owner's tenant.
  *
- * Only `POST /customers` and `GET /customers` exist so far, so this is a plain
- * function object on the shared `apiClient` (same shape as `authApi`) rather
- * than an `ApiService<T>` — there's no get-by-id/update/delete contract to
- * build on yet. Promote it to `ApiService` once those endpoints exist.
+ * `GET /customers/:id` exists now, but the collection still has no
+ * update/delete contract, so this stays a plain function object on the shared
+ * `apiClient` (same shape as `authApi`) rather than an `ApiService<T>`.
+ * Promote it to `ApiService` once those endpoints exist.
  *
  * Owner-only: a technician JWT gets 403. Rejects with `ApiError` on failure.
  */
 import { apiClient } from '../api/apiClient';
 import type { Paginated } from '../api/pagination';
+import type { JobServiceType, JobStatusApi } from './jobs';
 
 export interface CreateCustomerRequest {
   name: string;
@@ -84,6 +85,60 @@ async function list(cursor?: string): Promise<Paginated<ApiCustomer>> {
 const MAX_PAGES = 20;
 
 /**
+ * One row of a customer's job history, from `GET /customers/:id`. Same wire
+ * enums as the jobs endpoints — render via the jobs feature's `statusToBadge`
+ * and `serviceTypeLabel`.
+ */
+export interface JobHistoryItem {
+  id: string;
+  jobNumber: string;
+  scheduledStart: string;
+  status: JobStatusApi;
+  serviceType: JobServiceType;
+}
+
+/**
+ * A customer's full profile plus their paginated job history, as returned by
+ * `GET /customers/:id`. History is `scheduled_start DESC`, 20 per page,
+ * keyset via `?cursor=` (`jobHistory.nextCursor` passed back verbatim).
+ */
+export interface CustomerDetail {
+  id: string;
+  name: string;
+  /** Dial code with `+`, e.g. `+91`. */
+  countryCode: string;
+  /** Digits only, no country code. */
+  phoneNumber: string;
+  address: string | null;
+  city: string | null;
+  createdVia: 'manual' | 'job_creation';
+  createdAt: string;
+  tenantId: string;
+  jobHistory: Paginated<JobHistoryItem>;
+}
+
+/**
+ * `GET /customers/:id` — one customer's profile and the first page of their
+ * job history; pass `cursor` for the next page.
+ *
+ * Cursors are endpoint-scoped: a `GET /jobs` cursor is rejected with 400.
+ * Documented failures, all surfaced as `ApiError`:
+ *   400 malformed/foreign cursor · 403 technician JWT ·
+ *   404 missing/cross-tenant customer
+ */
+async function getById(
+  id: string,
+  cursor?: string,
+  signal?: AbortSignal,
+): Promise<CustomerDetail> {
+  const res = await apiClient.get<CustomerDetail>(`/customers/${id}`, {
+    ...(cursor ? { params: { cursor } } : {}),
+    ...(signal ? { signal } : {}),
+  });
+  return res.data;
+}
+
+/**
  * Every customer, following `nextCursor` until the server says there are no
  * more.
  *
@@ -122,4 +177,5 @@ export const customerService = {
   create,
   list,
   listAll,
+  getById,
 };

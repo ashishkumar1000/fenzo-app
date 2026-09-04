@@ -12,7 +12,13 @@
  */
 export { technicianService } from './technicians';
 export { customerService } from './customers';
-export type { ApiCustomer, CreateCustomerRequest, CreatedCustomer } from './customers';
+export type {
+  ApiCustomer,
+  CreateCustomerRequest,
+  CreatedCustomer,
+  CustomerDetail,
+  JobHistoryItem,
+} from './customers';
 export { jobService } from './jobs';
 export type {
   ActivityLogEntry,

@@ -1,5 +1,5 @@
 # generated: 2026-09-01
-# last_updated: 2026-09-04  # 1-5 → done (code review complete: decisions + patches applied, 200/200 tests, tsc clean; not yet committed)
+# last_updated: 2026-09-04  # 2-1 → done (code review applied: 8 patches, 4 deferred; 218/218 tests, tsc clean)
 # project: fenzo-app
 # project_key: NOKEY
 # tracking_system: file-system
@@ -22,7 +22,7 @@ development_status:
 
   # Epic 2: Customer Depth
   epic-2: in-progress
-  2-1-customer-detail-with-job-history: ready-for-dev  # blocked-by fenzit-be 2-4 for real data; screen buildable now
+  2-1-customer-detail-with-job-history: done
   2-2-single-customer-data-path: ready-for-dev
   epic-2-retrospective: optional
 
