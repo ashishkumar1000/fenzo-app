@@ -179,7 +179,10 @@ export function EditJobSheet({ visible, job, technicians, onClose, onSaved }: Pr
       const resolution = resolveSaveError(patch, caught as ApiError);
       setFormError(resolution.message);
       if (resolution.refreshRoster) {
-        loadMyProfile();
+        // Force: this runs because the save rejected the assigned technician
+        // (e.g. deleted since the roster loaded), so a throttled no-op would
+        // leave the picker offering ids the server already rejects.
+        void loadMyProfile({ force: true });
       }
       if (resolution.closeSheet) {
         // Show why, then hand the parent a close — it refetches the detail,

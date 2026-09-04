@@ -311,6 +311,8 @@ describe('EditJobSheet', () => {
     expect(updateMock).toHaveBeenCalledWith('job-1', { technicianId: 'tech-2' });
     expect(allText(renderer)).toContain(TECHNICIAN_GONE_MESSAGE);
     expect(loadMyProfile).toHaveBeenCalledTimes(1);
+    // Forced: a throttled no-op would keep offering the deleted technician.
+    expect(loadMyProfile).toHaveBeenCalledWith({ force: true });
     expect(onSaved).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });

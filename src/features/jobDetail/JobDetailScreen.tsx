@@ -190,7 +190,10 @@ export default function JobDetailScreen() {
   const applyJobUpdate = useCallback((updated: ApiJob) => {
     setDetail(prev => (prev ? { ...prev, ...updated } : prev));
     upsertJob(updated);
-    void loadMyProfile();
+    // Force: a successful mutation must land on Home's tiles immediately,
+    // bypassing the focus-refresh throttle. Fire-and-forget — a failure here
+    // is covered by Home's own focus refresh.
+    void loadMyProfile({ force: true });
   }, []);
 
   const handleEditSaved = useCallback(

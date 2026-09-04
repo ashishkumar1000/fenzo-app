@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Calendar, CloudOff, RefreshCw } from 'lucide-react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -16,7 +17,7 @@ import type { MainTabParamList, RootStackParamList } from '../navigation/types';
 import HomeHeader from '../components/HomeHeader';
 import { Card, EmptyState, InlineError } from '../components/ui';
 import { colors, radius, spacing, typography } from '../theme';
-import { useMyProfile } from '../features/profile';
+import { loadMyProfile, useMyProfile } from '../features/profile';
 import { QuickActions } from '../features/home';
 
 type Props = CompositeScreenProps<
@@ -31,6 +32,16 @@ export default function HomeScreen({ navigation }: Props) {
   // failed load gets its own error branch rather than a placeholder.
   const { profile, isLoading, error, refresh, dismissError } = useMyProfile();
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Every tab focus asks for fresh counts so the tiles are never a snapshot
+  // from login. The store's 15s throttle makes rapid tab switching cheap:
+  // at most one request per window, and a focus within the window is a no-op.
+  // No background spinner — a refresh over existing tiles must not flicker.
+  useFocusEffect(
+    useCallback(() => {
+      void loadMyProfile();
+    }, []),
+  );
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);

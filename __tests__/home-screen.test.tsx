@@ -12,8 +12,17 @@ import { ScrollView } from 'react-native';
 
 const mockNavigation = { navigate: jest.fn(), goBack: jest.fn(), canGoBack: jest.fn(() => false) };
 
+/**
+ * Captured focus-effect callback — the test for the story-1.4 focus refresh
+ * invokes it directly instead of simulating a tab switch.
+ */
+let focusEffect: (() => void) | null = null;
+
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => mockNavigation,
+  useFocusEffect: (effect: () => void) => {
+    focusEffect = effect;
+  },
 }));
 
 jest.mock('../src/features/profile', () => ({
@@ -26,10 +35,11 @@ jest.mock('../src/features/home', () => ({
 }));
 
 import HomeScreen from '../src/screens/HomeScreen';
-import { useMyProfile } from '../src/features/profile';
+import { loadMyProfile, useMyProfile } from '../src/features/profile';
 import type { MyProfile } from '../src/services';
 
 const useMyProfileMock = useMyProfile as jest.Mock;
+const loadMyProfileMock = loadMyProfile as jest.Mock;
 
 /** A completed-setup owner profile, exactly the shape `/users/me` returns. */
 function makeProfile(overrides: Partial<MyProfile> = {}): MyProfile {
@@ -86,6 +96,7 @@ async function mountScreen(): Promise<ReactTestRenderer> {
 
 afterEach(() => {
   jest.clearAllMocks();
+  focusEffect = null;
 });
 
 it('renders the greeting and header stats from the jobCounts buckets', async () => {
@@ -138,4 +149,25 @@ it('shows the error view (not a crash) when the profile is absent', async () => 
   const renderer = await mountScreen();
 
   expect(allText(renderer)).toContain("Couldn't load your account");
+});
+
+it('refreshes the profile on focus (unforced — the store throttle decides)', async () => {
+  useMyProfileMock.mockReturnValue({
+    profile: makeProfile(),
+    isLoading: false,
+    error: null,
+    refresh: jest.fn(),
+    dismissError: jest.fn(),
+  });
+  const renderer = await mountScreen();
+  expect(loadMyProfileMock).not.toHaveBeenCalled();
+
+  // Simulate regaining focus: the hook's captured callback is what fires.
+  focusEffect?.();
+  expect(loadMyProfileMock).toHaveBeenCalledTimes(1);
+  expect(loadMyProfileMock).toHaveBeenCalledWith(); // no { force: true }
+
+  await act(async () => {
+    renderer.unmount();
+  });
 });

@@ -41,7 +41,7 @@ import {
   DIAL_CODE,
 } from '../customers';
 import type { NewCustomerInput } from '../customers';
-import { useMyProfile } from '../profile';
+import { loadMyProfile, useMyProfile } from '../profile';
 import { TechnicianPicker } from '../../components/TechnicianPicker';
 import { DateTimeFields } from './components/DateTimeFields';
 import { ServiceTypePicker } from './components/ServiceTypePicker';
@@ -235,6 +235,11 @@ export default function NewJobScreen({ navigation }: Props) {
       // refetch is throttled, so without this a job created within 15s of the
       // last successful load stays invisible until the throttle expires.
       upsertJob(job);
+      // Fire-and-forget profile refresh with force: a successful mutation
+      // invalidates the Home tiles immediately, so returning to Home shows
+      // the new count even inside the throttle window. Failures are fine to
+      // drop — Home's own focus refresh is the safety net.
+      void loadMyProfile({ force: true });
       // TODO(jobs): navigate to the new job's detail screen once it exists,
       // rather than dropping back to wherever the owner came from.
       navigation.goBack();

@@ -449,7 +449,9 @@ it('cancel confirms via the dialog and PATCHes exactly { status: "cancelled" }',
   expect(update).toHaveBeenCalledTimes(1);
   expect(update).toHaveBeenCalledWith('j-1', { status: 'cancelled' });
   // The mutation is applied everywhere: roster counts and a silent refetch.
-  expect(loadMyProfileMock).toHaveBeenCalled();
+  // Forced — the mutation must land on Home's tiles immediately, past the
+  // focus-refresh throttle.
+  expect(loadMyProfileMock).toHaveBeenCalledWith({ force: true });
   expect(getById).toHaveBeenCalledTimes(2);
 });
 
