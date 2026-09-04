@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -43,11 +44,15 @@ import {
 } from '../../components/ui';
 import { colors, spacing, touch, typography } from '../../theme';
 import { jobService } from '../../services';
-import type { ApiError, JobDetail } from '../../services';
+import type { ApiError, ApiJob, JobDetail } from '../../services';
 import type { RootStackParamList } from '../../navigation/types';
+import { upsertJob } from '../jobs';
+import { loadMyProfile, useMyProfile } from '../profile';
+import { flattenApiMessage } from './editJobModel';
 import { PersonRow } from './components/PersonRow';
 import { ActivityTimeline } from './components/ActivityTimeline';
 import { AttachmentGrid } from './components/AttachmentGrid';
+import { EditJobSheet } from './components/EditJobSheet';
 import { SectionCard } from './components/SectionCard';
 import { STEP_LABELS, STEP_ORDER, stepNumber } from './eventLabels';
 import { formatTimeLabel, serviceTypeLabel, statusToBadge } from '../jobs/format';
@@ -97,6 +102,11 @@ export default function JobDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Edit sheet. Technicians come from the shared profile store (`/users/me`)
+  // — the only source of server-issued ids safe to send on a reassign.
+  const { profile } = useMyProfile();
+  const [isEditOpen, setIsEditOpen] = useState(false);
 
   // One request at a time: a retry/refresh is ignored while a fetch is in
   // flight, so responses can't interleave or land out of order.
@@ -170,6 +180,70 @@ export default function JobDetailScreen() {
     void load(false).finally(() => setIsRefreshing(false));
   }, [load]);
 
+  /**
+   * Applies a successful mutation (edit save or cancel) everywhere at once:
+   * the detail (response merged over the existing detail, so technician/
+   * customer/log/attachments survive until the refetch), the jobs-list store,
+   * and the profile store (status counts). Also refires the roster load —
+   * the shared store de-duplicates the request.
+   */
+  const applyJobUpdate = useCallback((updated: ApiJob) => {
+    setDetail(prev => (prev ? { ...prev, ...updated } : prev));
+    upsertJob(updated);
+    void loadMyProfile();
+  }, []);
+
+  const handleEditSaved = useCallback(
+    (updated: ApiJob) => applyJobUpdate(updated),
+    [applyJobUpdate],
+  );
+
+  const handleEditClosed = useCallback(() => {
+    setIsEditOpen(false);
+    // Silent refetch on close: after a save it renews the activity log, and
+    // after a "job already started" close it shows the new status — the
+    // busy guard makes overlapping calls harmless.
+    void load(false);
+  }, [load]);
+
+  // Cancel PATCHes can't be deduplicated server-side — a double-tap on the
+  // confirm button must not fire the request twice.
+  const isCancellingRef = useRef(false);
+
+  const handleCancelJob = useCallback(async () => {
+    if (!detail || isCancellingRef.current) return;
+    isCancellingRef.current = true;
+    try {
+      const updated = await jobService.update(detail.id, { status: 'cancelled' });
+      applyJobUpdate(updated);
+      void load(false);
+    } catch (caught) {
+      const apiError = caught as ApiError;
+      if (apiError.code === 'JOB_NOT_MODIFIABLE') {
+        // The job started between opening the dialog and confirming — the
+        // refreshed detail shows why the cancel didn't happen.
+        void load(false);
+        return;
+      }
+      // The confirm dialog is long gone by now — a failed cancel must be
+      // visible, not a console.warn. Reuse the alert so the feedback lands
+      // where the user's attention already is.
+      Alert.alert(
+        "Couldn't cancel the job",
+        flattenApiMessage(apiError.message) || 'Please try again.',
+      );
+    } finally {
+      isCancellingRef.current = false;
+    }
+  }, [applyJobUpdate, detail, load]);
+
+  const confirmCancel = useCallback(() => {
+    Alert.alert('Cancel job', 'The technician will no longer see this job.', [
+      { text: 'Keep job', style: 'cancel' },
+      { text: 'Cancel job', style: 'destructive', onPress: () => void handleCancelJob() },
+    ]);
+  }, [handleCancelJob]);
+
   if (!jobId) return null;
 
   const notFound = Boolean(error && (error.status === 404 || error.status === 403));
@@ -217,8 +291,9 @@ export default function JobDetailScreen() {
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
-        <ScrollView
-          contentContainerStyle={styles.content}
+        <>
+          <ScrollView
+            contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -295,8 +370,28 @@ export default function JobDetailScreen() {
             ) : null}
           </Card>
 
-          {/* 2. Actions slot — empty in this story; Story 1.3 fills it. */}
-          <View testID="job-detail-actions" />
+          {/* 2. Actions slot — edit + cancel for scheduled jobs only; every
+              other status renders nothing here. */}
+          {detail.status === 'scheduled' ? (
+            <View testID="job-detail-actions" style={styles.actionsRow}>
+              <Button
+                variant="secondary"
+                size="md"
+                style={styles.editButton}
+                onPress={() => setIsEditOpen(true)}>
+                Edit job
+              </Button>
+              <Button
+                variant="ghost"
+                size="md"
+                labelColor={colors.danger}
+                onPress={confirmCancel}>
+                Cancel job
+              </Button>
+            </View>
+          ) : (
+            <View testID="job-detail-actions" />
+          )}
 
           {/* 3. Customer */}
           <SectionCard title="Customer">
@@ -350,7 +445,18 @@ export default function JobDetailScreen() {
             </SectionCard>
           ) : null}
         </ScrollView>
-      )}
+
+        {isEditOpen ? (
+          <EditJobSheet
+            visible={isEditOpen}
+            job={detail}
+            technicians={profile?.technicians ?? []}
+            onClose={handleEditClosed}
+            onSaved={handleEditSaved}
+          />
+        ) : null}
+      </>
+    )}
     </SafeAreaView>
   );
 }
@@ -396,6 +502,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.s2,
+  },
+  // Actions slot (§5): Edit takes the width, Cancel sits beside it as
+  // destructive text.
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s3,
+  },
+  editButton: {
+    flex: 1,
   },
   serviceLabel: {
     ...typography.heading,

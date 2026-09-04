@@ -2,7 +2,8 @@
  * services/resources/jobs.ts
  * ──────────────────────────
  * Jobs for the signed-in owner's tenant: create (`POST /jobs`), the
- * paginated list (`GET /jobs`) and the detail (`GET /jobs/:id`).
+ * paginated list (`GET /jobs`), the detail (`GET /jobs/:id`) and the
+ * edit/reassign/cancel patch (`PATCH /jobs/:id`).
  *
  * A plain function object on the shared `apiClient` (same shape as
  * `customers.ts`) rather than an `ApiService<T>`.
@@ -65,6 +66,32 @@ export interface CreateJobRequest {
   requireCompletionPhoto?: boolean;
   notesForTechnician?: string;
 }
+
+/**
+ * `PATCH /jobs/:id` body: any subset of the editable fields, OR exactly
+ * `{ status: 'cancelled' }`.
+ *
+ * Rules the caller must uphold (server enforces each with a 422, see
+ * api-contracts §6):
+ *   - Cancel is its own request — combining `status` with any edit field 422s,
+ *     so the type makes a cancel-payload a distinct variant: `{ status }` can
+ *     never carry edit fields, and an edit variant can never carry `status`.
+ *   - An empty patch (no fields at all) 422s — diff before sending.
+ *   - `null`/absent both mean "leave unchanged": no field can be cleared.
+ */
+export type UpdateJobRequest = UpdateJobEditFields | { status: 'cancelled' };
+
+/** The edit-fields half of `UpdateJobRequest` (a patch that is NOT a cancel). */
+export type UpdateJobEditFields = {
+  description?: string;
+  /** ISO 8601, UTC. One-sided edits are pre-checked against the stored bound. */
+  scheduledStart?: string;
+  /** ISO 8601, UTC. */
+  scheduledEnd?: string;
+  notesForTechnician?: string;
+  technicianId?: string;
+  priority?: JobPriority;
+};
 
 /**
  * One job row, exactly as the API returns it — list, create, patch and
@@ -231,10 +258,28 @@ async function getById(id: string, signal?: AbortSignal): Promise<JobDetail> {
   return res.data;
 }
 
+/**
+ * `PATCH /jobs/:id` — edits, reassigns or cancels a scheduled job. Only
+ * scheduled jobs accept a patch; anything else is a 409. Send a subset of
+ * fields for an edit, or exactly `{ status: 'cancelled' }` to cancel — the
+ * two never mix.
+ *
+ * Owner only (a technician JWT is 403). Documented failures, all surfaced as
+ * `ApiError`:
+ *   403 technician JWT · 404 job or technician · 409 JOB_NOT_MODIFIABLE
+ *   (not `scheduled`) · 422 validation (empty patch, inverted window,
+ *   cancel combined with edits)
+ */
+async function update(id: string, patch: UpdateJobRequest): Promise<ApiJob> {
+  const res = await apiClient.patch<ApiJob>(`/jobs/${id}`, patch);
+  return res.data;
+}
+
 export const jobService = {
   create,
   list,
   getById,
+  update,
 };
 
 /**

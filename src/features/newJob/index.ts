@@ -2,8 +2,4 @@
  * New job feature — public surface.
  */
 export { default as NewJobScreen } from './NewJobScreen';
-export type {
-  NewJobDraft,
-  ServiceType,
-  TechnicianOption,
-} from './types';
+export type { NewJobDraft, ServiceType } from './types';

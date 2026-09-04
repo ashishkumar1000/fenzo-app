@@ -39,6 +39,12 @@ export type ButtonProps = {
   disabled?: boolean;
   leadingIcon?: ReactNode;
   trailingIcon?: ReactNode;
+  /**
+   * Overrides the variant's label color — for the destructive-text pattern
+   * (a `ghost` button whose label is `colors.danger`, e.g. "Cancel job"),
+   * which has no dedicated variant by design.
+   */
+  labelColor?: string;
   onPress?: PressableProps['onPress'];
   style?: StyleProp<ViewStyle>;
 };
@@ -72,6 +78,7 @@ export function Button({
   disabled = false,
   leadingIcon = null,
   trailingIcon = null,
+  labelColor,
   onPress,
   style,
 }: ButtonProps) {
@@ -122,7 +129,7 @@ export function Button({
           numberOfLines={1}
           style={[
             styles.label,
-            { fontSize: s.fontSize, color: variantText[variant] },
+            { fontSize: s.fontSize, color: labelColor ?? variantText[variant] },
           ]}>
           {children}
         </Text>

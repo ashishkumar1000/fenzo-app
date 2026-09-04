@@ -16,3 +16,8 @@
 ## Deferred from: code review of 1-1-wire-jobs-list-to-get-jobs, params-serializer follow-up (2026-09-03)
 
 - ~~**Backend query-parser contract has no pinned test**~~ — **Fixed 2026-09-03** (`fenzit-be/src/jobs/dto/list-jobs-query.dto.spec.ts`, 10 tests). Fastify's `inject()` pins the parser dialect (repeat style → string/array, bracket style survives as a literal `status[]` key), plus end-to-end DTO tests through a pipe config mirroring `main.ts` — including the trap case: `?status[]=bogus` validates as an empty query (200), while `?status=bogus` is a 422. fenzit-be suite: 18 suites, 262 tests green.
+
+## Deferred from: code review of 1-3-edit-reassign-cancel-job (2026-09-04)
+- Zero-length schedule window (end == start) parity with server unverified — needs backend rule confirmation (editJobModel.ts scheduleWindowError uses strict <).
+- ApiError.message typed string but can arrive as an array — Story 5.4 centralizes error-envelope handling (editJobModel.ts flattenApiMessage works around it).
+- No e2e/testID/accessibility hooks on EditJobSheet controls (Save, pills, technician rows, formError) — out of story scope.

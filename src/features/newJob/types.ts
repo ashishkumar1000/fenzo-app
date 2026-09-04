@@ -16,24 +16,6 @@ export interface ServiceType {
   icon: LucideIcon;
 }
 
-/** Option for the technician picker row. */
-export interface TechnicianOption {
-  /** The server's technician id, from `/users/me` — safe to send to the API. */
-  id: string;
-  name: string;
-  /**
-   * True while the technician still hasn't installed the app (API status
-   * `invited`). Shown as a marker rather than hidden: someone the owner just
-   * added shouldn't appear to vanish.
-   */
-  isInvited: boolean;
-  /**
-   * Skill names as the tenant typed them, carried here so the caller can filter
-   * by service type without going back to the raw profile payload.
-   */
-  skills: string[];
-}
-
 /**
  * What the form collects. `serviceTypeId`, `customerId` and `technicianId`
  * are null until picked, so the submit button can tell "untouched" from

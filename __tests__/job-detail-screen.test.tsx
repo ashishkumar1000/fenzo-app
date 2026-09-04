@@ -1,16 +1,17 @@
 /**
- * JobDetailScreen's fetch/state branches (AC 1, 5, 6): fetch on mount with
- * the route's jobId, a centered spinner (never a flash of empty content),
- * the not-available view on 404 (and 403), the actions slot testID, and the
- * section layout on a successful load.
+ * JobDetailScreen's fetch/state branches (AC 1, 5, 6) plus the actions slot
+ * and the cancel flow (Story 1-3): fetch on mount with the route's jobId, a
+ * centered spinner (never a flash of empty content), the not-available view
+ * on 404 (and 403), the edit/cancel actions for scheduled jobs only, the
+ * cancel PATCH payload, and the cancel failure feedback.
  *
  * Navigation hooks are stubbed (the route/navigate shape is static), and the
- * services layer is mocked at the module boundary — the screen's logic under
- * test is its state machine, not the client.
+ * services + profile layers are mocked at the module boundary — the screen's
+ * logic under test is its state machine, not the client.
  */
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
-import { ActivityIndicator, RefreshControl, ScrollView } from 'react-native';
+import { ActivityIndicator, Alert, RefreshControl, ScrollView } from 'react-native';
 
 const mockGoBack = jest.fn();
 const mockNavigate = jest.fn();
@@ -25,15 +26,28 @@ jest.mock('@react-navigation/native', () => ({
 }));
 
 jest.mock('../src/services', () => ({
-  jobService: { getById: jest.fn() },
+  jobService: { getById: jest.fn(), update: jest.fn() },
+}));
+
+// The profile feature (roster store + phone formatting) is mocked whole —
+// its real modules pull in the services barrel and MMKV, which would add
+// unrelated request noise to every test.
+jest.mock('../src/features/profile', () => ({
+  useMyProfile: () => ({ profile: null }),
+  loadMyProfile: jest.fn(),
+  formatPhone: (person: { countryCode?: string | null; phoneNumber?: string | null }) =>
+    `${person?.countryCode ?? ''} ${person?.phoneNumber ?? ''}`.trim(),
 }));
 
 import JobDetailScreen from '../src/features/jobDetail/JobDetailScreen';
 import { Button, InlineError } from '../src/components/ui';
 import { jobService } from '../src/services';
-import type { ApiError, JobDetail } from '../src/services';
+import { loadMyProfile } from '../src/features/profile';
+import type { ApiError, ApiJob, JobDetail } from '../src/services';
 
 const getById = jobService.getById as jest.Mock;
+const update = jobService.update as jest.Mock;
+const loadMyProfileMock = loadMyProfile as jest.Mock;
 
 function makeDetail(overrides: Partial<JobDetail> = {}): JobDetail {
   return {
@@ -144,8 +158,45 @@ async function mountScreen(): Promise<ReactTestRenderer.ReactTestRenderer> {
   return renderer;
 }
 
+/** The mutation response is a bare ApiJob row (no relations/log/attachments). */
+function toApiJob(detail: JobDetail): ApiJob {
+  return {
+    id: detail.id,
+    jobNumber: detail.jobNumber,
+    tenantId: detail.tenantId,
+    customerId: detail.customerId,
+    technicianId: detail.technicianId,
+    serviceLocation: detail.serviceLocation,
+    serviceType: detail.serviceType,
+    scheduledStart: detail.scheduledStart,
+    scheduledEnd: detail.scheduledEnd,
+    status: detail.status,
+    currentStep: detail.currentStep,
+    priority: detail.priority,
+    requireCompletionPhoto: detail.requireCompletionPhoto,
+    description: detail.description,
+    notesForTechnician: detail.notesForTechnician,
+    createdAt: detail.createdAt,
+    updatedAt: detail.updatedAt,
+  };
+}
+
+/** Confirms the native cancel dialog by firing its destructive button. */
+function confirmDialogs(): jest.SpyInstance {
+  return jest.spyOn(Alert, 'alert').mockImplementation(
+    (
+      _title?: string,
+      _message?: string | { text: string },
+      buttons?: Array<{ style?: 'cancel' | 'destructive' | 'default'; onPress?: () => void }>,
+    ) => {
+      buttons?.find(b => b.style === 'destructive')?.onPress?.();
+    },
+  );
+}
+
 afterEach(() => {
   jest.clearAllMocks();
+  jest.restoreAllMocks();
 });
 
 it('fetches on mount with the route param and renders the full detail', async () => {
@@ -351,4 +402,98 @@ it('aborts the in-flight request on unmount and sets no state after', async () =
   } finally {
     release();
   }
+});
+it('renders the edit/cancel actions only for a scheduled job', async () => {
+  getById.mockResolvedValue(makeDetail({ status: 'scheduled', currentStep: null }));
+  const renderer = await mountScreen();
+
+  // The scheduled detail renders the actions slot with children; the
+  // in_progress default in the next test renders the empty slot instead.
+  const actionsSlot = renderer.root.findByProps({ testID: 'job-detail-actions' });
+  expect(actionsSlot).toBeDefined();
+  expect(renderedText(renderer)).toContain('Edit job');
+  expect(renderedText(renderer)).toContain('Cancel job');
+});
+
+it('renders no actions for a non-scheduled job', async () => {
+  getById.mockResolvedValue(makeDetail()); // in_progress
+  const renderer = await mountScreen();
+
+  expect(renderedText(renderer)).not.toContain('Edit job');
+  expect(renderedText(renderer)).not.toContain('Cancel job');
+});
+
+it('cancel confirms via the dialog and PATCHes exactly { status: "cancelled" }', async () => {
+  const scheduled = makeDetail({ status: 'scheduled', currentStep: null });
+  const cancelled = toApiJob({ ...scheduled, status: 'cancelled' });
+  getById.mockResolvedValue(scheduled);
+  update.mockResolvedValueOnce(cancelled);
+  const dialogs = confirmDialogs();
+  const renderer = await mountScreen();
+
+  const cancelButton = renderer.root
+    .findAllByType(Button)
+    .find(b => b.props.children === 'Cancel job');
+  expect(cancelButton).toBeDefined();
+  await ReactTestRenderer.act(async () => {
+    cancelButton!.props.onPress();
+  });
+
+  // The confirm dialog fired, and its destructive button sent the cancel —
+  // exactly the status field, never mixed with edit fields (a 422 mix).
+  expect(dialogs).toHaveBeenCalledWith(
+    'Cancel job',
+    'The technician will no longer see this job.',
+    expect.anything(),
+  );
+  expect(update).toHaveBeenCalledTimes(1);
+  expect(update).toHaveBeenCalledWith('j-1', { status: 'cancelled' });
+  // The mutation is applied everywhere: roster counts and a silent refetch.
+  expect(loadMyProfileMock).toHaveBeenCalled();
+  expect(getById).toHaveBeenCalledTimes(2);
+});
+
+it('a failed cancel surfaces an alert instead of vanishing', async () => {
+  getById.mockResolvedValue(makeDetail({ status: 'scheduled', currentStep: null }));
+  update.mockRejectedValueOnce(
+    Object.assign(new Error('Offline'), { status: 0, code: 'NETWORK_ERROR', message: 'Offline' }),
+  );
+  // Auto-confirm so the destructive button fires the (failing) request.
+  const dialogs = confirmDialogs();
+  const renderer = await mountScreen();
+
+  const cancelButton = renderer.root
+    .findAllByType(Button)
+    .find(b => b.props.children === 'Cancel job');
+  await ReactTestRenderer.act(async () => {
+    cancelButton!.props.onPress();
+    // The press is fire-and-forget — flush the rejected-promise chain too.
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
+  });
+
+  // The failure alert carries title + message only (no retry buttons) — the
+  // confirm dialog is already dismissed at this point.
+  expect(dialogs).toHaveBeenLastCalledWith("Couldn't cancel the job", 'Offline');
+});
+
+it('a 409 on cancel refetches the detail without an alert', async () => {
+  getById.mockResolvedValue(makeDetail({ status: 'scheduled', currentStep: null }));
+  update.mockRejectedValueOnce(
+    Object.assign(new Error('Started'), { status: 409, code: 'JOB_NOT_MODIFIABLE' }),
+  );
+  const dialogs = confirmDialogs();
+  const renderer = await mountScreen();
+
+  const cancelButton = renderer.root
+    .findAllByType(Button)
+    .find(b => b.props.children === 'Cancel job');
+  await ReactTestRenderer.act(async () => {
+    cancelButton!.props.onPress();
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
+  });
+
+  // The job started mid-flow — the refreshed detail explains it; no error UI.
+  expect(getById).toHaveBeenCalledTimes(2);
+  // The only alert was the confirm dialog — no failure alert on a 409.
+  expect(dialogs).toHaveBeenCalledTimes(1);
 });

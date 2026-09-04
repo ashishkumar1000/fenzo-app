@@ -42,11 +42,11 @@ import {
 } from '../customers';
 import type { NewCustomerInput } from '../customers';
 import { useMyProfile } from '../profile';
+import { TechnicianPicker } from '../../components/TechnicianPicker';
 import { DateTimeFields } from './components/DateTimeFields';
 import { ServiceTypePicker } from './components/ServiceTypePicker';
-import { TechnicianPicker } from './components/TechnicianPicker';
 import { resolveServiceCategories, technicianHasSkill } from './serviceCategories';
-import type { NewJobDraft, TechnicianOption } from './types';
+import type { NewJobDraft } from './types';
 import { toJobServiceType } from "../../services/resources/jobs.ts";
 
 type Props = NativeStackScreenProps<RootStackParamList, 'NewJob'>;
@@ -142,14 +142,8 @@ export default function NewJobScreen({ navigation }: Props) {
   const isPastSlot = draft.scheduledAt.getTime() <= Date.now();
 
   /** The whole roster, from `/users/me` — server ids, safe to POST. */
-  const allTechnicians = useMemo<TechnicianOption[]>(
-    () =>
-      (profile?.technicians ?? []).map(t => ({
-        id: t.id,
-        name: t.name,
-        isInvited: t.status === 'invited',
-        skills: t.skills,
-      })),
+  const allTechnicians = useMemo(
+    () => profile?.technicians ?? [],
     [profile?.technicians],
   );
 
@@ -398,9 +392,9 @@ export default function NewJobScreen({ navigation }: Props) {
           </Text>
         ) : null}
         <TechnicianPicker
-          options={technicianOptions}
-          value={draft.technicianId}
-          onChange={id => patch({ technicianId: id })}
+          technicians={technicianOptions}
+          selectedId={draft.technicianId}
+          onSelect={id => patch({ technicianId: id })}
         />
       </>
     );

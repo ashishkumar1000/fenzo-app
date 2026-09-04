@@ -26,6 +26,8 @@ export type {
   JobServiceType,
   JobStatusApi,
   ListJobsQuery,
+  UpdateJobEditFields,
+  UpdateJobRequest,
   WorkflowStepApi,
 } from './jobs';
 export { skillService } from './skills';
