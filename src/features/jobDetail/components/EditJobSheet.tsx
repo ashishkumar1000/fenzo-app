@@ -265,6 +265,7 @@ export function EditJobSheet({ visible, job, technicians, onClose, onSaved }: Pr
                     return (
                       <Pressable
                         key={option.value}
+                        testID={`edit-job-priority-${option.value}`}
                         accessibilityRole="button"
                         accessibilityState={{ selected: isSelected }}
                         onPress={() => {
@@ -301,12 +302,17 @@ export function EditJobSheet({ visible, job, technicians, onClose, onSaved }: Pr
 
             <Text style={styles.hint}>{NO_CLEAR_HINT}</Text>
 
-            {formError ? <Text style={styles.formError}>{formError}</Text> : null}
+            {formError ? (
+              <Text style={styles.formError} testID="edit-job-form-error">
+                {formError}
+              </Text>
+            ) : null}
 
             <Button
               variant="primary"
               size="lg"
               fullWidth
+              testID="edit-job-save"
               disabled={!patch || submitting || isAutoClosing}
               onPress={handleSave}>
               {submitting ? 'Saving…' : 'Save changes'}

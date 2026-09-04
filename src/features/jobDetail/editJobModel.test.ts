@@ -189,6 +189,18 @@ describe('scheduleWindowError', () => {
   it('is a no-op for a cancel payload (it carries no schedule fields)', () => {
     expect(scheduleWindowError({ status: 'cancelled' }, BASE_JOB)).toBeNull();
   });
+
+  // Backend parity, confirmed 2026-09-04: createJob and the update RPC both
+  // reject with strict `<` on the effective window — a zero-length window
+  // (end == start) is allowed end-to-end. This test pins that agreement.
+  it('allows a zero-length window (end == start) in both directions', () => {
+    expect(
+      scheduleWindowError({ scheduledStart: '2026-09-04T12:00:00.000Z' }, BASE_JOB),
+    ).toBeNull();
+    expect(
+      scheduleWindowError({ scheduledEnd: '2026-09-04T10:00:00.000Z' }, BASE_JOB),
+    ).toBeNull();
+  });
 });
 
 describe('resolveSaveError', () => {

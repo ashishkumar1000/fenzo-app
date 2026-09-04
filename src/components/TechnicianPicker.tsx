@@ -90,6 +90,7 @@ function Tiles({
         return (
           <Pressable
             key={technician.id}
+            testID={`technician-tile-${technician.id}`}
             accessibilityRole="button"
             accessibilityState={{ selected: isSelected }}
             accessibilityLabel={technician.name}
@@ -130,6 +131,7 @@ function Rows({
         return (
           <Pressable
             key={technician.id}
+            testID={`technician-row-${technician.id}`}
             accessibilityRole="button"
             accessibilityState={{ selected: isSelected }}
             accessibilityLabel={technician.name}

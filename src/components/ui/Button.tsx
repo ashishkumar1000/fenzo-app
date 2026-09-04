@@ -46,6 +46,8 @@ export type ButtonProps = {
    */
   labelColor?: string;
   onPress?: PressableProps['onPress'];
+  /** Test/e2e hook, forwarded to the underlying Pressable. */
+  testID?: string;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -80,6 +82,7 @@ export function Button({
   trailingIcon = null,
   labelColor,
   onPress,
+  testID,
   style,
 }: ButtonProps) {
   const s = sizeStyles[size];
@@ -109,6 +112,7 @@ export function Button({
       <Pressable
         disabled={disabled}
         onPress={onPress}
+        testID={testID}
         onPressIn={disabled ? undefined : pressIn}
         onPressOut={disabled ? undefined : pressOut}
         android_ripple={{ color: 'transparent' }}

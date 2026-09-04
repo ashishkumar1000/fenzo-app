@@ -182,6 +182,13 @@ describe('EditJobSheet', () => {
     expect(text).toContain('keep their saved value');
 
     expect(pressableFor(renderer, 'Save changes').props.disabled).toBe(true);
+
+    // e2e hooks: the controls an automation run must target (pinned so the
+    // testIDs can't silently regress).
+    expect(renderer.root.findByProps({ testID: 'edit-job-save' })).toBeDefined();
+    expect(renderer.root.findByProps({ testID: 'edit-job-priority-normal' })).toBeDefined();
+    expect(renderer.root.findByProps({ testID: 'edit-job-priority-urgent' })).toBeDefined();
+    expect(renderer.root.findByProps({ testID: 'technician-row-tech-1' })).toBeDefined();
   });
 
   it('hides invited technicians from the roster (they cannot take work yet)', () => {

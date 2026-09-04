@@ -88,8 +88,12 @@ export function toApiError(error: AxiosError, onUnauthorized?: () => void): ApiE
   // The Fenzit backend's error envelope is `{ statusCode, error_code, message }`
   // (see auth API docs) — note the field is `error_code`, not `code`. Both are
   // optional here because we can't guarantee every endpoint (or every failure
-  // mode, e.g. a 502 from a proxy) follows that contract.
-  const payload = data as { error_code?: string; message?: string } | undefined;
+  // mode, e.g. a 502 from a proxy) follows that contract. `message` can also
+  // arrive as an array: NestJS's ValidationPipe serializes DTO violations as
+  // one string per violation.
+  const payload = data as
+    | { error_code?: string; message?: string | string[] }
+    | undefined;
 
   if (status === 401) {
     onUnauthorized?.();
@@ -98,9 +102,20 @@ export function toApiError(error: AxiosError, onUnauthorized?: () => void): ApiE
   return {
     status,
     code: payload?.error_code ?? defaultCodeForStatus(status),
-    message: payload?.message ?? defaultMessageForStatus(status),
+    message: flattenErrorMessage(payload?.message) ?? defaultMessageForStatus(status),
     details: data,
   };
+}
+
+/**
+ * Joins the ValidationPipe's array form into one sentence before it reaches
+ * any caller — `ApiError.message` stays a plain `string`, so no consumer ever
+ * has to know which shape arrived. (This was previously patched per-surface in
+ * the edit-job model; centralized here 2026-09-04.)
+ */
+function flattenErrorMessage(message?: string | string[]): string | undefined {
+  if (message === undefined) return undefined;
+  return Array.isArray(message) ? message.join('. ') : message;
 }
 
 
