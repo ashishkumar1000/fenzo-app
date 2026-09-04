@@ -4,6 +4,17 @@ Status: ready-for-dev
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
+> **⚠️ Breaking change from BE 3-7 is already accepted — FE breaks until this story ships.**
+> fenzit-be story 3-7 (merged/deploys first) removed `jobStatusCounts` from `GET /users/me`
+> and replaced it with `jobCounts` ({ today, upcoming, overdue, completed, cancelled }).
+> Until this story implements that rename, `HomeScreen.tsx` (the
+> `jobStatusCounts.scheduled + inProgress + …` sums) and `HomeHeader.tsx` render
+> **"NaN jobs / NaN done"** on every profile load. This break window was reviewed and
+> **accepted 2026-09-04 (pre-launch, no real users)** — do not add a BE compatibility shim;
+> the fix is entirely this story: switch `HomeScreen.tsx` / `HomeHeader.tsx` /
+> `src/services/resources/users.ts` to `jobCounts`. Job rows also gain
+> `completedAt: string | null` (see API Contract below).
+
 ## Story
 
 As an owner,
