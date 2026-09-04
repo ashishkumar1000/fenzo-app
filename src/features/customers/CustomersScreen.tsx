@@ -2,12 +2,19 @@
  * CustomersScreen — the tenant's customer list from `GET /customers`, with
  * search and an "+ Add" action that opens the `AddCustomerSheet`.
  *
- * Fetches whenever the tab is focused, and again after a successful save, so a
- * newly added customer appears without a manual reload. Pull-to-refresh covers
- * everything else. Search filters the fetched list client-side — the endpoint
- * takes no query param.
+ * Renders exclusively from the shared `useCustomers` store (same source as
+ * NewJob's picker), so there is exactly one fetch path to the endpoint. Focus
+ * refetches go through `loadCustomers`, throttled to one request per
+ * `FOCUS_REFRESH_TTL_MS`; pull-to-refresh forces past the throttle, and a
+ * successful save pushes the created row straight into the store.
+ *
+ * Search filters the store list client-side — a deliberate choice, not a
+ * limitation: the endpoint does take a `q` param (api-contracts.md §12), but
+ * the store already holds every page, so filtering locally costs nothing and
+ * the match semantics mirror the backend `q` (name OR phone) to keep a later
+ * server-side switch invisible.
  */
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -23,14 +30,14 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Button, EmptyState, InlineError } from '../../components/ui';
 import { colors, radius, spacing, touch, typography } from '../../theme';
 import { customerService } from '../../services';
-import type { ApiError } from '../../services';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { AddCustomerSheet } from './components/AddCustomerSheet';
 import { CustomerRow } from './components/CustomerRow';
-import { customerLocation } from './format';
+import { filterCustomers } from './format';
 import { DIAL_CODE } from './constants';
+import { loadCustomers, upsertCustomer, useCustomers } from './useCustomers';
 import type { Customer, NewCustomerInput } from './types';
 
 type Navigation = NativeStackNavigationProp<RootStackParamList, 'MainTabs'>;
@@ -40,71 +47,47 @@ export default function CustomersScreen() {
   const [query, setQuery] = useState('');
   const [sheetVisible, setSheetVisible] = useState(false);
 
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  // Starts true so the first render is a loader, not a false "No customers yet".
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  /** First load shows the spinner; later focuses refresh silently. */
-  const hasLoadedOnce = useRef(false);
+  const { customers, isLoading, error, hasCustomers, refresh } = useCustomers();
 
-  const fetchCustomers = useCallback(async () => {
-    try {
-      const page = await customerService.list();
-      // TODO: `page.hasMore`/`page.nextCursor` are ignored — only the first
-      // page renders until the list supports paging.
-      setCustomers(page.data);
-      setLoadError(null);
-    } catch (err) {
-      console.warn('[CustomersScreen] GET /customers failed →', err);
-      setLoadError((err as ApiError).message);
-    }
-  }, []);
-
-  /**
-   * Refetch every time the tab is focused, not just on mount — the tab stays
-   * mounted once opened, so a mount-only fetch would go stale as soon as a
-   * customer is added elsewhere (another device, or server-side by a job).
-   *
-   * Only the first focus shows the spinner; later ones refresh in place so
-   * switching tabs doesn't blank the list.
-   */
+  // Refetch every time the tab is focused, not just on mount — the tab stays
+  // mounted once opened, so a mount-only fetch would go stale as soon as a
+  // customer is added elsewhere (another device, or server-side by a job).
+  // The store throttles (skips within 15s of a success), so rapid tab
+  // switches stay cheap; the first focus shows the spinner via the store's
+  // `isLoading`, later ones refresh in place so switching doesn't blank the
+  // list.
   useFocusEffect(
     useCallback(() => {
-      void (async () => {
-        await fetchCustomers();
-        if (!hasLoadedOnce.current) {
-          hasLoadedOnce.current = true;
-          setIsLoading(false);
-        }
-      })();
-    }, [fetchCustomers]),
+      void loadCustomers();
+    }, []),
   );
 
-  const handleRefresh = useCallback(async () => {
+  // Pull-to-refresh runs over rows already on screen, where the store's
+  // `isLoading` deliberately stays false — so the spinner is local state.
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
-    try {
-      await fetchCustomers();
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [fetchCustomers]);
+    void refresh().finally(() => setIsRefreshing(false));
+  }, [refresh]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return customers;
-    return customers.filter(
-      c =>
-        c.name.toLowerCase().includes(q) ||
-        customerLocation(c).toLowerCase().includes(q) ||
-        c.phoneNumber.includes(q),
-    );
-  }, [customers, query]);
+  // A failed refresh keeps its rows on screen behind a dismissible banner;
+  // the dismissal is local (the store's error clears on the next success).
+  const [errorDismissed, setErrorDismissed] = useState(false);
+  useEffect(() => {
+    setErrorDismissed(false);
+  }, [error]);
+
+  const filtered = useMemo(
+    () => filterCustomers(customers, query),
+    [customers, query],
+  );
 
   const handleAdd = () => setSheetVisible(true);
 
   /**
-   * `POST /customers`, then re-fetch the list so the new row shows up.
+   * `POST /customers`, then push the created row into the store directly so
+   * it sits on top instantly — a refetch would leave a window (and, if it
+   * failed, a permanent state) where the row is missing from the list.
    *
    * Rejecting with the `ApiError` keeps the sheet open and shows the message;
    * resolving closes and resets it. Optional fields are omitted rather than
@@ -116,7 +99,7 @@ export default function CustomersScreen() {
   const handleSubmitCustomer = async (input: NewCustomerInput) => {
     const address = [input.address, input.area].filter(Boolean).join(', ');
 
-    await customerService.create({
+    const created = await customerService.create({
       name: input.name,
       countryCode: DIAL_CODE,
       phoneNumber: input.phone,
@@ -124,18 +107,18 @@ export default function CustomersScreen() {
       ...(input.city ? { city: input.city } : {}),
     });
 
-    // Awaited before the sheet closes, so the list is already current when the
-    // screen is revealed. A refresh failure here shouldn't look like a save
+    upsertCustomer(created);
+    // The refresh still runs afterward to pick up anything server-side
+    // (derived `jobCount`, normalized fields), but it's belt-and-braces
+    // rather than load-bearing. A refresh failure must not read as a save
     // failure — the customer *was* created — so it surfaces as the list's own
     // error banner rather than being rethrown into the sheet.
-    await fetchCustomers();
+    await refresh();
   };
 
   const handleOpenCustomer = (customer: Customer) => {
     navigation.navigate('CustomerDetail', { customerId: customer.id });
   };
-
-  const hasCustomers = customers.length > 0;
 
   const refreshControl = (
     <RefreshControl
@@ -184,9 +167,12 @@ export default function CustomersScreen() {
         <>
           {/* A failed load with rows already on screen: keep the rows, explain
               why they may be stale. */}
-          {loadError && hasCustomers ? (
+          {error && hasCustomers && !errorDismissed ? (
             <View style={styles.bannerWrap}>
-              <InlineError message={loadError} onDismiss={() => setLoadError(null)} />
+              <InlineError
+                message={error}
+                onDismiss={() => setErrorDismissed(true)}
+              />
             </View>
           ) : null}
 
@@ -209,11 +195,11 @@ export default function CustomersScreen() {
                   title="No matches"
                   description={`No customer matches "${query.trim()}".`}
                 />
-              ) : loadError ? (
+              ) : error ? (
                 <EmptyState
                   icon={<Users size={36} color={colors.danger} strokeWidth={1.5} />}
                   title="Couldn't load customers"
-                  description={loadError}
+                  description={error}
                 />
               ) : (
                 // No CTA in the centre — the "Add" button in the header is the

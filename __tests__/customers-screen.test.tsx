@@ -18,35 +18,33 @@ jest.mock('@react-navigation/native', () => ({
 }));
 
 jest.mock('../src/services', () => ({
-  customerService: { list: jest.fn(), create: jest.fn() },
+  customerService: { list: jest.fn(), create: jest.fn(), listAll: jest.fn() },
 }));
 
 import CustomersScreen from '../src/features/customers/CustomersScreen';
 import { customerService } from '../src/services';
 
-const list = customerService.list as jest.Mock;
+// Since story 2.2 the screen renders from the shared `useCustomers` store,
+// which fetches via `listAll` (all pages) — not the paged `list`.
+const listAll = customerService.listAll as jest.Mock;
 
 afterEach(() => {
   jest.clearAllMocks();
 });
 
 it('navigates to CustomerDetail with the customer id when a row is tapped', async () => {
-  list.mockResolvedValue({
-    data: [
-      {
-        id: 'c-7',
-        name: 'Ravi Kumar',
-        countryCode: '+91',
-        phoneNumber: '9000000002',
-        address: '12 Anna Nagar',
-        city: 'Chennai',
-        jobCount: 2,
-        lastJobDate: '2026-08-12T10:00:00Z',
-      },
-    ],
-    nextCursor: null,
-    hasMore: false,
-  });
+  listAll.mockResolvedValue([
+    {
+      id: 'c-7',
+      name: 'Ravi Kumar',
+      countryCode: '+91',
+      phoneNumber: '9000000002',
+      address: '12 Anna Nagar',
+      city: 'Chennai',
+      jobCount: 2,
+      lastJobDate: '2026-08-12T10:00:00Z',
+    },
+  ]);
 
   let renderer!: ReactTestRenderer.ReactTestRenderer;
   await ReactTestRenderer.act(async () => {

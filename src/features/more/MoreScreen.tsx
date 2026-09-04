@@ -11,6 +11,7 @@ import { Bell, ChevronRight, HardHat, LogOut, Phone, Settings, ShieldCheck } fro
 import { Avatar, Card } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import { useAuth } from '../auth';
+import { useCustomers } from '../customers';
 import { clearJobs } from '../jobs';
 import { formatPhone, formatRole, useMyProfile } from '../profile';
 import { useTechnicians } from '../technicians';
@@ -21,6 +22,7 @@ export default function MoreScreen() {
   const tileSize = (width - spacing.s4 * 2 - spacing.s3) / 2;
   const { reset } = useAuth();
   const { clear: clearTechnicians } = useTechnicians();
+  const { clear: clearCustomers } = useCustomers();
   const { profile, isLoading, clear: clearProfile } = useMyProfile();
   const navigation = useNavigation();
 
@@ -40,6 +42,7 @@ export default function MoreScreen() {
         style: 'destructive',
         onPress: () => {
           clearTechnicians();
+          clearCustomers();
           clearJobs();
           clearProfile();
           reset();

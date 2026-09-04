@@ -40,6 +40,30 @@ export function customerPhone(
   return `${customer.countryCode} ${customer.phoneNumber}`;
 }
 
+/**
+ * Client-side search over the store list. Deliberately client-side: the store
+ * already holds every page (`listAll`), so filtering locally costs nothing and
+ * keeps the picker and list in sync — but the semantics mirror the backend
+ * `GET /customers?q=` filter (name OR phone — api-contracts.md §12) so a later
+ * switch to server-side search is invisible to the user.
+ *
+ * Phone matching uses only the digits of the query, so a partial number typed
+ * with stray punctuation still matches the stored digits-only number.
+ */
+export function filterCustomers(
+  customers: Customer[],
+  query: string,
+): Customer[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return customers;
+  const digits = q.replace(/\D/g, '');
+  return customers.filter(
+    c =>
+      c.name.toLowerCase().includes(q) ||
+      (digits.length > 0 && c.phoneNumber.includes(digits)),
+  );
+}
+
 /** `No jobs` / `1 job` / `4 jobs`. */
 export function jobCountLabel(count: number): string {
   if (count === 0) return 'No jobs';

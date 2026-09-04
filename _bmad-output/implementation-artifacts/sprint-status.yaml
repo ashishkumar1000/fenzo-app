@@ -1,5 +1,5 @@
 # generated: 2026-09-01
-# last_updated: 2026-09-04  # 2-1 → done (code review applied: 8 patches, 4 deferred; 218/218 tests, tsc clean)
+# last_updated: 2026-09-04  # 2-2 → review (Task 4 on-device pass done)
 # project: fenzo-app
 # project_key: NOKEY
 # tracking_system: file-system
@@ -23,7 +23,7 @@ development_status:
   # Epic 2: Customer Depth
   epic-2: in-progress
   2-1-customer-detail-with-job-history: done
-  2-2-single-customer-data-path: ready-for-dev
+  2-2-single-customer-data-path: review
   epic-2-retrospective: optional
 
   # Epic 3: Technician Job Execution
