@@ -144,6 +144,51 @@ describe('session token', () => {
   });
 });
 
+describe('reset', () => {
+  it('mints a new session token and clears state', async () => {
+    autosuggest.mockResolvedValue([suggestion('p1', 'Andheri West')]);
+    renderProbe();
+
+    await typeAndSettle('and');
+    const [, firstToken] = autosuggest.mock.calls[0];
+
+    act(() => {
+      probe.reset();
+    });
+    expect(probe.query).toBe('');
+    expect(probe.suggestions).toEqual([]);
+    expect(probe.phase).toBe('idle');
+
+    await typeAndSettle('andh');
+    expect(autosuggest).toHaveBeenCalledTimes(2);
+    const [, secondToken] = autosuggest.mock.calls[1];
+    expect(secondToken).not.toBe(firstToken);
+  });
+
+  it('does not fire a spurious autosuggest call for the stale pre-reset query', async () => {
+    autosuggest.mockResolvedValue([suggestion('p1', 'Andheri West')]);
+    renderProbe();
+
+    await typeAndSettle('and');
+    expect(autosuggest).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      probe.reset();
+    });
+    // Nothing should fire off the reset itself, before the debounce window
+    // even elapses for the now-cleared query.
+    expect(autosuggest).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      jest.advanceTimersByTime(300);
+    });
+    await act(async () => {
+      await flushMicrotasks();
+    });
+    expect(autosuggest).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('stale response discarding', () => {
   it('only ever renders the latest query’s results, even if an older request settles late', async () => {
     let resolveFirst!: (v: unknown) => void;

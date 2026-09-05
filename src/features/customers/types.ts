@@ -19,6 +19,12 @@ export type Customer = ApiCustomer;
  * What the "Add customer" sheet collects. Name and phone are required; the
  * rest are optional, so they arrive as trimmed strings that may be empty —
  * the caller decides whether to omit them from the API payload.
+ *
+ * The 5 trailing fields are the `AddressPickerSheet` resolve snapshot
+ * (Story 1.5) — present only when the sheet has a resolved pick, absent
+ * otherwise (never sent as empty strings). They're independent of `address`/
+ * `city` above: a hand-edit to the free text after a resolve never changes
+ * or clears them.
  */
 export type NewCustomerInput = {
   name: string;
@@ -28,4 +34,11 @@ export type NewCustomerInput = {
   area: string;
   /** Free-text address or map hint, e.g. "Flat 4B, Sai Krupa, near Metro". */
   address: string;
+  /** `ResolvedPlace.formattedAddress`, as picked. */
+  formattedAddress?: string;
+  /** `ResolvedPlace.pincode`, when the resolved place had one. */
+  pincode?: string;
+  latitude?: number;
+  longitude?: number;
+  placeId?: string;
 };

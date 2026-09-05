@@ -1,7 +1,7 @@
 /**
  * useAddressAutosuggest — the address picker's data layer: session-token
  * management, debounced/gated autosuggest search, and the terminating
- * resolve call. `AddressPickerScreen` is a thin render layer over this.
+ * resolve call. `AddressPickerSheet` is a thin render layer over this.
  *
  * One session token is minted per screen mount and never regenerated —
  * every autosuggest call AND the resolve call that ends the session reuse
@@ -10,7 +10,7 @@
  *
  * `phase` collapses every moving piece (query length, in-flight fetch, last
  * autosuggest error, in-flight resolve, last resolve error) into the epic's
- * 8 states, in strict precedence, so `AddressPickerScreen` only has to
+ * 8 states, in strict precedence, so `AddressPickerSheet` only has to
  * switch on one value instead of re-deriving this logic itself.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -61,7 +61,17 @@ export function useAddressAutosuggest() {
   // recompute, never a correctness guarantee — `useState`'s initializer is
   // guaranteed to run exactly once per component instance, which is what
   // "never regenerated" actually requires.
-  const [sessionToken] = useState(() => generateIdempotencyKey());
+  const [sessionToken, setSessionToken] = useState(() => generateIdempotencyKey());
+  // Mirrored into a ref so `fetchSuggestions`/`resolvePlace` can read the
+  // latest token without depending on the state value itself: `reset()`
+  // changes `sessionToken` and `query` in the same render, and if
+  // `fetchSuggestions` depended on `sessionToken`, that alone would recreate
+  // it and re-fire the debounced-search effect below — on whatever
+  // `debouncedQuery` still stale-holds from before the reset, since its own
+  // 300ms timer hasn't caught up yet. Reading via ref keeps that effect
+  // gated purely on `debouncedQuery` actually changing.
+  const sessionTokenRef = useRef(sessionToken);
+  sessionTokenRef.current = sessionToken;
 
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebounce(query, DEBOUNCE_MS);
@@ -106,7 +116,7 @@ export function useAddressAutosuggest() {
       try {
         const results = await placesService.autosuggest(
           trimmedQuery,
-          sessionToken,
+          sessionTokenRef.current,
           controller.signal,
         );
         if (seq !== requestSeqRef.current) return;
@@ -122,7 +132,7 @@ export function useAddressAutosuggest() {
         setAutosuggestError((caught as ApiError)?.message || 'Something went wrong');
       }
     },
-    [sessionToken],
+    [],
   );
 
   useEffect(() => {
@@ -159,6 +169,30 @@ export function useAddressAutosuggest() {
   }, [fetchSuggestions]);
 
   /**
+   * Starts a genuinely fresh search session: clears every field back to its
+   * initial value AND mints a new session token. `AddressPickerSheet` (an
+   * always-mounted modal, not a per-search screen mount) calls this each
+   * time it opens — without it, a second search within the same "Add
+   * customer" visit would reuse the first search's session token, breaking
+   * the "one token per search session" cost-control invariant the mounted
+   * screen used to get for free.
+   */
+  const reset = useCallback(() => {
+    latestControllerRef.current?.abort();
+    resolveControllerRef.current?.abort();
+    requestSeqRef.current += 1;
+    lastFiredQueryRef.current = null;
+    setQuery('');
+    setSuggestions([]);
+    setIsLoading(false);
+    setHasLoadedOnce(false);
+    setAutosuggestError(null);
+    setResolvingPlaceId(null);
+    setResolveError(null);
+    setSessionToken(generateIdempotencyKey());
+  }, []);
+
+  /**
    * Resolves a tapped suggestion. Returns the resolved place on success (the
    * caller navigates back with it) or `null` on failure (the caller keeps
    * the list on screen — `resolveError`/`phase` already reflect the
@@ -178,7 +212,11 @@ export function useAddressAutosuggest() {
       setResolvingPlaceId(placeId);
       setResolveError(null);
       try {
-        const resolved = await placesService.resolve(placeId, sessionToken, controller.signal);
+        const resolved = await placesService.resolve(
+          placeId,
+          sessionTokenRef.current,
+          controller.signal,
+        );
         // The screen may have unmounted (or this call may have been
         // superseded) while the request was in flight — don't touch state
         // that no longer has a live consumer.
@@ -192,7 +230,7 @@ export function useAddressAutosuggest() {
         return null;
       }
     },
-    [sessionToken, resolvingPlaceId],
+    [resolvingPlaceId],
   );
 
   const trimmedLength = query.trim().length;
@@ -226,5 +264,6 @@ export function useAddressAutosuggest() {
     resolvingPlaceId,
     retry,
     resolvePlace,
+    reset,
   };
 }

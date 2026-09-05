@@ -13,7 +13,7 @@
  * type, so the service type has to be chosen first. Customer, service type and
  * technician are all required — `POST /jobs` rejects a job without an assignee.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -30,17 +30,11 @@ import { ArrowLeft, UserPlus } from 'lucide-react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button, Input, Select, Switch } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
-import { customerService, jobService } from '../../services';
+import { jobService } from '../../services';
 import type { ApiError } from '../../services';
 import { upsertJob } from '../jobs';
 import type { RootStackParamList } from '../../navigation/types';
-import {
-  AddCustomerSheet,
-  useCustomers,
-  upsertCustomer,
-  DIAL_CODE,
-} from '../customers';
-import type { NewCustomerInput } from '../customers';
+import { useCustomers } from '../customers';
 import { loadMyProfile, useMyProfile } from '../profile';
 import { TechnicianPicker } from '../../components/TechnicianPicker';
 import { DateTimeFields } from './components/DateTimeFields';
@@ -75,11 +69,23 @@ const initialDraft = (): NewJobDraft => ({
   requireCompletionSignature: false,
 });
 
-export default function NewJobScreen({ navigation }: Props) {
+export default function NewJobScreen({ navigation, route }: Props) {
   const [draft, setDraft] = useState<NewJobDraft>(initialDraft);
-  const [customerSheetVisible, setCustomerSheetVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+
+  // `AddCustomerScreen` returns here with `createdCustomerId` on a successful
+  // save when opened from this screen's "Add new" link — select it in the
+  // draft, then clear the param (a flat, one-off stack param, unlike
+  // `Customers`'s persistent tab params — but cleared anyway, on the same
+  // principle: a param that's already been consumed shouldn't re-apply on
+  // some later unrelated navigation).
+  useEffect(() => {
+    if (!route.params?.createdCustomerId) return;
+    patch({ customerId: route.params.createdCustomerId });
+    navigation.setParams({ createdCustomerId: undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route.params?.createdCustomerId, navigation]);
 
   // Service types are the tenant's own `serviceCategories`, chosen at company
   // setup. Home already populates this store, so arriving here normally costs
@@ -254,42 +260,11 @@ export default function NewJobScreen({ navigation }: Props) {
     }
   };
 
-  const handleAddCustomer = () => setCustomerSheetVisible(true);
-
-  /**
-   * `POST /customers`, then make the new customer selectable and select them —
-   * creating one mid-flow only ever means "this is the customer for this job".
-   *
-   * The created row is pushed into the store directly rather than waiting on a
-   * refetch: otherwise a failed refresh would leave `customerId` pointing at a
-   * customer the dropdown doesn't have, and `Select` falls back to its
-   * placeholder when the value matches no option — a job creatable with an
-   * invisible customer and an empty service location.
-   *
-   * The refresh still runs afterward to pick up anything server-side, but it's
-   * now belt-and-braces rather than load-bearing.
-   *
-   * Not caught here: `AddCustomerSheet` needs the rejection to stay open and
-   * show the error rather than closing on a failed save.
-   */
-  const handleSubmitCustomer = async (input: NewCustomerInput) => {
-    const address = [input.address, input.area].filter(Boolean).join(', ');
-
-    const created = await customerService.create({
-      name: input.name,
-      countryCode: DIAL_CODE,
-      phoneNumber: input.phone,
-      ...(address ? { address } : {}),
-      ...(input.city ? { city: input.city } : {}),
-    });
-
-    upsertCustomer(created);
-    patch({ customerId: created.id });
-    // A refresh failure must not read as a save failure — the customer exists
-    // and is already selected — so it surfaces as the dropdown's own error
-    // rather than being rethrown into the sheet.
-    await refreshCustomers();
-  };
+  // `AddCustomerScreen` creates the customer, pushes it into the shared store,
+  // and returns here with `createdCustomerId` (consumed by the `useEffect`
+  // above) — nothing left to do here but navigate.
+  const handleAddCustomer = () =>
+    navigation.navigate('AddCustomer', { returnRouteName: 'NewJob' });
 
   /**
    * The dropdown carries its own state in its placeholder and helper rather
@@ -524,12 +499,6 @@ export default function NewJobScreen({ navigation }: Props) {
           </Button>
         </SafeAreaView>
       </KeyboardAvoidingView>
-
-      <AddCustomerSheet
-        visible={customerSheetVisible}
-        onClose={() => setCustomerSheetVisible(false)}
-        onSubmit={handleSubmitCustomer}
-      />
     </SafeAreaView>
   );
 }

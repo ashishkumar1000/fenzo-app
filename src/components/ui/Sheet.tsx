@@ -12,11 +12,13 @@
  *
  * Known edges (both inherent to the native sheet):
  * - Drag-down and Android back dismiss natively BEFORE `onClose` runs, so a
- *   guarded parent cannot veto them — the sheet closes even mid-submit.
- *   The guard then only blocks the `visible` sync, so if the parent refuses
- *   while the sheet is already gone, the sheet can't be re-presented until
- *   the parent flips `visible` (the old Modal could veto via
- *   `onRequestClose`; the native sheet cannot).
+ *   guarded parent cannot veto them by refusing inside `onClose` alone — the
+ *   sheet closes even mid-submit. Pass `dismissible={false}` for the actual
+ *   guard (blocks both paths at the native level); without it, the guard
+ *   only blocks the `visible` sync, so if the parent refuses while the sheet
+ *   is already gone, the sheet can't be re-presented until the parent flips
+ *   `visible` (the old Modal could veto via `onRequestClose`; the native
+ *   sheet cannot without `dismissible={false}`).
  * - Tap-outside-to-close (the old Modal backdrop) is not supported by
  *   TrueSheet — dismissal paths are the close button, drag-down and back.
  *
@@ -47,6 +49,12 @@ export type SheetProps = {
   /** Lets the content's `ScrollView` hand off drags to the sheet. Only set
    *  it when `children` actually contains a `ScrollView`. */
   scrollable?: boolean;
+  /** false blocks every interactive dismissal path — drag-down AND Android
+   *  back — at the native level (TrueSheet's own `dismissible` prop), for a
+   *  guarded parent (e.g. mid-submit) that must not let the sheet disappear
+   *  out from under an in-flight action. Programmatic dismiss via `visible`
+   *  still works either way. Default `true` (native default). */
+  dismissible?: boolean;
   children: ReactNode;
 };
 
@@ -58,6 +66,7 @@ export function Sheet({
   onDidPresent,
   detents = ['auto'],
   scrollable = false,
+  dismissible = true,
   children,
 }: SheetProps) {
   const sheet = useRef<TrueSheet>(null);
@@ -88,6 +97,7 @@ export function Sheet({
     <TrueSheet
       ref={sheet}
       detents={detents}
+      dismissible={dismissible}
       scrollable={scrollable}
       scrollableOptions={scrollable ? { scrollingExpandsSheet: false } : undefined}
       cornerRadius={radius.xl}
@@ -124,6 +134,10 @@ export function Sheet({
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.s5,
+    // The native grabber renders above this content with its own
+    // `topMargin` — without matching top padding here, the title sits
+    // right up against it.
+    paddingTop: spacing.s3,
     paddingBottom: spacing.s4,
     gap: spacing.s4,
   },

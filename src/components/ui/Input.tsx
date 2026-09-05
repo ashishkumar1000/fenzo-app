@@ -28,6 +28,13 @@ export type InputProps = {
   error?: string;
   disabled?: boolean;
   required?: boolean;
+  /**
+   * false renders normally (value, placeholder, focus/blur styling) but
+   * blocks the keyboard and text editing — for a field that's really a tap
+   * target for something else (e.g. a picker), not real text entry. Unlike
+   * `disabled`, it doesn't gray out the field.
+   */
+  editable?: boolean;
   style?: StyleProp<ViewStyle>;
 } & Pick<
   TextInputProps,
@@ -46,6 +53,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input({
   error = '',
   disabled = false,
   required = false,
+  editable = true,
   style,
   onFocus,
   onBlur,
@@ -86,7 +94,12 @@ export const Input = forwardRef<TextInput, InputProps>(function Input({
           onChangeText={onChangeText}
           placeholder={placeholder}
           placeholderTextColor={colors.textMuted}
-          editable={!disabled}
+          editable={!disabled && editable}
+          // A non-editable field is often wrapped in its own `Pressable` (a
+          // tap-to-open-picker field, not real text entry) — without this,
+          // the `TextInput` can still capture the touch on some platform
+          // versions instead of bubbling it up to that wrapper.
+          pointerEvents={!disabled && editable ? 'auto' : 'none'}
           onFocus={(e) => {
             setFocused(true);
             onFocus?.(e);

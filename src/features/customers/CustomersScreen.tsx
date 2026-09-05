@@ -1,6 +1,6 @@
 /**
  * CustomersScreen — the tenant's customer list from `GET /customers`, with
- * search and an "+ Add" action that opens the `AddCustomerSheet`.
+ * search and an "+ Add" action that pushes `AddCustomerScreen`.
  *
  * Renders exclusively from the shared `useCustomers` store (same source as
  * NewJob's picker), so there is exactly one fetch path to the endpoint. Focus
@@ -26,26 +26,21 @@ import {
 } from 'react-native';
 import { Search, Users, UserPlus } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Button, EmptyState, InlineError } from '../../components/ui';
 import { colors, radius, spacing, touch, typography } from '../../theme';
-import { customerService } from '../../services';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
-import { AddCustomerSheet } from './components/AddCustomerSheet';
 import { CustomerRow } from './components/CustomerRow';
 import { filterCustomers } from './format';
-import { DIAL_CODE } from './constants';
-import { loadCustomers, upsertCustomer, useCustomers } from './useCustomers';
-import type { Customer, NewCustomerInput } from './types';
+import { loadCustomers, useCustomers } from './useCustomers';
+import type { Customer } from './types';
 
 type Navigation = NativeStackNavigationProp<RootStackParamList, 'MainTabs'>;
 
 export default function CustomersScreen() {
   const navigation = useNavigation<Navigation>();
   const [query, setQuery] = useState('');
-  const [sheetVisible, setSheetVisible] = useState(false);
 
   const { customers, isLoading, error, hasCustomers, refresh } = useCustomers();
 
@@ -82,39 +77,12 @@ export default function CustomersScreen() {
     [customers, query],
   );
 
-  const handleAdd = () => setSheetVisible(true);
-
-  /**
-   * `POST /customers`, then push the created row into the store directly so
-   * it sits on top instantly — a refetch would leave a window (and, if it
-   * failed, a permanent state) where the row is missing from the list.
-   *
-   * Rejecting with the `ApiError` keeps the sheet open and shows the message;
-   * resolving closes and resets it. Optional fields are omitted rather than
-   * sent as empty strings, so the backend stores null instead of "".
-   *
-   * The endpoint has no `area` field, so Area is merged into the address line
-   * as "<address>, <area>" — either part alone is sent on its own.
-   */
-  const handleSubmitCustomer = async (input: NewCustomerInput) => {
-    const address = [input.address, input.area].filter(Boolean).join(', ');
-
-    const created = await customerService.create({
-      name: input.name,
-      countryCode: DIAL_CODE,
-      phoneNumber: input.phone,
-      ...(address ? { address } : {}),
-      ...(input.city ? { city: input.city } : {}),
-    });
-
-    upsertCustomer(created);
-    // The refresh still runs afterward to pick up anything server-side
-    // (derived `jobCount`, normalized fields), but it's belt-and-braces
-    // rather than load-bearing. A refresh failure must not read as a save
-    // failure — the customer *was* created — so it surfaces as the list's own
-    // error banner rather than being rethrown into the sheet.
-    await refresh();
-  };
+  // `AddCustomerScreen` pushes the created row into the shared store
+  // directly (`upsertCustomer`) and force-refreshes it before returning, so
+  // there's nothing to read back here — this screen's own `useCustomers()`
+  // subscription re-renders from that same store automatically.
+  const handleAdd = () =>
+    navigation.navigate('AddCustomer', { returnRouteName: 'Customers' });
 
   const handleOpenCustomer = (customer: Customer) => {
     navigation.navigate('CustomerDetail', { customerId: customer.id });
@@ -215,12 +183,6 @@ export default function CustomersScreen() {
           />
         </>
       )}
-
-      <AddCustomerSheet
-        visible={sheetVisible}
-        onClose={() => setSheetVisible(false)}
-        onSubmit={handleSubmitCustomer}
-      />
     </SafeAreaView>
   );
 }

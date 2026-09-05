@@ -1,0 +1,318 @@
+/**
+ * Tests for AddCustomerScreen: form bindings (enablement, phone
+ * normalisation, the close-and-reset-on-success / stays-open-on-409
+ * contract), the address field opening `AddressPickerSheet` on a tap
+ * anywhere on it (not just an icon — see the file doc on why), populating
+ * from a resolved pick, and the returnRouteName-based post-save navigation
+ * (`goBack()` for Customers, `createdCustomerId` param for NewJob).
+ *
+ * `AddressPickerSheet` is stubbed to a prop-capturing placeholder (its own
+ * behaviour is `AddressPickerSheet.test.tsx`'s job).
+ */
+jest.mock('../addressPicker', () => {
+  const ReactLib = require('react');
+  const { View } = require('react-native');
+  return {
+    AddressPickerSheet: (props: Record<string, unknown>) =>
+      ReactLib.createElement(View, { testID: 'address-picker-sheet', ...props }),
+  };
+});
+
+jest.mock('./useCustomers', () => ({
+  upsertCustomer: jest.fn(),
+  loadCustomers: jest.fn().mockResolvedValue(undefined),
+}));
+
+import type ReactTestRenderer from 'react-test-renderer';
+import React from 'react';
+import { act, create } from 'react-test-renderer';
+import { Text, TextInput } from 'react-native';
+import { Button } from '../../components/ui';
+import { customerService } from '../../services';
+import type { ResolvedPlace } from '../../services';
+import { upsertCustomer, loadCustomers } from './useCustomers';
+import AddCustomerScreen from './AddCustomerScreen';
+
+const createSpy = jest.spyOn(customerService, 'create');
+const upsertCustomerMock = upsertCustomer as jest.Mock;
+const loadCustomersMock = loadCustomers as jest.Mock;
+
+const noopNavigation = { navigate: jest.fn(), goBack: jest.fn(), setParams: jest.fn() };
+
+function renderScreen(returnRouteName: 'Customers' | 'NewJob' = 'Customers') {
+  const navigation = { ...noopNavigation, navigate: jest.fn(), goBack: jest.fn() };
+  const route = { params: { returnRouteName } };
+  let renderer!: ReactTestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = create(
+      <AddCustomerScreen navigation={navigation as never} route={route as never} />,
+    );
+  });
+  return { root: renderer.root, navigation };
+}
+
+function inputByPlaceholder(
+  root: ReactTestRenderer.ReactTestInstance,
+  placeholder: string,
+) {
+  const input = root
+    .findAllByType(TextInput)
+    .find(t => t.props.placeholder === placeholder);
+  if (!input) throw new Error(`Input "${placeholder}" not found`);
+  return input;
+}
+
+function typeName(root: ReactTestRenderer.ReactTestInstance, text: string) {
+  act(() => {
+    inputByPlaceholder(root, 'e.g. Ramesh Kumar').props.onChangeText(text);
+  });
+}
+
+function typePhone(root: ReactTestRenderer.ReactTestInstance, text: string) {
+  act(() => {
+    inputByPlaceholder(root, '98765 43210').props.onChangeText(text);
+  });
+}
+
+function submit(root: ReactTestRenderer.ReactTestInstance) {
+  const submitButton = root
+    .findAllByType(Button)
+    .find(b => b.props.children === 'Add customer');
+  if (!submitButton) throw new Error('Submit button not found');
+  act(() => {
+    void submitButton.props.onPress?.();
+  });
+}
+
+function addressPickerProps(root: ReactTestRenderer.ReactTestInstance) {
+  return root.findByProps({ testID: 'address-picker-sheet' }).props;
+}
+
+function addressFieldTrigger(root: ReactTestRenderer.ReactTestInstance) {
+  return root
+    .findAllByProps({ accessibilityLabel: 'Search for an address' })
+    .find(instance => typeof instance.props.onPress === 'function');
+}
+
+const RESOLVED: ResolvedPlace = {
+  placeId: 'place-1',
+  formattedAddress: '12 MG Road, Bengaluru, Karnataka 560001',
+  city: 'Bengaluru',
+  pincode: '560001',
+  latitude: 12.9716,
+  longitude: 77.5946,
+};
+
+beforeEach(() => {
+  jest.clearAllMocks();
+});
+
+it('disables submit until a name and a 10-digit phone are entered', () => {
+  const { root } = renderScreen();
+  const submitButton = root
+    .findAllByType(Button)
+    .find(b => b.props.children === 'Add customer');
+  expect(submitButton?.props.disabled).toBe(true);
+
+  typeName(root, 'Ramesh Kumar');
+  typePhone(root, '98765');
+  expect(submitButton?.props.disabled).toBe(true);
+
+  typePhone(root, '9876543210');
+  expect(submitButton?.props.disabled).toBe(false);
+});
+
+it('strips non-digits from the phone and caps it at 10', () => {
+  const { root } = renderScreen();
+  typePhone(root, '98-76a54!32109999');
+  expect(inputByPlaceholder(root, '98765 43210').props.value).toBe('9876543210');
+});
+
+it('shows the duplicate-phone copy and stays open on a 409', async () => {
+  createSpy.mockRejectedValueOnce({ status: 409, message: 'Conflict' });
+  const { root, navigation } = renderScreen();
+  typeName(root, 'Ramesh Kumar');
+  typePhone(root, '9876543210');
+
+  await act(async () => {
+    submit(root);
+  });
+
+  expect(navigation.goBack).not.toHaveBeenCalled();
+  const texts = root.findAllByType(Text).map(t => t.props.children);
+  expect(texts).toContain('A customer with this phone number already exists.');
+});
+
+it('opens the address picker sheet when the address field is tapped', () => {
+  const { root } = renderScreen();
+  expect(addressPickerProps(root).visible).toBe(false);
+
+  act(() => {
+    addressFieldTrigger(root)?.props.onPress();
+  });
+
+  expect(addressPickerProps(root).visible).toBe(true);
+});
+
+it('populates the address field and closes the sheet on a resolved pick', () => {
+  const { root } = renderScreen();
+
+  act(() => {
+    addressFieldTrigger(root)?.props.onPress();
+  });
+  act(() => {
+    addressPickerProps(root).onResolved(RESOLVED);
+  });
+
+  expect(inputByPlaceholder(root, 'Tap to search for an address').props.value).toBe(
+    RESOLVED.formattedAddress,
+  );
+  expect(inputByPlaceholder(root, 'Mumbai').props.value).toBe(RESOLVED.city);
+  expect(addressPickerProps(root).visible).toBe(false);
+});
+
+it('the address field is not directly editable — only the picker sets it', () => {
+  const { root } = renderScreen();
+  expect(inputByPlaceholder(root, 'Tap to search for an address').props.editable).toBe(
+    false,
+  );
+});
+
+describe('submitting with returnRouteName: Customers', () => {
+  it('creates the customer, updates the shared store, and goes back — no params needed', async () => {
+    createSpy.mockResolvedValueOnce({
+      id: 'cust-1',
+      name: 'Ramesh Kumar',
+      countryCode: '+91',
+      phoneNumber: '9876543210',
+      address: null,
+      city: null,
+    });
+    const { root, navigation } = renderScreen('Customers');
+    typeName(root, 'Ramesh Kumar');
+    typePhone(root, '9876543210');
+
+    await act(async () => {
+      submit(root);
+    });
+
+    expect(upsertCustomerMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'cust-1' }),
+    );
+    expect(loadCustomersMock).toHaveBeenCalledWith({ force: true });
+    expect(navigation.goBack).toHaveBeenCalledTimes(1);
+    expect(navigation.navigate).not.toHaveBeenCalled();
+  });
+});
+
+describe('submitting with returnRouteName: NewJob', () => {
+  it('returns the created customer id via navigation params instead of going back', async () => {
+    createSpy.mockResolvedValueOnce({
+      id: 'cust-2',
+      name: 'Suresh Rao',
+      countryCode: '+91',
+      phoneNumber: '9876500000',
+      address: null,
+      city: null,
+    });
+    const { root, navigation } = renderScreen('NewJob');
+    typeName(root, 'Suresh Rao');
+    typePhone(root, '9876500000');
+
+    await act(async () => {
+      submit(root);
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledWith({
+      name: 'NewJob',
+      params: { createdCustomerId: 'cust-2' },
+      merge: true,
+    });
+    expect(navigation.goBack).not.toHaveBeenCalled();
+  });
+});
+
+it('sends the 5 resolved fields alongside existing fields on submit', async () => {
+  createSpy.mockResolvedValueOnce({
+    id: 'cust-3',
+    name: 'Ramesh Kumar',
+    countryCode: '+91',
+    phoneNumber: '9876543210',
+    address: RESOLVED.formattedAddress,
+    city: RESOLVED.city,
+  });
+  const { root } = renderScreen();
+  typeName(root, 'Ramesh Kumar');
+  typePhone(root, '9876543210');
+
+  act(() => {
+    addressFieldTrigger(root)?.props.onPress();
+  });
+  act(() => {
+    addressPickerProps(root).onResolved(RESOLVED);
+  });
+
+  await act(async () => {
+    submit(root);
+  });
+
+  expect(createSpy).toHaveBeenCalledWith(
+    expect.objectContaining({
+      formattedAddress: RESOLVED.formattedAddress,
+      pincode: RESOLVED.pincode,
+      latitude: RESOLVED.latitude,
+      longitude: RESOLVED.longitude,
+      placeId: RESOLVED.placeId,
+    }),
+  );
+});
+
+it('omits the 5 resolved fields entirely when the picker was never used', async () => {
+  createSpy.mockResolvedValueOnce({
+    id: 'cust-4',
+    name: 'Ramesh Kumar',
+    countryCode: '+91',
+    phoneNumber: '9876543210',
+    address: null,
+    city: null,
+  });
+  const { root } = renderScreen();
+  typeName(root, 'Ramesh Kumar');
+  typePhone(root, '9876543210');
+
+  await act(async () => {
+    submit(root);
+  });
+
+  const [payload] = createSpy.mock.calls[0] as unknown as [Record<string, unknown>];
+  expect(payload).not.toHaveProperty('formattedAddress');
+  expect(payload).not.toHaveProperty('pincode');
+  expect(payload).not.toHaveProperty('latitude');
+  expect(payload).not.toHaveProperty('longitude');
+  expect(payload).not.toHaveProperty('placeId');
+});
+
+it('trims leading/trailing whitespace from name and city on submit', async () => {
+  createSpy.mockResolvedValueOnce({
+    id: 'cust-5',
+    name: 'Ramesh Kumar',
+    countryCode: '+91',
+    phoneNumber: '9876543210',
+    address: null,
+    city: 'Mumbai',
+  });
+  const { root } = renderScreen();
+  typeName(root, '  Ramesh Kumar  ');
+  typePhone(root, '9876543210');
+  act(() => {
+    inputByPlaceholder(root, 'Mumbai').props.onChangeText('  Mumbai  ');
+  });
+
+  await act(async () => {
+    submit(root);
+  });
+
+  expect(createSpy).toHaveBeenCalledWith(
+    expect.objectContaining({ name: 'Ramesh Kumar', city: 'Mumbai' }),
+  );
+});

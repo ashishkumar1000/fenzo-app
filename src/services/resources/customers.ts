@@ -22,6 +22,19 @@ export interface CreateCustomerRequest {
   phoneNumber: string;
   address?: string;
   city?: string;
+  /**
+   * The 5 fields below are the Places autosuggest/resolve flow's structured
+   * snapshot (Epic 1 / Story 1.5), 1:1 with backend `CreateCustomerDto`. All
+   * optional — a customer must remain creatable with none of them, i.e. from
+   * the free-text `address`/`city` above alone.
+   */
+  formattedAddress?: string;
+  /** 6-digit Indian PIN code. */
+  pincode?: string;
+  latitude?: number;
+  longitude?: number;
+  /** Places provider place id. */
+  placeId?: string;
 }
 
 /**

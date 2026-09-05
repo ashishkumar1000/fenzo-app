@@ -2,7 +2,7 @@
  * EditJobSheet — bottom-sheet form to edit, reassign or (via its parent) cancel
  * a scheduled job. Uses the DS `Sheet` (native TrueSheet) at a fixed 85%
  * detent with a scrollable body, so the hint + Save stay pinned below the
- * form (the same layout as AddCustomerSheet).
+ * form.
  *
  * Form state is re-initialized from the job each time the sheet opens — but
  * only on the false→true transition: a background refetch landing while the

@@ -1,7 +1,8 @@
 /**
- * Address picker feature — public surface. The screen is registered on the
- * root stack (see `navigation/RootNavigator.tsx`).
+ * Address picker feature — public surface. `AddressPickerSheet` is a nested
+ * modal rendered from `AddCustomerScreen` (see `features/customers`), not a
+ * registered route.
  */
-export { default as AddressPickerScreen } from './AddressPickerScreen';
+export { default as AddressPickerSheet } from './AddressPickerSheet';
 export { useAddressAutosuggest } from './useAddressAutosuggest';
 export type { AddressPickerPhase } from './useAddressAutosuggest';

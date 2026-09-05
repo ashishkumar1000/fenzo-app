@@ -8,7 +8,7 @@
  * call site.
  */
 
-import type { JobScope, ResolvedPlace } from '../services';
+import type { JobScope } from '../services';
 
 export type MainTabParamList = {
   Home: undefined;
@@ -37,13 +37,13 @@ export type RootStackParamList = {
   MainTabs: undefined;
   Technicians: undefined;
   /**
-   * `pendingAddress` is set by `AddressPickerScreen` on a successful resolve
-   * (`navigation.navigate({ name: 'NewJob', params: { pendingAddress }, merge: true })`)
-   * and consumed by `AddCustomerSheet` via this screen (Story 1.5 — reading it
-   * back and clearing it is out of scope for the picker itself, per
-   * `epic-1-context.md`'s `JobsScreen.tsx`-style precedent).
+   * `createdCustomerId` is set by `AddCustomerScreen` on a successful save
+   * when opened from here (`returnRouteName: 'NewJob'`), so this screen can
+   * select the new customer in its draft. `Customers` needs no equivalent
+   * param — its list reads from the shared `useCustomers` store, which
+   * `AddCustomerScreen` already updates directly via `upsertCustomer`.
    */
-  NewJob: { pendingAddress?: ResolvedPlace } | undefined;
+  NewJob: { createdCustomerId?: string } | undefined;
   /** Owner/technician job detail — opened with the job's uuid. */
   JobDetail: { jobId: string };
   /** Owner-only customer profile + job history — opened with the customer's uuid. */
@@ -51,29 +51,15 @@ export type RootStackParamList = {
   /** Tenant skill list management (More tab → Skills row). */
   Skills: undefined;
   /**
-   * Address search (Epic 1) — pushed over whatever screen opened it.
-   * `returnRouteName` names the route to navigate back to; on a successful
-   * resolve, `AddressPickerScreen` calls
-   * `navigation.navigate({ name: returnRouteName, params: { pendingAddress }, merge: true })`
-   * so the caller finds its resolved address in its own route params.
+   * Full-page "Add customer" form, pushed from either `CustomersScreen` or
+   * `NewJobScreen`. `returnRouteName` decides post-save behavior — see
+   * `AddCustomerScreen`'s file doc.
    */
-  AddressPicker: { returnRouteName: AddressPickerReturnRouteName };
+  AddCustomer: { returnRouteName: AddCustomerReturnRouteName };
 };
 
-/**
- * Route names `AddressPicker.returnRouteName` may target — i.e. routes whose
- * param type declares `pendingAddress?: ResolvedPlace` (today, `NewJob`
- * only). Deliberately an explicit union, not a type derived from
- * `RootStackParamList` via a mapped/conditional type: TypeScript's
- * structural typing means an `extends { pendingAddress?: ResolvedPlace }`
- * check is satisfied by ANY object param type, because an optional property
- * imposes no constraint when the source type omits it entirely — e.g.
- * `JobDetail: { jobId: string }` would incorrectly pass such a check even
- * though it never declares the field. Extend this union, together with the
- * corresponding param entry above, whenever another route gains
- * `pendingAddress` (Story 1.5's `CustomersScreen` wiring, etc).
- */
-export type AddressPickerReturnRouteName = 'NewJob';
+/** Screens that can push `AddCustomer` and be returned to. */
+export type AddCustomerReturnRouteName = 'Customers' | 'NewJob';
 
 /**
  * Technician full-screen routes pushed over `TechnicianTabs` by
