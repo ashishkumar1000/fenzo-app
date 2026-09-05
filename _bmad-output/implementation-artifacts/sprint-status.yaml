@@ -51,6 +51,6 @@ development_status:
   epic-5: in-progress
   5-1-skills-management-screen: done
   5-2-profile-edit: done  # review closed 2026-09-05 (1 decision + 7 patches: seq-bump race, draft-wipe, Button loading, users/wiring tests)
-  5-3-session-expiry-global-401: ready-for-dev
+  5-3-session-expiry-global-401: done  # review closed 2026-09-05 (1 decision + 10 patches: logout → registry + clearAuthToken, App/registry/banner/race tests)
   5-4-error-envelope-consistency: ready-for-dev
   epic-5-retrospective: optional

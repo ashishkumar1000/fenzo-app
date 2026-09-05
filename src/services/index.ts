@@ -22,5 +22,6 @@ export type { ListParams } from './api/ApiService';
 export type { Paginated } from './api/pagination';
 export { getAuthToken, setAuthToken, clearAuthToken } from './authToken';
 export { storage } from './storage';
+export { registerReset, runAllResets } from './resetRegistry';
 export * from './resources';
 

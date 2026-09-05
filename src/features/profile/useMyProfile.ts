@@ -20,6 +20,7 @@
  */
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { usersApi } from '../../services';
+import { registerReset } from '../../services/resetRegistry';
 import type { ApiError, MyProfile } from '../../services';
 import { FOCUS_REFRESH_TTL_MS } from '../../constants';
 
@@ -166,6 +167,22 @@ export function loadMyProfile(opts: { force?: boolean } = {}): Promise<void> {
   return request;
 }
 
+/**
+ * Reset to the pre-login state. Call on logout (via the reset registry).
+ *
+ * Invalidates any in-flight GET and marks every older response stale — a
+ * response landing after logout would otherwise show the previous session's
+ * profile after the next login (AC 5).
+ */
+export function clearMyProfile(): void {
+  requestSeq += 1;
+  inFlight = null;
+  setState(INITIAL);
+}
+
+// Join the global 401 reset flow (story 5.3) — see services/resetRegistry.ts.
+registerReset(clearMyProfile);
+
 export function useMyProfile() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot);
 
@@ -192,7 +209,7 @@ export function useMyProfile() {
 
   /** Reset to the pre-login state. Call on logout. */
   const clear = useCallback(() => {
-    setState(INITIAL);
+    clearMyProfile();
   }, []);
 
   return {

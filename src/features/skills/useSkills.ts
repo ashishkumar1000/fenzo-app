@@ -14,6 +14,7 @@
  */
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { skillService } from '../../services';
+import { registerReset } from '../../services/resetRegistry';
 import type { ApiError, Skill } from '../../services';
 import { FOCUS_REFRESH_TTL_MS } from '../../constants';
 
@@ -228,6 +229,9 @@ export function clearSkills() {
   inFlight = null;
   setState(INITIAL);
 }
+
+// Join the global 401 reset flow (story 5.3) — see services/resetRegistry.ts.
+registerReset(clearSkills);
 
 export function useSkills() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot);

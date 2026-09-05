@@ -150,3 +150,17 @@
 - **Relative imports in new files** — `SignatureScreen`, `signatureExport`, `base64` follow
   each file's existing relative style rather than the CLAUDE.md `@/` aliases; part of the
   repo-wide alias migration already deferred from 1-6 and 2-1 reviews.
+
+## Deferred from: code review of 5-3-session-expiry-global-401.md (2026-09-05)
+
+- **A 401 from an OLD session can settle after a fresh re-login and wipe the new session** —
+  `src/services/api/apiClient.ts`: the `handlingUnauthorized` dedup re-arms on a tick with no
+  session-generation guard, so a late 401 from a request issued pre-logout can fire the global
+  reset + `expireSession()` after the user has already logged back in, kicking them out again.
+  Practically unreachable (old-session requests settle within the API timeout, well before a
+  manual re-login completes), pre-existing. Fix needs per-request token identity — a rebuild of
+  the interceptor that story 5.3 explicitly forbids. Worth a session-gen guard when Epic 4
+  touches this code.
+- **Reset registry has no ordering/async contract** — `src/services/resetRegistry.ts` runs resets
+  in Set-insertion order, sync only. Today's resets are order-independent; Epic 4's sync store /
+  action queue may need ordering or async semantics. Document the contract when that store lands.

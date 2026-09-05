@@ -15,6 +15,7 @@
 import { useCallback, useSyncExternalStore } from 'react';
 import { storage } from '../../services/storage';
 import { technicianService } from '../../services';
+import { registerReset } from '../../services/resetRegistry';
 import { DIAL_CODE } from './constants';
 import type { NewTechnicianInput, Technician } from './types';
 
@@ -53,6 +54,14 @@ function subscribe(callback: () => void) {
 function getSnapshot() {
   return technicians;
 }
+
+/** Clear all technicians — used on logout to reset the first-run state. */
+export function clearTechnicians(): void {
+  setTechnicians([]);
+}
+
+// Join the global 401 reset flow (story 5.3) — see services/resetRegistry.ts.
+registerReset(clearTechnicians);
 
 export function useTechnicians() {
   const list = useSyncExternalStore(subscribe, getSnapshot);
@@ -100,7 +109,7 @@ export function useTechnicians() {
 
   /** Clear all technicians — used on logout to reset the first-run state. */
   const clear = useCallback(() => {
-    setTechnicians([]);
+    clearTechnicians();
   }, []);
 
   return {

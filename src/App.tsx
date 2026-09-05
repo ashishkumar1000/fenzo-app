@@ -5,7 +5,7 @@
  * @format
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StatusBar, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
@@ -14,13 +14,28 @@ import RootNavigator from './navigation/RootNavigator';
 import TechnicianRootNavigator from './navigation/TechnicianRootNavigator';
 import { navigationRef } from './navigation/navigationRef';
 import { OnboardingScreen, useOnboarding } from './features/onboarding';
-import { AuthFlow, useAuth } from './features/auth';
+import { AuthFlow, useAuth, expireSession } from './features/auth';
+import { runAllResets, setOnUnauthorized } from './services';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
   const [splashVisible, setSplashVisible] = useState(true);
   const { status: onboardingStatus, complete: completeOnboarding } = useOnboarding();
   const { status: authStatus, session, complete: completeAuth } = useAuth();
+
+  // Global 401 handling (story 5.3): any authenticated request that comes
+  // back 401 forces the user back to the login screen. Data stores reset
+  // FIRST, then the auth gate flips — screens unmount into a clean world,
+  // and the login screen shows the "Session expired" notice. The interceptor
+  // in apiClient fires this at most once per expiry event (deduped), and
+  // never for a login 401 (no token was attached).
+  useEffect(() => {
+    setOnUnauthorized(() => {
+      runAllResets();
+      expireSession();
+    });
+    return () => setOnUnauthorized(null);
+  }, []);
 
   // First launch: onboarding tour → account setup → main app.
   let content;

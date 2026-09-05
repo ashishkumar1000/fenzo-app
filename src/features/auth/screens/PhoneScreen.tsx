@@ -4,7 +4,7 @@
  */
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Button, Input } from '../../../components/ui';
+import { Button, Input, InlineError } from '../../../components/ui';
 import { colors, spacing, typography } from '../../../theme';
 import { AuthScaffold } from '../components/AuthScaffold';
 import { DIAL_CODE, OTP_LENGTH, PHONE_LENGTH } from '../constants';
@@ -21,6 +21,13 @@ type Props = {
    * and vice versa.
    */
   serverError?: string;
+  /**
+   * True right after a forced 401 logout (story 5.3) — shows the "Session
+   * expired" banner above the form, so the person knows why they're back
+   * at step 1. Cleared on dismiss, or on the next successful login.
+   */
+  sessionExpired?: boolean;
+  onDismissSessionExpired?: () => void;
 };
 
 export function PhoneScreen({
@@ -29,6 +36,8 @@ export function PhoneScreen({
   onContinue,
   sending = false,
   serverError = '',
+  sessionExpired = false,
+  onDismissSessionExpired,
 }: Props) {
   const [error, setError] = useState('');
 
@@ -52,6 +61,15 @@ export function PhoneScreen({
       <Text style={styles.sub}>
         We'll send a {OTP_LENGTH}-digit code to this number.
       </Text>
+
+      {sessionExpired ? (
+        <View style={styles.notice}>
+          <InlineError
+            message="Session expired — please log in again."
+            onDismiss={onDismissSessionExpired}
+          />
+        </View>
+      ) : null}
 
       <View style={styles.field}>
         <Input
@@ -100,6 +118,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.s2,
   },
   field: {
+    marginTop: spacing.s6,
+  },
+  notice: {
     marginTop: spacing.s6,
   },
   dial: {

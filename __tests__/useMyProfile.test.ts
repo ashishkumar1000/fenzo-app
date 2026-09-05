@@ -22,6 +22,7 @@ jest.mock('../src/services', () => ({
 }));
 
 import {
+  clearMyProfile,
   loadMyProfile,
   setProfileFromServer,
   useMyProfile,
@@ -432,4 +433,42 @@ it('a PATCH stored while a GET is in flight is not overwritten by that GET (stor
     await slow;
   });
   expect(probe?.profile?.name).toBe('Patched Name');
+});
+
+it('clearMyProfile resets the store to the pre-login state (story 5.3)', async () => {
+  getMe.mockResolvedValueOnce(makeProfile());
+  // Every later GET hangs: after the clear the probe's auto-load effect
+  // refires, and an unresolved refetch leaves the store at the exact
+  // pre-login snapshot this test pins (on a real logout the gate unmounts
+  // the screen before any refetch could land).
+  getMe.mockImplementation(() => new Promise<MyProfile>(() => {}));
+  await mountProbeAt(T0);
+  expect(probe?.profile).not.toBeNull();
+
+  await run(() => clearMyProfile());
+
+  expect(probe?.profile).toBeNull();
+  expect(probe?.isLoading).toBe(true);
+  expect(probe?.error).toBeNull();
+});
+
+it('ignores a GET response that lands after clearMyProfile (logout race, story 5.3)', async () => {
+  // The mount load is held open while the forced logout runs.
+  let resolveList!: (p: MyProfile) => void;
+  getMe.mockImplementationOnce(
+    () => new Promise<MyProfile>(res => (resolveList = res)),
+  );
+  await mountProbe(); // the mount load is in flight
+  const pendingGet = loadMyProfile(); // joins the in-flight mount request
+
+  await run(() => clearMyProfile());
+
+  // The in-flight GET settles after the clear — it must not repopulate the
+  // next session's store with the previous session's profile.
+  await act(async () => {
+    resolveList(makeProfile({ name: 'Previous session owner' }));
+    await pendingGet;
+  });
+  expect(probe?.profile).toBeNull();
+  expect(probe?.error).toBeNull();
 });

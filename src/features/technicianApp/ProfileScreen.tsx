@@ -19,13 +19,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LogOut, Pencil, Phone } from 'lucide-react-native';
 import { Avatar, Card, IconButton } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
+import { runAllResets } from '../../services';
+import { clearAuthToken } from '../../services/authToken';
 import { useAuth } from '../auth';
 import { EditNameSheet, formatPhone, useMyProfile } from '../profile';
-import { clearTechnicianJobs } from './useTechnicianJobs';
 
 export default function ProfileScreen() {
   const { reset } = useAuth();
-  const { profile, isLoading, clear: clearProfile } = useMyProfile();
+  const { profile, isLoading } = useMyProfile();
   const [editNameOpen, setEditNameOpen] = useState(false);
 
   const handleLogOut = () => {
@@ -35,11 +36,12 @@ export default function ProfileScreen() {
         text: 'Log out',
         style: 'destructive',
         onPress: () => {
+          // Same reset flow as a forced 401 logout (story 5.3): the registry
+          // owns the store list (technician jobs included), and the token
+          // must go too — a manual logout used to leave the JWT attached.
+          clearAuthToken();
+          runAllResets();
           reset();
-          clearProfile();
-          // The technician jobs store outlives the session in memory — reset
-          // it so the next login starts from a clean (not-fetched) state.
-          clearTechnicianJobs();
         },
       },
     ]);

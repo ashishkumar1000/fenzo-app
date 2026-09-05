@@ -19,6 +19,7 @@
  */
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { customerService } from '../../services';
+import { registerReset } from '../../services/resetRegistry';
 import type { ApiError } from '../../services';
 import { FOCUS_REFRESH_TTL_MS } from '../../constants';
 import type { Customer } from './types';
@@ -191,6 +192,22 @@ export function upsertCustomer(customer: UpsertCustomerInput): void {
   setState({ customers: [row, ...rest], hasLoaded: true });
 }
 
+/**
+ * Reset to the pre-login state. Call on logout (via the reset registry).
+ *
+ * Invalidates any in-flight GET and marks every older response stale — a
+ * response landing after logout would otherwise repopulate the next
+ * session's store with the previous tenant's customers.
+ */
+export function clearCustomers(): void {
+  requestSeq += 1;
+  inFlight = null;
+  setState(INITIAL);
+}
+
+// Join the global 401 reset flow (story 5.3) — see services/resetRegistry.ts.
+registerReset(clearCustomers);
+
 export function useCustomers() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot);
 
@@ -209,7 +226,7 @@ export function useCustomers() {
 
   /** Reset to the pre-login state. Call on logout. */
   const clear = useCallback(() => {
-    setState(INITIAL);
+    clearCustomers();
   }, []);
 
   return {

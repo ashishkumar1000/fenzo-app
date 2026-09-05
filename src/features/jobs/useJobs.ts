@@ -17,6 +17,7 @@
  */
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { jobService } from '../../services';
+import { registerReset } from '../../services/resetRegistry';
 import type { ApiError, ApiJob } from '../../services';
 import { isSameIstDay } from '../../utils';
 import { filterForScope } from './scopeFilters';
@@ -241,6 +242,9 @@ export function clearJobs(): void {
   resetGen += 1; // an in-flight response is now stale — it must not commit
   setState(INITIAL);
 }
+
+// Join the global 401 reset flow (story 5.3) — see services/resetRegistry.ts.
+registerReset(clearJobs);
 
 export function useJobs() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot);

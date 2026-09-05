@@ -20,6 +20,7 @@
  */
 import { useCallback, useSyncExternalStore } from 'react';
 import { jobService } from '../../services';
+import { registerReset } from '../../services/resetRegistry';
 import type { ApiError, ApiJob, JobDetail, Paginated } from '../../services';
 import { FOCUS_REFRESH_TTL_MS } from '../../constants';
 
@@ -316,6 +317,9 @@ export function clearTechnicianJobs(): void {
   resetGen += 1; // an in-flight response is now stale — it must not commit
   setState(INITIAL);
 }
+
+// Join the global 401 reset flow (story 5.3) — see services/resetRegistry.ts.
+registerReset(clearTechnicianJobs);
 
 export function useTechnicianJobs() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot);

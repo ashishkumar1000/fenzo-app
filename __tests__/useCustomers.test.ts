@@ -14,6 +14,7 @@ jest.mock('../src/services', () => ({
 }));
 
 import {
+  clearCustomers,
   loadCustomers,
   upsertCustomer,
   useCustomers,
@@ -229,4 +230,44 @@ it('upsertCustomer puts the created row on top without a round trip', async () =
   });
   expect(probe?.customers.map(c => c.id)).toEqual(['c-9', 'c-1']);
   expect(listAll).toHaveBeenCalledTimes(1); // no extra fetch
+});
+
+it('clearCustomers resets the store to the pre-login state (story 5.3)', async () => {
+  listAll.mockResolvedValueOnce([make()]);
+  // Every later GET hangs: after the clear the probe's auto-load effect
+  // refires, and an unresolved refetch leaves the store at the exact
+  // pre-login snapshot this test pins (on a real logout the gate unmounts
+  // the screen before any refetch could land).
+  listAll.mockImplementation(() => new Promise<ApiCustomer[]>(() => {}));
+  await mountProbeAt(T0);
+  expect(probe?.customers).toEqual([make()]);
+
+  await run(() => clearCustomers());
+
+  expect(probe?.customers).toEqual([]);
+  expect(probe?.hasLoaded).toBe(false);
+  expect(probe?.isLoading).toBe(true);
+});
+
+it('ignores a GET response that lands after clearCustomers (logout race, story 5.3)', async () => {
+  // The mount load is held open while the forced logout runs.
+  let resolveList!: (p: ApiCustomer[]) => void;
+  listAll.mockImplementationOnce(
+    () => new Promise<ApiCustomer[]>(res => (resolveList = res)),
+  );
+  await act(async () => {
+    instance = create(React.createElement(Probe));
+  });
+  const pendingGet = loadCustomers(); // joins the in-flight mount request
+
+  await run(() => clearCustomers());
+
+  // The in-flight GET settles after the clear — it must not repopulate the
+  // next session's store with the previous tenant's rows.
+  await act(async () => {
+    resolveList([make({ name: 'Old tenant customer' })]);
+    await pendingGet;
+  });
+  expect(probe?.customers).toEqual([]);
+  expect(probe?.hasLoaded).toBe(false);
 });

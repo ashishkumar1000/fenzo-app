@@ -13,6 +13,7 @@ import type { AuthResult, AuthStep, BusinessProfile } from './types';
 import { PhoneScreen } from './screens/PhoneScreen';
 import { OtpScreen } from './screens/OtpScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
+import { clearSessionExpired, useSessionExpired } from './useAuth';
 import { authApi, setAuthToken } from '../../services';
 import type { ApiError } from '../../services';
 
@@ -62,6 +63,10 @@ function serviceCategoriesFor(businessTypes: string[]): string[] {
 
 export default function AuthFlow({ onComplete }: Props) {
   const [step, setStep] = useState<AuthStep>('phone');
+  // True right after a forced 401 logout (story 5.3) — PhoneScreen shows a
+  // "Session expired" banner until the person dismisses it or logs in again
+  // (useAuth's `complete` clears the flag).
+  const sessionExpired = useSessionExpired();
   const [phone, setPhone] = useState('');
 
   const [code, setCode] = useState('');
@@ -240,6 +245,8 @@ export default function AuthFlow({ onComplete }: Props) {
         onContinue={sendOtp}
         sending={sending}
         serverError={phoneError}
+        sessionExpired={sessionExpired}
+        onDismissSessionExpired={clearSessionExpired}
       />
     );
   }

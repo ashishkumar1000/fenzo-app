@@ -1,8 +1,9 @@
 /**
  * MoreScreen — the account/settings tab. Header is a plain "Account &
  * settings"; below it, Technicians + Notifications tiles, a Settings row, the
- * account card, and Log out. Logging out resets the auth gate
- * (`useAuth().reset()`), which sends the user back to the account-setup flow.
+ * account card, and Log out. Logging out runs the same forced-logout flow as
+ * a 401 expiry (story 5.3): the reset registry wipes every store, the token
+ * is cleared, and `useAuth().reset()` sends the user back to login.
  */
 import { useState } from 'react';
 import { Alert, ActivityIndicator, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
@@ -11,21 +12,17 @@ import { useNavigation } from '@react-navigation/native';
 import { Bell, ChevronRight, HardHat, LogOut, Pencil, Phone, Settings, ShieldCheck, Wrench } from 'lucide-react-native';
 import { Avatar, Card, IconButton } from '../../components/ui';
 import { colors, radius, spacing, typography } from '../../theme';
+import { runAllResets } from '../../services';
+import { clearAuthToken } from '../../services/authToken';
 import { useAuth } from '../auth';
-import { useCustomers } from '../customers';
-import { clearJobs } from '../jobs';
 import { EditNameSheet, formatPhone, formatRole, useMyProfile } from '../profile';
-import { clearSkills } from '../skills';
-import { useTechnicians } from '../technicians';
 import { MoreTile } from './components/MoreTile';
 
 export default function MoreScreen() {
   const { width } = useWindowDimensions();
   const tileSize = (width - spacing.s4 * 2 - spacing.s3) / 2;
   const { reset } = useAuth();
-  const { clear: clearTechnicians } = useTechnicians();
-  const { clear: clearCustomers } = useCustomers();
-  const { profile, isLoading, clear: clearProfile } = useMyProfile();
+  const { profile, isLoading } = useMyProfile();
   const navigation = useNavigation();
   const [editNameOpen, setEditNameOpen] = useState(false);
 
@@ -44,11 +41,12 @@ export default function MoreScreen() {
         text: 'Log out',
         style: 'destructive',
         onPress: () => {
-          clearTechnicians();
-          clearCustomers();
-          clearSkills();
-          clearJobs();
-          clearProfile();
+          // Same reset flow as a forced 401 logout (story 5.3): the registry
+          // owns the store list — a hand-rolled copy here would drift the
+          // first time a new store registers. The token must go too: a
+          // manual logout used to leave the JWT attached to later requests.
+          clearAuthToken();
+          runAllResets();
           reset();
         },
       },
