@@ -6,7 +6,6 @@
  * API keys, etc.) become necessary, swap this for `react-native-config`
  * without touching any call site — everything imports from here.
  */
-import { Platform } from 'react-native';
 
 /**
  * Base URL for the Fenzit backend (NestJS).
@@ -18,8 +17,12 @@ import { Platform } from 'react-native';
  *     e.g. `192.168.x.x`, with the phone on the same network
  *
  * Update `DEV_API_HOST` below when testing on Android or a physical device.
+ *
+ * TEMPORARY (2026-09-05): hardcoded to the dev machine's LAN IP so a physical
+ * device on the same network reaches the localhost backend (the user asked to
+ * keep it for now). Revert to the Platform split before shipping.
  */
-const DEV_API_HOST = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
+const DEV_API_HOST = '192.168.1.208';
 
 export const API_BASE_URL = __DEV__
   ? `http://${DEV_API_HOST}:3000/api/v1`

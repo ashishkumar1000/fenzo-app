@@ -26,7 +26,6 @@ import type { JobDetail } from '../../../services';
 import { openMaps } from '../../../utils/linking';
 import { PersonRow } from '../../jobDetail/components/PersonRow';
 import { ActivityTimeline } from '../../jobDetail/components/ActivityTimeline';
-import { AttachmentGrid } from '../../jobDetail/components/AttachmentGrid';
 import { formatPhone } from '../../profile';
 import {
   formatTimeLabel,
@@ -36,6 +35,7 @@ import {
 import { STEP_ORDER, buildStepper, type WorkflowStep } from '../stepperModel';
 import { WorkflowStepper } from './WorkflowStepper';
 import { SignatureTile } from './SignatureTile';
+import { PhotoSection } from './PhotoSection';
 
 const SERVICE_ICON = {
   wrench: Wrench,
@@ -60,9 +60,11 @@ type Props = {
   onAdvance?: (step: WorkflowStep) => void;
   /** 3.3 — the step whose advance request is in flight (subtle pressed state). */
   pendingStep?: WorkflowStep | null;
+  /** 3.4 — fired per confirmed photo upload (the screen's silent refetch). */
+  onPhotosConfirmed?: () => void;
 };
 
-export function TechJobDetailContent({ detail, onAdvance, pendingStep }: Props) {
+export function TechJobDetailContent({ detail, onAdvance, pendingStep, onPhotosConfirmed }: Props) {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   const isTerminal = detail.status === 'completed' || detail.status === 'cancelled';
@@ -153,11 +155,16 @@ export function TechJobDetailContent({ detail, onAdvance, pendingStep }: Props) 
 
       {/* 5. Photos — the capture slot (3.4). Present on non-terminal jobs even
           when empty (the add tile invites); a finished job with no photos has
-          nothing to show. */}
+          nothing to show. Terminal jobs render the captured photos read-only. */}
       {!isTerminal || photos.length > 0 ? (
         <Card padding="md">
           <Text style={styles.sectionTitle}>Photos</Text>
-          <AttachmentGrid attachments={photos} />
+          <PhotoSection
+            jobId={detail.id}
+            photos={photos}
+            readOnly={isTerminal}
+            onConfirmed={onPhotosConfirmed}
+          />
         </Card>
       ) : null}
 

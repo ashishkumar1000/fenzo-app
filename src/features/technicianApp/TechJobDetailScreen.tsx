@@ -289,7 +289,15 @@ export default function TechJobDetailScreen() {
                 tintColor={colors.primary}
               />
             }>
-            <TechJobDetailContent detail={detail} onAdvance={advance} pendingStep={pendingStep} />
+            <TechJobDetailContent
+              detail={detail}
+              onAdvance={advance}
+              pendingStep={pendingStep}
+              // 3.4 — a confirmed photo upload refetches the detail (no
+              // spinner): the grid re-renders from server truth, including a
+              // fresh read URL for the just-uploaded photo.
+              onPhotosConfirmed={() => void load(false)}
+            />
           </ScrollView>
           {barAction ? (
             <WorkflowActionBar

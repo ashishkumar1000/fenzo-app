@@ -53,6 +53,22 @@ jest.mock('../src/features/profile', () => ({
   formatPhone: () => '+91 90000 00000',
 }));
 
+// 3.4: PhotoSection is replaced by a capture stub so the screen-level wiring
+// can be asserted — confirm → onPhotosConfirmed → silent refetch — without
+// dragging the whole upload pipeline into a screen test (the hook and grid
+// have their own suites). Variables referenced here must be `mock`-prefixed.
+let mockLastPhotoProps: {
+  photos: Array<{ id: string }>;
+  readOnly: boolean;
+  onConfirmed?: () => void;
+} | null = null;
+jest.mock('../src/features/technicianApp/components/PhotoSection', () => ({
+  PhotoSection: (props: { photos: Array<{ id: string }>; readOnly: boolean; onConfirmed?: () => void }) => {
+    mockLastPhotoProps = props;
+    return null;
+  },
+}));
+
 import TechJobDetailScreen from '../src/features/technicianApp/TechJobDetailScreen';
 import { jobService } from '../src/services';
 import {
@@ -184,6 +200,7 @@ async function mountScreen(): Promise<Renderer> {
 
 beforeEach(() => {
   clearTechnicianJobs();
+  mockLastPhotoProps = null;
 });
 
 afterEach(() => {
@@ -508,4 +525,46 @@ it('cancelled job — no bar at all', async () => {
 
   expect(advanceButton(renderer)).toHaveLength(0);
   expect(renderedText(renderer)).not.toContain('Job completed');
+});
+
+/* ————— 3.4: photos (AC 6) ————— */
+
+const shot = (id: string) => ({
+  id,
+  type: 'photo' as const,
+  url: `https://r2/read-${id}`,
+  createdAt: '2026-09-04T10:30:00Z',
+});
+
+it('a photo confirm refetches the detail and re-renders the grid from server truth (AC 6)', async () => {
+  getById
+    .mockResolvedValueOnce(makeDetail()) // the mount
+    .mockResolvedValueOnce(makeDetail({ attachments: [shot('att-9')] })); // post-confirm
+  await mountScreen();
+  expect(mockLastPhotoProps!.photos).toHaveLength(0);
+  expect(mockLastPhotoProps!.readOnly).toBe(false);
+
+  await ReactTestRenderer.act(async () => {
+    mockLastPhotoProps!.onConfirmed!();
+  });
+
+  // The silent refetch is the second getById call, and the grid now renders
+  // the server's confirmed photo (fresh read URL included).
+  expect(getById).toHaveBeenCalledTimes(2);
+  expect(mockLastPhotoProps!.photos).toHaveLength(1);
+  expect(mockLastPhotoProps!.photos[0].id).toBe('att-9');
+});
+
+it('a terminal job with photos renders the grid read-only (AC 6)', async () => {
+  getById.mockResolvedValueOnce(
+    makeDetail({
+      status: 'completed',
+      currentStep: 'completed' as JobDetail['currentStep'],
+      attachments: [shot('att-1')],
+    }),
+  );
+  await mountScreen();
+
+  expect(mockLastPhotoProps!.readOnly).toBe(true);
+  expect(mockLastPhotoProps!.photos).toHaveLength(1);
 });

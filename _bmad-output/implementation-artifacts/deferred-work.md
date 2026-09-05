@@ -75,3 +75,47 @@
   History disclosure header, maps row, and error-view Retry have no `testID` hooks. Add them when
   Story 3.3 wires interactivity and the rows need to be driven in tests (same pattern as the 1-3
   EditJobSheet hooks).
+
+## Deferred from: code review of 3-4-photo-capture-upload-r2 (2026-09-05)
+
+- **`limitReached` is a one-way latch** — set on a 409 from presign/confirm, never reset even if a
+  later refetch shows fewer than 5 photos; harmless until a photo-delete feature exists, then the
+  flag needs a reset path (derive from `photos.length` or clear on refetch).
+- **Per-file confirm fires its own full detail refetch** — 4 parallel picks → up to 4 chained silent
+  `load(false)` calls; the screen's inflight chaining softens the churn. Batch/debounce if a device
+  run shows it.
+- **Just-confirmed photo vanishes from the grid until the refetch lands** — the done tile is dropped
+  before the refetched detail includes it (brief flicker; the limit briefly under-counts in the same
+  window; server 409 is the backstop). Revisit if visible on device.
+- **Presign 422 (disallowed mime) is offered a Retry that deterministically fails** — the pipeline
+  distinguishes 409/410 but has no retryable-vs-permanent notion.
+- **Photo tiles carry no accessibility labels** — confirmed/in-flight/failed tiles announce nothing
+  meaningful; same repo-wide a11y-polish family as the 1-2 and 3-2 deferred items.
+
+## Deferred from: second code-review pass over 3-4-photo-capture-upload-r2 (2026-09-05, BE cross-check)
+
+- **5-photo cap can be exceeded by parallel uploads (fenzit-be)** — the limit is counted at presign
+  (`attachments.service.ts` ~L118-145, confirmed photos only) and again at confirm (RPC
+  `20260621000014`, `SELECT COUNT(*) >= 5` then INSERT), but two overlapping confirms can both read
+  4 under READ COMMITTED and both insert — the migration's own comment concedes this. The FE's
+  parallel uploads reach the path directly (pick 3 files at 4/5 → 6-7 rows, no 409 ever fires).
+  Real fix: a UNIQUE/exclusion constraint in a BE migration; FE-side confirm serialization would
+  only narrow, not close, the window.
+- **Confirm endpoint lacks the idempotency interceptor (fenzit-be)** — presign and workflow-advance
+  have `@UseInterceptors(IdempotencyInterceptor)`; confirm does not, so its `X-Idempotency-Key`
+  header is silently ignored. Harmless today (FE mints fresh keys; re-executed confirm is safe —
+  the RPC returns the existing row). Fix is one line on the controller, or leave the FE comment
+  (now corrected 2026-09-05) documenting the status quo.
+- **410/failed confirm after a successful PUT orphans the R2 object (fenzit-be)** — the single
+  restart mints a fresh presign (new UUID key), so the first PUT's object is never referenced again.
+  The daily cron deletes only the `attachment_uploads` staging row; neither repo deletes storage
+  objects and the bucket has no lifecycle rule. Same leak on any confirm failure/network death
+  post-PUT. Fix direction: an R2 bucket lifecycle rule, or delete-on-abandon in the BE.
+- **Confirm never verifies the R2 object or its size (fenzit-be)** — the backend trusts the
+  client-reported `sizeBytes` (bounded ≤ 50 MB) with no HEAD of the object and no content-length in
+  the signed URL; confirm can create an attachment row for a missing object. Hardening gap — the FE
+  throws on any non-ok PUT so the happy path never hits it.
+- **Client-side expiry pre-check trusts the device clock** — `deps.now()` vs the server-issued
+  `expiresAt`: a device ≥15 min fast fails every upload with "presign expired" before any request.
+  Kept as a deliberate fail-safe (avoids PUTting into a dead URL); revisit only if a device ever
+  shows it.

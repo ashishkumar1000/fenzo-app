@@ -10,6 +10,12 @@
  * Features never import a resource file directly — they go through the
  * top-level `@services` barrel, which re-exports everything from here.
  */
+export { attachmentService } from './attachments';
+export type {
+  AttachmentPresignBody,
+  ConfirmResponse,
+  PresignResponse,
+} from './attachments';
 export { technicianService } from './technicians';
 export { customerService } from './customers';
 export type {
