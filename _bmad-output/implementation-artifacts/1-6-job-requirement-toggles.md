@@ -4,7 +4,7 @@ baseline_commit: af01f7a4e091ff79ceae3830723cfb33d8dbce6e
 
 # Story 1.6: Job Requirement Toggles (photos + signature)
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -63,34 +63,78 @@ technician app reacts via Story 3-5 (revised).
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Types** (`src/services/resources/jobs.ts`):
-  - [ ] `CreateJobRequest`: add `requireCompletionSignature?: boolean` (sibling of :80).
-  - [ ] `UpdateJobEditFields` (:99-108): add `requireCompletionPhoto?: boolean` and
+- [x] **Task 1 — Types** (`src/services/resources/jobs.ts`):
+  - [x] `CreateJobRequest`: add `requireCompletionSignature?: boolean` (sibling of :80).
+  - [x] `UpdateJobEditFields` (:99-108): add `requireCompletionPhoto?: boolean` and
         `requireCompletionSignature?: boolean`.
-  - [ ] `ApiJob` (:118-156): add `requireCompletionSignature: boolean` (required, sibling of
+  - [x] `ApiJob` (:118-156): add `requireCompletionSignature: boolean` (required, sibling of
         :149) — shared with Story 3-5 Task 2; whoever lands first updates the five fixtures
         (`workflowActionBarModel.test.ts:30`, `WorkflowStepper.test.tsx:26`, `jobs.test.ts:32`,
         `editJobModel.test.ts:32`, plus any new fixture) per 3-5 AC 8.
-  - [ ] Update `fenzo-app/_bmad-output/planning-artifacts/api-contracts.md` §5 (create body),
+  - [x] Update `fenzo-app/_bmad-output/planning-artifacts/api-contracts.md` §5 (create body),
         §6 (PATCH subset), §2 (`ApiJob`).
-- [ ] **Task 2 — NewJobScreen** (`src/features/newJob/`):
-  - [ ] `types.ts`: `NewJobDraft` gains `requireCompletionPhoto: boolean` +
+- [x] **Task 2 — NewJobScreen** (`src/features/newJob/`):
+  - [x] `types.ts`: `NewJobDraft` gains `requireCompletionPhoto: boolean` +
         `requireCompletionSignature: boolean` (init `false` in `initialDraft()` —
         `NewJobScreen.tsx:68-74`).
-  - [ ] `NewJobScreen.tsx`: new section after Notes (before ScrollView close, :484-491) with
+  - [x] `NewJobScreen.tsx`: new section after Notes (before ScrollView close, :484-491) with
         two `Switch` rows wired through `patch()` (:173-174); create call (:216-233) passes
         both flags and updates the :231-232 comment (priority remains omitted).
-- [ ] **Task 3 — Edit sheet** (`src/features/jobDetail/`):
-  - [ ] `editJobModel.ts`: `EditJobDraft` (:22-29) gains both flags; seeding in
+- [x] **Task 3 — Edit sheet** (`src/features/jobDetail/`):
+  - [x] `editJobModel.ts`: `EditJobDraft` (:22-29) gains both flags; seeding in
         `EditJobSheet.tsx:107-141`; `buildPatch` (:59-91) diffs them (send only when changed —
         mirror the priority field's diff pattern).
-  - [ ] `EditJobSheet.tsx`: two `Switch` rows (new "Job requirements" section — the sheet's
+  - [x] `EditJobSheet.tsx`: two `Switch` rows (new "Job requirements" section — the sheet's
         section pattern matches the Priority pill row styling at :263-290 for spacing/titles;
         use `Switch`, not pills).
-- [ ] **Task 4 — Tests**: `editJobModel.test.ts` (defaults, buildPatch diff, flags-only patch
+- [x] **Task 4 — Tests**: `editJobModel.test.ts` (defaults, buildPatch diff, flags-only patch
       non-empty, mixed patch merges flags with other fields); `jobs.test.ts` create payload
       includes the new flag; update stale fixtures per Task 1 if this story lands the `ApiJob`
       field first.
+
+### Review Findings
+
+- [x] [Review][Patch] Screen-level coverage for the toggles — `__tests__/edit-job-sheet.test.tsx` and
+  `__tests__/new-job-screen.test.tsx` mount the screens but never assert the two Switch rows render, seed from
+  the job, or reach the create/patch body. Verification confirmed the gap is real: the NewJobScreen test asserts
+  the create body via `expect.objectContaining` (customerId/technicianId/serviceType only), so dropped flags
+  would pass silently. **Resolved 2026-09-05: extend the existing screen suites** (not "introducing a harness" —
+  one has existed since Story 1-1; AC 5's premise was stale). New tests: NewJob — switches default OFF + toggled
+  flag reaches the create body; edit sheet — labels render, switches seed from the job, toggled flag PATCHes
+  alone.
+- [x] [Review][Patch] `jobs.test.ts` ends without a trailing newline [src/services/resources/jobs.test.ts:EOF]
+  — **fixed 2026-09-05.**
+- [x] [Review][Patch] api-contracts §1 documents only the photo-skip rule — **fixed 2026-09-05**: added the
+  signature skip rule ("`signature_captured` skippable only when `requireCompletionSignature === false`"),
+  verified against `fenzit-be/src/jobs/workflow.service.ts` `validateStep`.
+  [_bmad-output/planning-artifacts/api-contracts.md §1]
+- [x] [Review][Patch] PATCH flag-passthrough not pinned by a service test — **fixed 2026-09-05**: `jobService.update`
+  verbatim-passthrough test added (mocked `apiClient.patch`).
+  [src/services/resources/jobs.test.ts]
+- [x] [Review][Patch] Section order differs between surfaces — **resolved 2026-09-05 by documenting the
+  divergence**: AC 1 pins NewJob's placement (after Notes), so the sheet keeps its own order (after Priority,
+  before Technician) with a comment in `EditJobSheet.tsx` explaining why (job-level attributes ahead of the
+  roster, so the technician list isn't pushed below the scroll fold).
+- [x] [Review][Patch] No explicit test that draft flags default to `false` — **resolved 2026-09-05 via the
+  screen test instead of a model test**: `initialDraft()` is screen-local (not exported), and the new NewJob
+  test asserts both switches render `false` on mount — the exact AC-5 "default OFF" guarantee, pinned where the
+  default lives. Exporting `initialDraft` for a model test would add surface for no extra coverage.
+- [x] [Review][Defer] Deploy-order hazard: `ApiJob.requireCompletionSignature` is required, so if fenzo-app
+  deploys before fenzit-be 3-8, every job row would carry `undefined` for the field (seeding `undefined` into
+  drafts, diffing truthy against `false`). Cross-repo ordering is CLAUDE.md territory (BE first) — noted as a
+  hand-off constraint, not a code fix. [src/services/resources/jobs.ts] — deferred, pre-existing
+- [x] [Review][Defer] Signature toggle is inert until Story 3-5 ships — the owner can set
+  `requireCompletionSignature`, but the technician app doesn't consume it yet. Expected sequencing (3-5 is
+  ready-for-dev and revised to depend on this field), not a defect. — deferred, pre-existing
+- [x] [Review][Defer] Fixture duplication across 11 test files — every new required `ApiJob` field touches all
+  fixtures; a shared `makeJob()` factory would stop the churn. Pre-existing pattern family, standalone cleanup.
+  [src/features/jobDetail/editJobModel.test.ts:32, src/services/resources/jobs.test.ts:32, +9 root fixtures] — deferred, pre-existing
+- [x] [Review][Defer] Relative imports in touched files — new imports in this story followed the file's existing
+  relative style rather than the CLAUDE.md `@/` aliases; repo-wide alias migration is already deferred from the
+  2-1 review. — deferred, pre-existing
+- [x] [Review][Defer] Sheet controls not disabled while submitting — the new Switches stay enabled during the
+  in-flight save like every other sheet control (pre-existing pattern); if it ever matters, disable the whole
+  form in one pass. [src/features/jobDetail/components/EditJobSheet.tsx] — deferred, pre-existing
 
 ## Dev Notes
 
@@ -112,10 +156,72 @@ technician app reacts via Story 3-5 (revised).
 
 ### Agent Model Used
 
+Claude Code (GLM) — 2026-09-05
+
 ### Debug Log References
+
+- RED→GREEN: 3 new editJobModel tests failed before the model change (flag diff, flags-only
+  patch, mixed patch), passed after `buildPatch` gained the flag diffs.
+- Full suite: 43 suites / 406 tests green. `bunx tsc --noEmit`: clean after fixture updates.
+- `bun run lint`: **no ESLint config exists in this repo** (pre-existing, unrelated to this
+  story — eslint exits with "couldn't find a configuration file").
 
 ### Completion Notes List
 
+- Implemented in task order 1 → 4 (red-green on the model tests before the UI landed).
+- `ApiJob.requireCompletionSignature` is required, matching the BE `JobResponse`
+  (verified against `fenzit-be/src/jobs/jobs.service.ts:54` and
+  `sync/dto/sync-response.dto.ts:29` — delta-sync payloads carry it too, so the field is
+  required rather than optional; the `completedAt`-style sync exception does NOT apply here).
+- **Fixture updates (this story landed the `ApiJob` field first):** besides the four fixtures
+  named in Task 1/AC 5, nine root `__tests__/` fixtures also needed the field
+  (`JobCard`, `JobsScreen`, `jobs-service`, `edit-job-sheet`, `job-detail-screen` ×2 incl.
+  its `toApiJob` mapper, `today-sections`, `useJobs`, `useTechnicianJobs`,
+  `tech-job-detail-screen` ×2). All set to `false`, except `tech-job-detail-screen`
+  (`true` — matches its photo fixture).
+- **`WorkflowStepper.test.tsx:26` deliberately NOT updated:** its fixture is a
+  `StepperJob` = `Pick<JobDetail, 'currentStep' | 'requireCompletionPhoto' | 'status'>` —
+  adding the field there fails the excess-property check, and widening the Pick is
+  Story 3-5's Task 2 (its Dev Notes say widening is what forces its fixtures). 3-5 should
+  add `requireCompletionSignature: false` to this fixture when it widens the Pick.
+- Edit-sheet section placed after Priority (sheet order: Description → Schedule → Notes →
+  Priority → Job requirements → Technician); NewJob section after Notes, both using the ui
+  `Switch` with its built-in 44px-min row. Section label "Job requirements" (sentence case).
+- Edit-sheet toggles clear `formError` on change, matching every other control's pattern.
+- `jobs.test.ts` create test asserts the body passes through verbatim, both flags included;
+  also updated the file's header comment (it described only the advanceWorkflow tests).
+- No NewJobScreen screen-test harness introduced, per AC 5. The root `__tests__/new-job-screen.test.tsx`
+  suite (from Story 1-1) passes unchanged.
+
 ### File List
 
+- `src/services/resources/jobs.ts` (modified — CreateJobRequest, UpdateJobEditFields, ApiJob)
+- `src/features/newJob/types.ts` (modified — NewJobDraft flags)
+- `src/features/newJob/NewJobScreen.tsx` (modified — section, create call, initialDraft)
+- `src/features/jobDetail/editJobModel.ts` (modified — EditJobDraft, buildPatch diffs)
+- `src/features/jobDetail/components/EditJobSheet.tsx` (modified — seeding, draft, section)
+- `src/features/jobDetail/editJobModel.test.ts` (modified — BASE_JOB/makeDraft + 3 new tests)
+- `src/services/resources/jobs.test.ts` (modified — fixture + create-payload test)
+- `src/features/technicianApp/workflowActionBarModel.test.ts` (modified — fixture)
+- `__tests__/JobCard.test.tsx` (modified — fixture)
+- `__tests__/JobsScreen.test.tsx` (modified — fixture)
+- `__tests__/jobs-service.test.ts` (modified — fixture)
+- `__tests__/edit-job-sheet.test.tsx` (modified — fixture)
+- `__tests__/job-detail-screen.test.tsx` (modified — fixture + toApiJob mapper)
+- `__tests__/today-sections.test.ts` (modified — fixture)
+- `__tests__/useJobs.test.ts` (modified — fixture)
+- `__tests__/useTechnicianJobs.test.ts` (modified — fixture)
+- `__tests__/tech-job-detail-screen.test.tsx` (modified — fixtures ×2)
+- `_bmad-output/planning-artifacts/api-contracts.md` (modified — §2, §5, §6)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified — status)
+- `_bmad-output/implementation-artifacts/1-6-job-requirement-toggles.md` (this file)
+
 ## Change Log
+
+- 2026-09-05 — Story 1-6 implemented: job requirement toggles end-to-end on the owner side.
+  Types widen (`CreateJobRequest.requireCompletionSignature`, both flags in
+  `UpdateJobEditFields`, `ApiJob.requireCompletionSignature` required). NewJob gains a
+  "Job requirements" section after Notes (two Switch rows, default off) and sends both flags
+  on create. Edit sheet gains the same section (after Priority), seeded from the detail and
+  diffed via `buildPatch` so only changed flags go on the wire. api-contracts.md §2/§5/§6
+  updated. 11 stale `ApiJob`/`JobDetail` fixtures updated. Tests: 406 pass; tsc clean.

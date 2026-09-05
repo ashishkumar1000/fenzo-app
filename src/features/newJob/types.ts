@@ -32,4 +32,10 @@ export interface NewJobDraft {
   scheduledAt: Date;
   technicianId: string | null;
   notes: string;
+  /**
+   * Completion-evidence toggles. Both default off — simple jobs shouldn't
+   * force evidence steps on the technician.
+   */
+  requireCompletionPhoto: boolean;
+  requireCompletionSignature: boolean;
 }

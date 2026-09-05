@@ -1,12 +1,13 @@
 /**
- * Tests for the jobs service's workflow advance: the request must carry the
- * step in the body and the idempotency key in the `X-Idempotency-Key`
- * header — the key is minted by the CALLER (never inside the service) so
- * Epic 4 can replay the same key for a queued action.
+ * Tests for the jobs service: workflow advance (the idempotency key is minted
+ * by the CALLER — never inside the service — so Epic 4 can replay the same
+ * key for a queued action) and the create/update bodies passing through
+ * verbatim, completion flags included.
  */
 jest.mock('./../api/apiClient', () => ({
   apiClient: {
     post: jest.fn().mockResolvedValue({ data: { id: 'job-1' } }),
+    patch: jest.fn().mockResolvedValue({ data: { id: 'job-1' } }),
   },
 }));
 
@@ -15,6 +16,7 @@ import { jobService } from './jobs';
 import type { ApiJob } from './jobs';
 
 const post = apiClient.post as jest.Mock;
+const patch = apiClient.patch as jest.Mock;
 
 const JOB: ApiJob = {
   id: 'job-1',
@@ -30,6 +32,7 @@ const JOB: ApiJob = {
   currentStep: null,
   priority: 'normal',
   requireCompletionPhoto: false,
+  requireCompletionSignature: false,
   description: null,
   notesForTechnician: null,
   createdAt: '2026-09-01T06:00:00.000Z',
@@ -53,5 +56,31 @@ describe('jobService.advanceWorkflow', () => {
     post.mockResolvedValueOnce({ data: { ...JOB, currentStep: 'arrived' } });
     const returned = await jobService.advanceWorkflow('job-1', 'arrived', 'aaaaaaa1-b2b2-4c3c-8d4d-e5e5e5e5e5e5');
     expect(returned.currentStep).toBe('arrived');
+  });
+});
+
+describe('jobService.create', () => {
+  it('posts the body verbatim to /jobs, completion flags included', async () => {
+    post.mockResolvedValueOnce({ data: JOB });
+    const input = {
+      customerId: 'customer-1',
+      technicianId: 'tech-1',
+      serviceType: 'ac_service' as const,
+      scheduledStart: '2026-09-04T10:00:00.000Z',
+      serviceLocation: '12 MG Road, Bengaluru',
+      requireCompletionPhoto: true,
+      requireCompletionSignature: true,
+    };
+    await jobService.create(input);
+    expect(post).toHaveBeenCalledWith('/jobs', input);
+  });
+});
+
+describe('jobService.update', () => {
+  it('PATCHes the body verbatim to /jobs/:id, completion flags included', async () => {
+    patch.mockResolvedValueOnce({ data: JOB });
+    const input = { requireCompletionPhoto: true, requireCompletionSignature: false };
+    await jobService.update('job-1', input);
+    expect(patch).toHaveBeenCalledWith('/jobs/job-1', input);
   });
 });

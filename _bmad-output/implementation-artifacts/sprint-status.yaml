@@ -1,5 +1,5 @@
 # generated: 2026-09-01
-# last_updated: 2026-09-05  # all done stories committed to main: 3-2 (71fc05d), 3-3 (aba7b75), 3-4 (e189daa), 1-5 (37a92e2)
+# last_updated: 2026-09-05  # 1-6 → done (review: 1 decision + 6 patches + 5 defers)
 # project: fenzo-app
 # project_key: NOKEY
 # tracking_system: file-system
@@ -18,7 +18,7 @@ development_status:
   1-3-edit-reassign-cancel-job: done
   1-4-home-stats-refresh: done  # review complete (follow-up commit 98ba957); story file already says done
   1-5-jobs-timeline-scopes: done  # committed 37a92e2 (review: 3 decisions + 10 patches + 3 defers)
-  1-6-job-requirement-toggles: ready-for-dev  # created 2026-09-05; depends on fenzit-be 3-8
+  1-6-job-requirement-toggles: done  # review closed 2026-09-05 (1 decision + 6 patches + 5 defers); deps: fenzit-be 3-8 (done)
   epic-1-retrospective: optional
 
   # Epic 2: Customer Depth

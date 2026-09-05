@@ -28,6 +28,7 @@ function job(overrides: Partial<JobDetail> = {}): JobDetail {
     currentStep: null,
     priority: 'normal',
     requireCompletionPhoto: false,
+    requireCompletionSignature: false,
     description: null,
     notesForTechnician: null,
     createdAt: '2026-09-01T06:00:00.000Z',

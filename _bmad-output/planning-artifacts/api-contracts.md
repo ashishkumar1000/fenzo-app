@@ -21,7 +21,7 @@ type JobPriority = 'normal' | 'urgent';
 type WorkflowStep = 'on_my_way' | 'arrived' | 'in_progress' | 'photos_uploaded' | 'signature_captured' | 'completed';
 type AttachmentType = 'photo' | 'signature';
 ```
-Step order is fixed: `on_my_way → arrived → in_progress → photos_uploaded → signature_captured → completed`. Fresh job has `currentStep: null`. `photos_uploaded` skippable only when `requireCompletionPhoto === false` (then `in_progress → signature_captured` is legal).
+Step order is fixed: `on_my_way → arrived → in_progress → photos_uploaded → signature_captured → completed`. Fresh job has `currentStep: null`. `photos_uploaded` skippable only when `requireCompletionPhoto === false` (then `in_progress → signature_captured` is legal); `signature_captured` skippable only when `requireCompletionSignature === false` (then `photos_uploaded`/`in_progress → completed` is legal).
 
 ## 2. JobResponse (list rows, create/patch/workflow responses)
 
@@ -41,6 +41,7 @@ interface ApiJob {
   currentStep: string | null;       // one of WorkflowStep, or null pre-start
   priority: JobPriority;
   requireCompletionPhoto: boolean;
+  requireCompletionSignature: boolean;
   description: string | null;
   notesForTechnician: string | null;
   createdAt: string;
@@ -77,12 +78,12 @@ interface JobAttachment    { id: string; type: 'photo' | 'signature'; url: strin
 
 ## 5. POST /jobs — create (Owner) [already wired]
 
-Body (create-job.dto): `customerId` XOR `newCustomer{name,countryCode,phoneNumber,address?,city?}`, `serviceLocation`, `serviceType`, `scheduledStart` (ISO), `technicianId`; optional `scheduledEnd`, `description`, `priority`, `requireCompletionPhoto`, `notesForTechnician`. `scheduledEnd < scheduledStart` → 422. 201 → full `ApiJob`. FE `CreatedJob {id}` should be widened to `ApiJob` in Story 1.1.
+Body (create-job.dto): `customerId` XOR `newCustomer{name,countryCode,phoneNumber,address?,city?}`, `serviceLocation`, `serviceType`, `scheduledStart` (ISO), `technicianId`; optional `scheduledEnd`, `description`, `priority`, `requireCompletionPhoto`, `requireCompletionSignature`, `notesForTechnician` (both flags default `false` server-side). `scheduledEnd < scheduledStart` → 422. 201 → full `ApiJob`. FE `CreatedJob {id}` should be widened to `ApiJob` in Story 1.1.
 
 ## 6. PATCH /jobs/:id — edit/reassign/cancel (Owner)
 
 Source: jobs.service.ts#updateJob (L324–481).
-- Body: any subset of `{ description, scheduledStart, scheduledEnd, notesForTechnician, technicianId, priority }` OR exactly `{ status: 'cancelled' }`.
+- Body: any subset of `{ description, scheduledStart, scheduledEnd, notesForTechnician, technicianId, priority, requireCompletionPhoto, requireCompletionSignature }` OR exactly `{ status: 'cancelled' }`. The completion flags follow the same subset rule as everything else — absent = unchanged (COALESCE).
 - **Rules enforced server-side (mirror in FE):**
   - Cancel + any edit field in one request → 422 "Cancellation cannot be combined with field edits". Send cancel ALONE.
   - Empty patch (no fields) → 422 "No updatable fields provided". Diff before sending.

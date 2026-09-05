@@ -28,7 +28,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, UserPlus } from 'lucide-react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button, Input, Select } from '../../components/ui';
+import { Button, Input, Select, Switch } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import { customerService, jobService } from '../../services';
 import type { ApiError } from '../../services';
@@ -71,6 +71,8 @@ const initialDraft = (): NewJobDraft => ({
   scheduledAt: nextHalfHour(),
   technicianId: null,
   notes: '',
+  requireCompletionPhoto: false,
+  requireCompletionSignature: false,
 });
 
 export default function NewJobScreen({ navigation }: Props) {
@@ -228,8 +230,10 @@ export default function NewJobScreen({ navigation }: Props) {
         ...(trimmedNotes
           ? { description: trimmedNotes, notesForTechnician: trimmedNotes }
           : {}),
-        // `priority` and `requireCompletionPhoto` are deliberately omitted —
-        // no UI for either, so the server's defaults (normal / false) apply.
+        requireCompletionPhoto: draft.requireCompletionPhoto,
+        requireCompletionSignature: draft.requireCompletionSignature,
+        // `priority` is deliberately omitted — no UI for it, so the server's
+        // default (normal) applies.
       });
       // Drop the created row straight into the Jobs store: the tab's focus
       // refetch is throttled, so without this a job created within 15s of the
@@ -488,6 +492,20 @@ export default function NewJobScreen({ navigation }: Props) {
             placeholder="Any special instructions..."
             multiline
           />
+
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Job requirements</Text>
+            <Switch
+              label="Require completion photos"
+              value={draft.requireCompletionPhoto}
+              onValueChange={next => patch({ requireCompletionPhoto: next })}
+            />
+            <Switch
+              label="Require customer signature"
+              value={draft.requireCompletionSignature}
+              onValueChange={next => patch({ requireCompletionSignature: next })}
+            />
+          </View>
         </ScrollView>
 
         {/* Footer sits outside the ScrollView so "Create job" is always

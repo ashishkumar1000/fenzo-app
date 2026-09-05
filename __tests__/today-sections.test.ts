@@ -21,6 +21,7 @@ function makeJob(id: string, overrides: Partial<ApiJob> = {}): ApiJob {
     currentStep: null,
     priority: 'normal',
     requireCompletionPhoto: false,
+    requireCompletionSignature: false,
     description: null,
     notesForTechnician: null,
     createdAt: '2026-09-03T09:00:00Z',

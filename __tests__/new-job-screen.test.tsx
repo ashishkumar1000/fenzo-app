@@ -4,6 +4,10 @@
  * refresh (`loadMyProfile({ force: true })`) so Home's tiles are fresh the
  * moment the owner returns, bypassing the 15s focus throttle.
  *
+ * Also covers the job-requirement switches: both render OFF by default and
+ * a toggled flag reaches the create body (a dropped flag would otherwise
+ * pass every test — the submit assertions use `objectContaining`).
+ *
  * The screen's picker subcomponents and the profile/customers/jobs features
  * are mocked at the module boundary (same pattern as job-detail-screen.test) —
  * the logic under test is the submit flow, not the pickers or the client.
@@ -117,8 +121,14 @@ const customers = [
   },
 ];
 
-/** Fills the draft via the pickers' own props, then presses Create job. */
-async function submitSuccessfulJob(): Promise<ReactTestRenderer.ReactTestRenderer> {
+/**
+ * Fills the draft via the pickers' own props, then presses Create job.
+ * `beforeSubmit` runs after the pickers and before the press — the hook for
+ * asserting/driving controls that live in the scroll body (e.g. the switches).
+ */
+async function submitSuccessfulJob(
+  beforeSubmit?: (renderer: ReactTestRenderer.ReactTestRenderer) => Promise<void>,
+): Promise<ReactTestRenderer.ReactTestRenderer> {
   let renderer!: ReactTestRenderer.ReactTestRenderer;
   await ReactTestRenderer.act(async () => {
     renderer = ReactTestRenderer.create(
@@ -138,6 +148,8 @@ async function submitSuccessfulJob(): Promise<ReactTestRenderer.ReactTestRendere
   await ReactTestRenderer.act(async () => {
     renderer.root.findByType(TechnicianPicker).props.onSelect('tech-1');
   });
+
+  if (beforeSubmit) await beforeSubmit(renderer);
 
   const createButton = renderer.root
     .findAllByType(Button)
@@ -186,6 +198,31 @@ it('a successful create forces a profile refresh so Home tiles are fresh', async
   expect(loadMyProfileMock).toHaveBeenCalledTimes(1);
   expect(loadMyProfileMock).toHaveBeenCalledWith({ force: true });
   expect(mockGoBack).toHaveBeenCalledTimes(1);
+
+  await ReactTestRenderer.act(async () => {
+    renderer.unmount();
+  });
+});
+
+it('the requirement switches default OFF and a toggled flag reaches the create body', async () => {
+  const renderer = await submitSuccessfulJob(async r => {
+    const photo = r.root.findByProps({ label: 'Require completion photos' });
+    const signature = r.root.findByProps({ label: 'Require customer signature' });
+    // Both OFF on a fresh form — simple jobs must not force evidence steps
+    // on the technician.
+    expect(photo.props.value).toBe(false);
+    expect(signature.props.value).toBe(false);
+    await ReactTestRenderer.act(async () => {
+      photo.props.onValueChange(true);
+    });
+  });
+
+  expect(create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      requireCompletionPhoto: true,
+      requireCompletionSignature: false,
+    }),
+  );
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();

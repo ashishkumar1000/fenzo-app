@@ -119,3 +119,19 @@
   `expiresAt`: a device ≥15 min fast fails every upload with "presign expired" before any request.
   Kept as a deliberate fail-safe (avoids PUTting into a dead URL); revisit only if a device ever
   shows it.
+
+## Deferred from: code review of 1-6-job-requirement-toggles (2026-09-05)
+
+- **Deploy-order hazard: `ApiJob.requireCompletionSignature` is required on the client** — if fenzo-app deploys
+  before fenzit-be 3-8, every job row carries `undefined` for the field (seeds `undefined` into drafts, diffs
+  truthy against `false` → phantom "changed" flags on first save). Cross-repo ordering rule (BE first) covers
+  it; keep BE-first explicit in the 1-6 hand-off.
+- **Signature toggle is inert until Story 3-5 ships** — owner can set `requireCompletionSignature`, but the
+  technician app doesn't consume it yet. Expected sequencing (3-5 is ready-for-dev, revised to depend on the
+  field), not a defect.
+- **Fixture duplication across 11 test files** — every new required `ApiJob` field touches all fixtures; a
+  shared `makeJob()` factory would stop the churn. Pre-existing pattern family; standalone cleanup.
+- **Relative imports in touched files** — new imports followed the file's existing relative style rather than
+  the CLAUDE.md `@/` aliases; repo-wide alias migration already deferred from the 2-1 review.
+- **Sheet controls not disabled while submitting** — the new Switches stay enabled during an in-flight save like
+  every other sheet control (pre-existing pattern); if it matters, disable the whole form in one pass.

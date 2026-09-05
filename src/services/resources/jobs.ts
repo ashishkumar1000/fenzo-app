@@ -78,6 +78,8 @@ export interface CreateJobRequest {
   priority?: JobPriority;
   /** Defaults to `false` server-side when omitted. */
   requireCompletionPhoto?: boolean;
+  /** Defaults to `false` server-side when omitted. */
+  requireCompletionSignature?: boolean;
   notesForTechnician?: string;
 }
 
@@ -105,6 +107,9 @@ export type UpdateJobEditFields = {
   notesForTechnician?: string;
   technicianId?: string;
   priority?: JobPriority;
+  /** Completion-evidence toggles: absent = unchanged (COALESCE server-side). */
+  requireCompletionPhoto?: boolean;
+  requireCompletionSignature?: boolean;
 };
 
 /**
@@ -147,6 +152,13 @@ export interface ApiJob {
   currentStep: WorkflowStepApi | null;
   priority: JobPriority;
   requireCompletionPhoto: boolean;
+  /**
+   * Always present — the backend sends it on every row, delta-sync payloads
+   * included (BE Story 3-8), so the field is required rather than optional:
+   * an optional field would lie about the wire. Read by the technician's
+   * signature step (Story 3-5) and editable by the owner (this story).
+   */
+  requireCompletionSignature: boolean;
   /** Null when the form left it blank. */
   description: string | null;
   /** Null when the form left it blank. */

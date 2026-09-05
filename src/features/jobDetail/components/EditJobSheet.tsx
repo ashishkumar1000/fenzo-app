@@ -31,7 +31,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Input } from '../../../components/ui';
+import { Button, Input, Switch } from '../../../components/ui';
 import { TechnicianPicker } from '../../../components/TechnicianPicker';
 import { DateTimeFields } from '../../newJob/components/DateTimeFields';
 import { colors, radius, shadow, spacing, touch, typography } from '../../../theme';
@@ -76,6 +76,8 @@ export function EditJobSheet({ visible, job, technicians, onClose, onSaved }: Pr
   const [scheduledAt, setScheduledAt] = useState(() => new Date());
   const [notes, setNotes] = useState('');
   const [priority, setPriority] = useState<JobPriority>('normal');
+  const [requireCompletionPhoto, setRequireCompletionPhoto] = useState(false);
+  const [requireCompletionSignature, setRequireCompletionSignature] = useState(false);
   const [technicianId, setTechnicianId] = useState<string | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
@@ -116,6 +118,8 @@ export function EditJobSheet({ visible, job, technicians, onClose, onSaved }: Pr
     setScheduledAt(new Date(job.scheduledStart));
     setNotes(job.notesForTechnician ?? '');
     setPriority(job.priority);
+    setRequireCompletionPhoto(job.requireCompletionPhoto);
+    setRequireCompletionSignature(job.requireCompletionSignature);
     setTechnicianId(job.technicianId);
     setFormError('');
     setIsAutoClosing(false);
@@ -136,6 +140,8 @@ export function EditJobSheet({ visible, job, technicians, onClose, onSaved }: Pr
     scheduledStart: scheduledAt,
     notesForTechnician: notes,
     priority,
+    requireCompletionPhoto,
+    requireCompletionSignature,
     technicianId,
   };
   const patch = buildPatch(job, draft);
@@ -287,6 +293,30 @@ export function EditJobSheet({ visible, job, technicians, onClose, onSaved }: Pr
                     );
                   })}
                 </View>
+              </View>
+
+              <View style={styles.section}>
+                {/* Deliberately before Technician here — New job shows the same
+                    section last (after Notes). The sheet keeps job-level
+                    attributes (priority, requirements) ahead of the roster, so
+                    the technician list isn't pushed below the scroll fold. */}
+                <Text style={styles.sectionLabel}>Job requirements</Text>
+                <Switch
+                  label="Require completion photos"
+                  value={requireCompletionPhoto}
+                  onValueChange={next => {
+                    setFormError('');
+                    setRequireCompletionPhoto(next);
+                  }}
+                />
+                <Switch
+                  label="Require customer signature"
+                  value={requireCompletionSignature}
+                  onValueChange={next => {
+                    setFormError('');
+                    setRequireCompletionSignature(next);
+                  }}
+                />
               </View>
 
               <View style={styles.section}>
