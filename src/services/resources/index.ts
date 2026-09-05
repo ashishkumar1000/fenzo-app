@@ -17,6 +17,8 @@ export type {
   PresignResponse,
 } from './attachments';
 export { technicianService } from './technicians';
+export { placesService } from './places';
+export type { PlaceSuggestion, ResolvedPlace } from './places';
 export { customerService } from './customers';
 export type {
   ApiCustomer,
