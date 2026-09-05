@@ -13,9 +13,24 @@ inputDocuments:
 
 ## Overview
 
-Decomposes the frontend-completion PRD into implementable stories. The backend is complete and deployed; every story here consumes an existing endpoint. Order is deliberate: owner job board first (it is the visual verification surface for everything downstream), then customer depth, then technician execution online, then offline, then account/session polish.
+Decomposes the frontend-completion PRD into implementable stories. The backend is complete and deployed; every story here consumes an existing endpoint. Original order was deliberate: owner job board first (it is the visual verification surface for everything downstream), then customer depth, then technician execution online, then offline, then account/session polish. **Reordered 2026-09-05: Epic 5 now ships before Epic 4 — see "Sequencing Update (2026-09-05)" below.**
 
 Story files live in `_bmad-output/implementation-artifacts/` at status `ready-for-dev`. Sprint tracking in `sprint-status.yaml`.
+
+## Sequencing Update (2026-09-05)
+
+**Decision:** Epic 5 ships before Epic 4. Execution order is now:
+
+**5.1 → 5.2 → 5.3 → 4.1 → 4.2 → 4.3 → 5.4**
+
+**Rationale.** For the current app launch, offline support can be delayed, but a working session-expiry path cannot. `setOnUnauthorized` is exported from `apiClient.ts` but never registered (deferred from the 1-1 review), so a 401 today does nothing instead of landing on login — a launch-critical gap. 5.1/5.2 are dependency-free, and 5.3 is the launch-critical fix. Nothing breaks by this reorder: the backend Epic 4 endpoints (fenzit-be 4-1/4-2/4-3) are done and simply stay idle until the FE consumes them; no Epic 4 story depends on any Epic 5 story and vice versa.
+
+**Constraints this reorder imposes:**
+
+1. **Story 5.3 MUST implement the store reset as a reset registry** — a central list each store registers into (e.g. a `storeResetRegistry`), not a hard-coded reset list. Epic 4's delta-sync store and offline action queue register into it when they arrive (4.1/4.2), so a later 401 clears them without touching 5.3 again.
+2. **5.3's "technician queue retention per user" scope is a no-op until 4.2** — the offline queue doesn't exist yet; the requirement stays recorded in the story and is satisfied when 4.2 builds the queue.
+3. **Story 5.4 stays LAST, after Epic 4** — it audits error surfaces across Epics 1–4; running it before Epic 4 would miss the photo-upload and offline-banner error paths. (Its array-`message` flatten item was already fixed early on 2026-09-04 — see `deferred-work.md`.)
+4. **Story definitions and acceptance criteria are unchanged** — only the execution order moved. Epic 3's SM-1 smoke test and Epic 4's SM-2 test still apply as written.
 
 ## Epic Review Notes (2026-09-01)
 
@@ -120,7 +135,7 @@ Findings from reviewing the epic plan against the actual codebase before story c
 
 **Key rules.** A stale 15-min presigned PUT URL is never retried — photo actions whose PUT hasn't succeeded re-run from presign (Review Note 9). Sync triggers: app foreground, reconnect, post-queue-drain, manual.
 
-**Dependencies.** Epic 3 complete. New library: `@react-native-community/netinfo`.
+**Dependencies.** Epic 3 complete. New library: `@react-native-community/netinfo`. **Sequencing (2026-09-05): executed AFTER Epic 5 stories 5.1–5.3 and BEFORE 5.4 — see "Sequencing Update (2026-09-05)". Stories 4.1/4.2 must register their new stores in the reset registry built by 5.3.**
 
 **Definition of done.** SM-2 passes: 3 steps advanced in airplane mode sync exactly once on reconnect (activity log shows no duplicates, no gaps); app kill mid-queue loses nothing.
 
@@ -134,7 +149,7 @@ Findings from reviewing the epic plan against the actual codebase before story c
 
 **Scope.** Skills management screen from More (`GET/POST/DELETE /skills`, delete confirm warns about technician cascade), display-name edit for both roles (`PATCH /users/me` updating the shared profile store), wiring `setOnUnauthorized` (token clear already exists — add store resets, nav reset to AuthFlow, "Session expired" notice, technician queue retention per user), and error envelope polish (array `message` join in `ApiError`, audit Epics 1–4 screens for raw error codes leaking to UI).
 
-**Dependencies.** 5.1/5.2 independent (can start anytime). 5.3 is best done early in real usage terms but is sequenced here because its store-reset list must include the stores Epics 1–4 create; if the team wants it earlier, implement with a reset registry that later stores join. 5.4 is a closing audit — last.
+**Dependencies.** 5.1/5.2 independent (can start anytime). **Sequencing (2026-09-05): Epic 5 (except 5.4) now ships BEFORE Epic 4 — see "Sequencing Update (2026-09-05)".** 5.3 is therefore done FIRST and its store reset must be a reset registry that Epic 4's stores join later (4.1/4.2 register into it); its "technician queue retention per user" requirement is a no-op until 4.2 exists. 5.4 remains a closing audit — last, after Epic 4.
 
 **Definition of done.** Skills manageable end-to-end and the invite picker reflects changes; both roles can fix their name and see it change on Home/Profile immediately; forced-401 test (tamper the stored token) lands on login with notice and a clean re-login works; no screen shows a raw `error_code`.
 

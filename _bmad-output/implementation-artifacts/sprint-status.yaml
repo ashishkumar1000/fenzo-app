@@ -1,9 +1,13 @@
 # generated: 2026-09-01
-# last_updated: 2026-09-05  # 3-5 → done (code review passed; smoke test pending)
+# last_updated: 2026-09-05  # plan reordered: Epic 5 (except 5-4) now ships before Epic 4 — see epics.md "Sequencing Update (2026-09-05)"
 # project: fenzo-app
 # project_key: NOKEY
 # tracking_system: file-system
 # story_location: _bmad-output/implementation-artifacts
+
+# EXECUTION ORDER (updated 2026-09-05): 5-1 → 5-2 → 5-3 → 4-1 → 4-2 → 4-3 → 5-4.
+# Epic/section numbering below stays 1..5 for story-ID stability — it does NOT imply execution order.
+# Rationale + constraints (reset registry in 5-3, 5-4 stays last): see planning-artifacts/epics.md.
 
 # STATUS DEFINITIONS: same as fenzit-be sprint-status.yaml
 # Epic: backlog | in-progress | done
@@ -36,14 +40,14 @@ development_status:
   3-5-signature-capture: done  # reviewed 2026-09-05: 15 patches applied, 450 tests green; on-device pad smoke test pending
   epic-3-retrospective: optional
 
-  # Epic 4: Offline-First Sync
+  # Epic 4: Offline-First Sync — executed AFTER 5-1..5-3 (plan reordered 2026-09-05)
   epic-4: in-progress
   4-1-delta-sync-hydration-store: ready-for-dev
   4-2-offline-action-queue-idempotent-replay: ready-for-dev
   4-3-connectivity-ux: ready-for-dev
   epic-4-retrospective: optional
 
-  # Epic 5: Account, Session & Polish
+  # Epic 5: Account, Session & Polish — 5-1..5-3 ship BEFORE Epic 4 (plan reordered 2026-09-05); 5-4 stays last
   epic-5: in-progress
   5-1-skills-management-screen: ready-for-dev
   5-2-profile-edit: ready-for-dev
