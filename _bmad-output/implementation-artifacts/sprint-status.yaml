@@ -1,5 +1,5 @@
 # generated: 2026-09-01
-# last_updated: 2026-09-05  # 2-2 done (review closed); 3-1 done; 3-2 done (committed 71fc05d); 3-3 done — review round applied, not yet committed; 3-4 done (committed e7a1920)
+# last_updated: 2026-09-05  # all done stories committed to main: 3-2 (71fc05d), 3-3 (aba7b75), 3-4 (e189daa), 1-5 (37a92e2)
 # project: fenzo-app
 # project_key: NOKEY
 # tracking_system: file-system
@@ -17,7 +17,7 @@ development_status:
   1-2-owner-job-detail-screen: done
   1-3-edit-reassign-cancel-job: done
   1-4-home-stats-refresh: done  # review complete (follow-up commit 98ba957); story file already says done
-  1-5-jobs-timeline-scopes: done  # code review complete (3 decisions + 10 patches + 3 defers); not yet committed
+  1-5-jobs-timeline-scopes: done  # committed 37a92e2 (review: 3 decisions + 10 patches + 3 defers)
   epic-1-retrospective: optional
 
   # Epic 2: Customer Depth
@@ -29,9 +29,9 @@ development_status:
   # Epic 3: Technician Job Execution
   epic-3: in-progress
   3-1-today-history-wired-to-get-jobs: done  # review round 1 (10 findings) applied; committed c1debd1
-  3-2-technician-job-detail: done  # review round 1 applied (2 decisions + 8 patches); not yet committed
-  3-3-workflow-step-advancement: done  # review round applied (1 decision + 20 patches); not yet committed
-  3-4-photo-capture-upload-r2: done  # 2 review rounds applied (18 patches + second pass); committed e7a1920
+  3-2-technician-job-detail: done  # committed 71fc05d (review round 1: 2 decisions + 8 patches)
+  3-3-workflow-step-advancement: done  # committed aba7b75 (review: 1 decision + 20 patches)
+  3-4-photo-capture-upload-r2: done  # committed e189daa (2 review rounds: 18 patches + second pass)
   3-5-signature-capture: ready-for-dev
   epic-3-retrospective: optional
 
