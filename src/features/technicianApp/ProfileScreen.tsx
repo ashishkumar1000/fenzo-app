@@ -7,19 +7,26 @@
  *
  * Name and phone come from `GET /users/me` via `useMyProfile`, not from the
  * auth session — the session holds gating fields only.
+ *
+ * The name carries the same "Edit name" pencil affordance as the owner's
+ * More tab account card (story 5.2): both open the shared `EditNameSheet`,
+ * whose successful save updates this screen instantly via the shared
+ * profile store.
  */
+import { useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LogOut, Phone } from 'lucide-react-native';
-import { Avatar, Card } from '../../components/ui';
+import { LogOut, Pencil, Phone } from 'lucide-react-native';
+import { Avatar, Card, IconButton } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import { useAuth } from '../auth';
-import { formatPhone, useMyProfile } from '../profile';
+import { EditNameSheet, formatPhone, useMyProfile } from '../profile';
 import { clearTechnicianJobs } from './useTechnicianJobs';
 
 export default function ProfileScreen() {
   const { reset } = useAuth();
   const { profile, isLoading, clear: clearProfile } = useMyProfile();
+  const [editNameOpen, setEditNameOpen] = useState(false);
 
   const handleLogOut = () => {
     Alert.alert('Log out', 'You will need to verify your number again to sign back in.', [
@@ -53,9 +60,23 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.root} edges={['top']}>
       <View style={styles.header}>
         <Avatar name={name ?? undefined} size="xl" />
-        <Text style={styles.name}>{name}</Text>
+        <View style={styles.nameRow}>
+          <Text style={styles.name}>{name}</Text>
+          <IconButton
+            label="Edit name"
+            size="md"
+            onPress={() => setEditNameOpen(true)}>
+            <Pencil size={18} color={colors.textMuted} strokeWidth={2} />
+          </IconButton>
+        </View>
         <Text style={styles.role}>Technician</Text>
       </View>
+
+      <EditNameSheet
+        visible={editNameOpen}
+        currentName={profile.name}
+        onClose={() => setEditNameOpen(false)}
+      />
 
       <View style={styles.content}>
         <Card padding="none" style={styles.card}>
@@ -100,6 +121,11 @@ const styles = StyleSheet.create({
     paddingTop: spacing.s6,
     paddingBottom: spacing.s5,
     gap: spacing.s2,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s1,
   },
   name: {
     ...typography.title,

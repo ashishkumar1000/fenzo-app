@@ -1,5 +1,5 @@
 # generated: 2026-09-01
-# last_updated: 2026-09-05  # 5-1 done (code review complete)
+# last_updated: 2026-09-05  # 5-2 → done (BMAD review: 1 decision + 7 patches applied, suite green)
 # project: fenzo-app
 # project_key: NOKEY
 # tracking_system: file-system
@@ -50,7 +50,7 @@ development_status:
   # Epic 5: Account, Session & Polish — 5-1..5-3 ship BEFORE Epic 4 (plan reordered 2026-09-05); 5-4 stays last
   epic-5: in-progress
   5-1-skills-management-screen: done
-  5-2-profile-edit: ready-for-dev
+  5-2-profile-edit: done  # review closed 2026-09-05 (1 decision + 7 patches: seq-bump race, draft-wipe, Button loading, users/wiring tests)
   5-3-session-expiry-global-401: ready-for-dev
   5-4-error-envelope-consistency: ready-for-dev
   epic-5-retrospective: optional

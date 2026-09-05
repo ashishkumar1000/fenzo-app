@@ -124,6 +124,19 @@ async function getMe(signal?: AbortSignal): Promise<MyProfile> {
   return res.data;
 }
 
+/**
+ * `PATCH /users/me` — updates the signed-in user's display name. The server
+ * trims and validates (`MinLength(1)`, `MaxLength(100)` → 422) and returns
+ * the SAME full role-branched profile payload as `GET /users/me`, so callers
+ * should treat the response exactly like a GET result and store it wholesale
+ * (see `setProfileFromServer`) instead of refetching.
+ */
+async function updateMe(body: { name: string }): Promise<MyProfile> {
+  const res = await apiClient.patch<MyProfile>('/users/me', body);
+  return res.data;
+}
+
 export const usersApi = {
   getMe,
+  updateMe,
 };

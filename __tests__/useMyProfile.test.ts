@@ -21,7 +21,11 @@ jest.mock('../src/services', () => ({
   usersApi: { getMe: jest.fn() },
 }));
 
-import { loadMyProfile, useMyProfile } from '../src/features/profile/useMyProfile';
+import {
+  loadMyProfile,
+  setProfileFromServer,
+  useMyProfile,
+} from '../src/features/profile/useMyProfile';
 import { usersApi } from '../src/services';
 import type { ApiError, MyProfile } from '../src/services';
 
@@ -368,4 +372,64 @@ it('a background refresh does not flip isLoading when a profile exists (AC 5)', 
   expect(probe?.profile?.name).toBe('Second Owner');
   expect(probe?.isLoading).toBe(false);
   expect(probe?.error).toBeNull();
+});
+
+it('setProfileFromServer stores the PATCH payload wholesale, clears error, and stamps lastLoadedAt (story 5.2)', async () => {
+  getMe.mockResolvedValueOnce(makeProfile());
+  await mountProbeAt(T0);
+
+  // A failed refresh first, so there IS an error for the PATCH to clear.
+  jest.setSystemTime(T0 + 10_000);
+  getMe.mockRejectedValueOnce(apiError('Network down'));
+  await run(() => loadMyProfile({ force: true }));
+  expect(probe?.error).toBe('Network down');
+
+  // The PATCH response arrives at T0 + 11s — as fresh as a GET.
+  jest.setSystemTime(T0 + 11_000);
+  await run(() => setProfileFromServer(makeProfile({ name: 'Patched Name' })));
+  expect(probe?.profile?.name).toBe('Patched Name');
+  expect(probe?.error).toBeNull();
+  expect(probe?.isLoading).toBe(false);
+
+  // lastLoadedAt was stamped at the PATCH instant (T0 + 11s), not the last
+  // GET: inside the TTL an unforced refresh is still throttled...
+  jest.setSystemTime(T0 + 11_000 + TTL - 1);
+  await run(() => loadMyProfile());
+  expect(getMe).toHaveBeenCalledTimes(2); // mount load + failed refresh only
+  // ...and past it, the focus refresh runs again.
+  jest.setSystemTime(T0 + 11_000 + TTL);
+  await run(() => loadMyProfile());
+  expect(getMe).toHaveBeenCalledTimes(3);
+});
+
+it('a PATCH stored while a GET is in flight is not overwritten by that GET (story 5.2)', async () => {
+  getMe.mockResolvedValueOnce(makeProfile());
+  await mountProbeAt(T0);
+
+  // A forced (pull-to-refresh) GET starts and stays in flight while the
+  // user opens the sheet and saves.
+  let resolveSlow!: (p: MyProfile) => void;
+  getMe.mockImplementationOnce(
+    () => new Promise<MyProfile>(res => (resolveSlow = res)),
+  );
+  jest.setSystemTime(T0 + TTL);
+  let slow!: Promise<void>;
+  await act(async () => {
+    slow = loadMyProfile({ force: true });
+  });
+  expect(getMe).toHaveBeenCalledTimes(2);
+
+  // The PATCH response lands first and must win...
+  await run(() => setProfileFromServer(makeProfile({ name: 'Patched Name' })));
+  expect(probe?.profile?.name).toBe('Patched Name');
+  expect(probe?.isLoading).toBe(false);
+
+  // ...and the older GET settling late carries pre-PATCH data: the seq
+  // bump inside setProfileFromServer must make its stale-response guard
+  // discard it, or every subscribed surface would revert the saved name.
+  await act(async () => {
+    resolveSlow(makeProfile({ name: 'Stale Owner' }));
+    await slow;
+  });
+  expect(probe?.profile?.name).toBe('Patched Name');
 });

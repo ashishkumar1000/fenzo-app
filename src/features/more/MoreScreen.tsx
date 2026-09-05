@@ -4,16 +4,17 @@
  * account card, and Log out. Logging out resets the auth gate
  * (`useAuth().reset()`), which sends the user back to the account-setup flow.
  */
+import { useState } from 'react';
 import { Alert, ActivityIndicator, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { Bell, ChevronRight, HardHat, LogOut, Phone, Settings, ShieldCheck, Wrench } from 'lucide-react-native';
-import { Avatar, Card } from '../../components/ui';
+import { Bell, ChevronRight, HardHat, LogOut, Pencil, Phone, Settings, ShieldCheck, Wrench } from 'lucide-react-native';
+import { Avatar, Card, IconButton } from '../../components/ui';
 import { colors, radius, spacing, typography } from '../../theme';
 import { useAuth } from '../auth';
 import { useCustomers } from '../customers';
 import { clearJobs } from '../jobs';
-import { formatPhone, formatRole, useMyProfile } from '../profile';
+import { EditNameSheet, formatPhone, formatRole, useMyProfile } from '../profile';
 import { clearSkills } from '../skills';
 import { useTechnicians } from '../technicians';
 import { MoreTile } from './components/MoreTile';
@@ -26,6 +27,7 @@ export default function MoreScreen() {
   const { clear: clearCustomers } = useCustomers();
   const { profile, isLoading, clear: clearProfile } = useMyProfile();
   const navigation = useNavigation();
+  const [editNameOpen, setEditNameOpen] = useState(false);
 
   // Server truth (`technicianCount`), not the local invite store. The API has
   // no active/offline split, so the tile shows the count only.
@@ -132,6 +134,13 @@ export default function MoreScreen() {
                 <Text style={styles.rowSubtitle}>{formatPhone(profile)}</Text>
               </View>
             </View>
+
+            <IconButton
+              label="Edit name"
+              size="md"
+              onPress={() => setEditNameOpen(true)}>
+              <Pencil size={18} color={colors.textMuted} strokeWidth={2} />
+            </IconButton>
           </View>
 
           <View style={styles.divider} />
@@ -149,6 +158,12 @@ export default function MoreScreen() {
           </Card>
         </Card>
       </ScrollView>
+
+      <EditNameSheet
+        visible={editNameOpen}
+        currentName={profile.name}
+        onClose={() => setEditNameOpen(false)}
+      />
     </SafeAreaView>
   );
 }

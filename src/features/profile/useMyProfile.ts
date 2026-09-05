@@ -111,6 +111,24 @@ async function fetchProfile(): Promise<void> {
 }
 
 /**
+ * Replaces the profile wholesale from a server payload — currently the
+ * `PATCH /users/me` response used by Profile Edit, which returns the same
+ * full payload as `GET /users/me`. A PATCH response is as fresh as a GET, so
+ * this stamps `lastLoadedAt` exactly like a successful fetch would (keeping
+ * the focus-refresh throttle semantics intact) and clears any stale error.
+ *
+ * Throttling doesn't apply (the caller already holds the fresh data), but
+ * the write IS sequenced: bumping `requestSeq` supersedes any GET still in
+ * flight — one that started before the PATCH can only carry pre-PATCH data,
+ * so its late-settling response fails the fetch guard instead of
+ * overwriting this write.
+ */
+export function setProfileFromServer(profile: MyProfile) {
+  requestSeq += 1;
+  setState({ profile, error: null, isLoading: false, lastLoadedAt: Date.now() });
+}
+
+/**
  * Loads the profile, reusing any request already in flight.
  *
  * Throttled: a load whose last SUCCESS was within `FOCUS_REFRESH_TTL_MS` is
