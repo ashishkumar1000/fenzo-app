@@ -14,6 +14,7 @@
  */
 import { useRef, type ReactNode } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Pressable,
   StyleSheet,
@@ -37,6 +38,13 @@ export type ButtonProps = {
   shape?: Shape;
   fullWidth?: boolean;
   disabled?: boolean;
+  /**
+   * Shows an inline spinner in the leading slot and blocks pressing — for a
+   * mutating action whose request is in flight (e.g. a workflow advance).
+   * Distinct from `disabled` (a settled, permanently-off state): `loading`
+   * turns itself off when the caller's pending flag clears.
+   */
+  loading?: boolean;
   leadingIcon?: ReactNode;
   trailingIcon?: ReactNode;
   /**
@@ -78,6 +86,7 @@ export function Button({
   shape = 'default',
   fullWidth = false,
   disabled = false,
+  loading = false,
   leadingIcon = null,
   trailingIcon = null,
   labelColor,
@@ -110,11 +119,11 @@ export function Button({
         style,
       ]}>
       <Pressable
-        disabled={disabled}
+        disabled={disabled || loading}
         onPress={onPress}
         testID={testID}
-        onPressIn={disabled ? undefined : pressIn}
-        onPressOut={disabled ? undefined : pressOut}
+        onPressIn={disabled || loading ? undefined : pressIn}
+        onPressOut={disabled || loading ? undefined : pressOut}
         android_ripple={{ color: 'transparent' }}
         style={[
           styles.base,
@@ -126,9 +135,13 @@ export function Button({
             borderRadius: shape === 'pill' ? radius.pill : s.radius,
           },
           variantContainer[variant],
-          disabled && styles.disabled,
+          (disabled || loading) && styles.disabled,
         ]}>
-        {leadingIcon ? <View>{leadingIcon}</View> : null}
+        {loading ? (
+          <ActivityIndicator size="small" color={labelColor ?? variantText[variant]} />
+        ) : leadingIcon ? (
+          <View>{leadingIcon}</View>
+        ) : null}
         <Text
           numberOfLines={1}
           style={[

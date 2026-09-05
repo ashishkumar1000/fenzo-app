@@ -20,7 +20,7 @@
  */
 import { useCallback, useSyncExternalStore } from 'react';
 import { jobService } from '../../services';
-import type { ApiError, ApiJob, Paginated } from '../../services';
+import type { ApiError, ApiJob, JobDetail, Paginated } from '../../services';
 import { FOCUS_REFRESH_TTL_MS } from '../../constants';
 
 export interface TechnicianJobsState {
@@ -266,6 +266,25 @@ export function loadMoreHistory(): Promise<void> {
 }
 
 // --- Row updates -----------------------------------------------------------------
+/**
+ * The list-store row for a freshly fetched job detail — the ApiJob fields
+ * ONLY. The detail's embedded technician/customer profiles, activity log and
+ * attachments (whose presigned URLs are 1-hour and must never be persisted)
+ * are stripped before anything lands in the shared store. Lives here because
+ * every store writer needs the exact same strip — a missed field would leak
+ * a 1-hour URL into whatever screen persists the row.
+ */
+export function apiJobOf(detail: JobDetail): ApiJob {
+  const {
+    technician: _technician,
+    customer: _customer,
+    activityLog: _activityLog,
+    attachments: _attachments,
+    ...row
+  } = detail;
+  return row;
+}
+
 /**
  * Replaces one row in whichever array currently holds its id — for a caller
  * that just mutated the job and already holds the full row (Epic 3's

@@ -37,6 +37,12 @@ export interface ApiError {
 }
 
 /**
+ * The copy used when no backend message arrived AND no caller-specific copy
+ * exists — the shared generic line, so every surface shows the same words.
+ */
+export const FALLBACK_ERROR_MESSAGE = 'Something went wrong with that request.';
+
+/**
  * Converts any axios failure (network error, timeout, cancelled request, or
  * HTTP error response) into an `ApiError`. Called from the response
  * interceptor in `apiClient.ts` — nothing else should need to call this
@@ -123,6 +129,21 @@ function flattenErrorMessage(message?: string | string[]): string | undefined {
 }
 
 
+/**
+ * Extracts the server's `currentStep` from a workflow-advance 422 —
+ * `INVALID_WORKFLOW_STEP` carries it at the top level of the error body
+ * (fenzit-be `workflow.service.ts` + GlobalExceptionFilter forward it
+ * verbatim; `ApiError.details` is the raw body).
+ *
+ * The return type encodes the caller's branch:
+ *   `string | null` → a step-error body; null is a fresh job (no step yet).
+ *   `undefined`      → NOT an INVALID_WORKFLOW_STEP error — never reconcile.
+ */
+export function workflowCurrentStep(e: ApiError): string | null | undefined {
+  const d = e.details as { currentStep?: string | null } | undefined;
+  return e.code === 'INVALID_WORKFLOW_STEP' ? d?.currentStep : undefined;
+}
+
 /** Machine-readable fallback when the backend response has no `error_code` field. */
 function defaultCodeForStatus(status: number): string {
 
@@ -139,5 +160,5 @@ function defaultMessageForStatus(status: number): string {
   if (status === 403) return "You don't have permission to do that.";
   if (status === 404) return "That couldn't be found.";
   if (status >= 500) return 'Something went wrong on our end. Please try again.';
-  return 'Something went wrong with that request.';
+  return FALLBACK_ERROR_MESSAGE;
 }

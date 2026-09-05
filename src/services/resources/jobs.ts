@@ -321,11 +321,37 @@ async function update(id: string, patch: UpdateJobRequest): Promise<ApiJob> {
   return res.data;
 }
 
+/**
+ * `POST /jobs/:id/workflow` — advances the assigned technician's workflow by
+ * one step. `200` returns the full post-advance `ApiJob` (same shape as list
+ * rows); posting the job's exact `currentStep` again is a 200 no-op (no new
+ * log entry).
+ *
+ * The idempotency key is minted by the CALLER and passed in — never inside
+ * this function — because Epic 4 replays the SAME key for a queued action;
+ * a fresh key per attempt keeps the backend's 24h replay window honest.
+ *
+ * Documented failures, all surfaced as `ApiError`:
+ *   400 company not set up/bad uuid · 403 owner JWT or not assigned
+ *   · 404 job or other tenant · 409 JOB_NOT_MODIFIABLE (terminal status or
+ *   a lost concurrent race — indistinguishable, always refetch-and-reconcile)
+ *   · 422 INVALID_WORKFLOW_STEP (body carries the server's `currentStep`;
+ *   read it via `workflowCurrentStep` in apiError.ts) or a malformed
+ *   X-Idempotency-Key (must be a strict UUID v4)
+ */
+async function advanceWorkflow(id: string, step: WorkflowStepApi, idempotencyKey: string): Promise<ApiJob> {
+  const res = await apiClient.post<ApiJob>(`/jobs/${id}/workflow`, { step }, {
+    headers: { 'X-Idempotency-Key': idempotencyKey },
+  });
+  return res.data;
+}
+
 export const jobService = {
   create,
   list,
   getById,
   update,
+  advanceWorkflow,
 };
 
 /**

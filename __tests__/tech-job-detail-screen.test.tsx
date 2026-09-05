@@ -15,6 +15,7 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 import { ActivityIndicator, ScrollView, Text } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 const mockGoBack = jest.fn();
 const mockNavigate = jest.fn();
@@ -37,7 +38,13 @@ jest.mock('@react-navigation/native', () => ({
 }));
 
 jest.mock('../src/services', () => ({
-  jobService: { getById: jest.fn(), list: jest.fn() },
+  jobService: { getById: jest.fn(), list: jest.fn(), advanceWorkflow: jest.fn() },
+}));
+
+// The screen mints a fresh idempotency key per advance; pin it so the
+// advanceWorkflow call can be asserted verbatim.
+jest.mock('../src/utils/idempotency', () => ({
+  generateIdempotencyKey: () => 'key-fixed-0001',
 }));
 
 // formatPhone pulls the profile feature (a services consumer) — it's a
@@ -152,12 +159,22 @@ function pressableAncestor(node: ReactTestRenderer.ReactTestInstance) {
   return null;
 }
 
+// 3.3's WorkflowActionBar reads useSafeAreaInsets — every mount needs a provider.
+const SAFE_METRICS = {
+  insets: { top: 0, bottom: 34, left: 0, right: 0 },
+  frame: { x: 0, y: 0, width: 0, height: 0 },
+};
+
+function withProvider(children: React.ReactElement): React.ReactElement {
+  return <SafeAreaProvider initialMetrics={SAFE_METRICS}>{children}</SafeAreaProvider>;
+}
+
 async function mountScreen(): Promise<Renderer> {
   let renderer!: Renderer;
   await ReactTestRenderer.act(async () => {
     renderer = ReactTestRenderer.create(
       <>
-        <TechJobDetailScreen />
+        {withProvider(<TechJobDetailScreen />)}
         <StoreProbe />
       </>,
     );
@@ -184,7 +201,7 @@ it('spinner while the first load is in flight, then the §8 cards (AC 1)', async
   try {
     let renderer!: Renderer;
     await ReactTestRenderer.act(async () => {
-      renderer = ReactTestRenderer.create(<TechJobDetailScreen />);
+      renderer = ReactTestRenderer.create(withProvider(<TechJobDetailScreen />));
     });
     expect(renderer.root.findAllByType(ActivityIndicator).length).toBeGreaterThan(0);
 
@@ -367,4 +384,128 @@ it('the history disclosure expands into the timeline and collapses back', async 
     pressableAncestor(historyHeader)!.props.onPress();
   });
   expect(renderedText(renderer)).not.toContain('Job created');
+});
+
+/* ————— 3.3: workflow advance (ACs 2, 3, 4, 6) ————— */
+
+const advanceWorkflow = jobService.advanceWorkflow as jest.Mock;
+
+/** The bar's live Pressable (the duplicate-fiber entries lack onPress). */
+function advanceButton(renderer: Renderer) {
+  return renderer.root
+    .findAllByProps({ testID: 'workflow-advance-button' })
+    .filter((n: ReactTestRenderer.ReactTestInstance) => typeof n.props.onPress === 'function');
+}
+
+it('advancing posts the next step with a fresh idempotency key and merges the response (AC2)', async () => {
+  // Seed the store so upsertTechnicianJob's replace-in-place has the row.
+  list.mockResolvedValue({ data: [listRow], nextCursor: null, hasMore: false });
+  await loadToday({ force: true });
+  // Two getById calls: the mount, and the silent resync the advance chains
+  // after success (server truth — activity log timestamps — arrives here).
+  getById
+    .mockResolvedValueOnce(makeDetail())
+    .mockResolvedValueOnce(makeDetail({ status: 'in_progress', currentStep: 'on_my_way' }));
+  advanceWorkflow.mockResolvedValueOnce({
+    ...listRow,
+    status: 'in_progress',
+    currentStep: 'on_my_way',
+    updatedAt: '2026-09-04T10:05:00Z',
+  });
+  const renderer = await mountScreen();
+  expect(renderedText(renderer)).toContain('On my way'); // bar button
+
+  await ReactTestRenderer.act(async () => {
+    advanceButton(renderer)[0].props.onPress();
+  });
+
+  expect(advanceWorkflow).toHaveBeenCalledWith('j-1', 'on_my_way', 'key-fixed-0001');
+  // Post-advance ApiJob merged in: the bar re-derives to the next step…
+  expect(renderedText(renderer)).toContain('Arrived');
+  // …and the shared store row is updated for the list badges.
+  const row = storeSnapshot!.today.find(j => j.id === 'j-1');
+  expect(row!.status).toBe('in_progress');
+  expect(row!.currentStep).toBe('on_my_way');
+});
+
+it('422 step race reconciles silently — step patched locally and in the store, no error copy (AC5)', async () => {
+  list.mockResolvedValue({ data: [listRow], nextCursor: null, hasMore: false });
+  await loadToday({ force: true });
+  // Mount, then the silent resync chained after the reconcile — the server
+  // already knows the race's winner (currentStep 'arrived').
+  getById
+    .mockResolvedValueOnce(makeDetail())
+    .mockResolvedValueOnce(makeDetail({ status: 'in_progress', currentStep: 'arrived' }));
+  advanceWorkflow.mockRejectedValueOnce(
+    Object.assign(new Error('Invalid workflow step transition'), {
+      status: 422,
+      code: 'INVALID_WORKFLOW_STEP',
+      details: { currentStep: 'arrived' },
+    }),
+  );
+  const renderer = await mountScreen();
+
+  await ReactTestRenderer.act(async () => {
+    advanceButton(renderer)[0].props.onPress();
+  });
+
+  // Silent reconcile: the server's step is adopted, so the bar's next is
+  // 'in_progress' ("Start work") — and NO inline error copy appears.
+  expect(renderedText(renderer)).toContain('Start work');
+  expect(renderedText(renderer)).not.toContain('This job can no longer be updated');
+  expect(renderedText(renderer)).not.toContain('Invalid workflow step transition');
+  const row = storeSnapshot!.today.find(j => j.id === 'j-1');
+  expect(row!.currentStep).toBe('arrived');
+});
+
+it('409 locked — fixed copy (never the raw backend message) plus a full refetch (AC6)', async () => {
+  getById.mockResolvedValue(makeDetail());
+  advanceWorkflow.mockRejectedValueOnce(
+    Object.assign(new Error('Job not modifiable'), { status: 409, code: 'JOB_NOT_MODIFIABLE' }),
+  );
+  const renderer = await mountScreen();
+
+  await ReactTestRenderer.act(async () => {
+    advanceButton(renderer)[0].props.onPress();
+  });
+
+  expect(renderedText(renderer)).toContain('This job can no longer be updated');
+  expect(renderedText(renderer)).not.toContain('Job not modifiable');
+  // The 409's full refetch is the second getById call.
+  expect(getById).toHaveBeenCalledTimes(2);
+});
+
+it('offline advance — inline error, the button stays as the retry (AC6)', async () => {
+  getById.mockResolvedValueOnce(makeDetail());
+  advanceWorkflow.mockRejectedValueOnce(
+    Object.assign(new Error('No connection'), { status: 0, code: 'NETWORK_ERROR' }),
+  );
+  const renderer = await mountScreen();
+
+  await ReactTestRenderer.act(async () => {
+    advanceButton(renderer)[0].props.onPress();
+  });
+
+  expect(renderedText(renderer)).toContain('No connection');
+  expect(advanceButton(renderer).length).toBeGreaterThan(0); // retry affordance
+});
+
+it('completed job — the bar shows the static "Job completed" row, no button (AC2)', async () => {
+  getById.mockResolvedValueOnce(
+    makeDetail({ status: 'completed', currentStep: 'completed' as JobDetail['currentStep'] }),
+  );
+  const renderer = await mountScreen();
+
+  expect(advanceButton(renderer)).toHaveLength(0);
+  expect(renderedText(renderer)).toContain('Job completed');
+});
+
+it('cancelled job — no bar at all', async () => {
+  getById.mockResolvedValueOnce(
+    makeDetail({ status: 'cancelled', currentStep: 'arrived' as JobDetail['currentStep'] }),
+  );
+  const renderer = await mountScreen();
+
+  expect(advanceButton(renderer)).toHaveLength(0);
+  expect(renderedText(renderer)).not.toContain('Job completed');
 });

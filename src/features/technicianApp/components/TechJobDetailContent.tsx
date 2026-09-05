@@ -33,7 +33,7 @@ import {
   serviceTypeLabel,
   serviceTypeToIcon,
 } from '../../jobs/format';
-import { STEP_ORDER, buildStepper } from '../stepperModel';
+import { STEP_ORDER, buildStepper, type WorkflowStep } from '../stepperModel';
 import { WorkflowStepper } from './WorkflowStepper';
 import { SignatureTile } from './SignatureTile';
 
@@ -54,9 +54,15 @@ function dateLine(iso: string): string {
   });
 }
 
-type Props = { detail: JobDetail };
+type Props = {
+  detail: JobDetail;
+  /** 3.3 — wired to the screen's advance; absent → the stepper renders read-only. */
+  onAdvance?: (step: WorkflowStep) => void;
+  /** 3.3 — the step whose advance request is in flight (subtle pressed state). */
+  pendingStep?: WorkflowStep | null;
+};
 
-export function TechJobDetailContent({ detail }: Props) {
+export function TechJobDetailContent({ detail, onAdvance, pendingStep }: Props) {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   const isTerminal = detail.status === 'completed' || detail.status === 'cancelled';
@@ -82,7 +88,7 @@ export function TechJobDetailContent({ detail }: Props) {
             {detail.status === 'completed' ? 'Done' : `${doneCount} of ${STEP_ORDER.length}`}
           </Text>
         </View>
-        <WorkflowStepper steps={steps} />
+        <WorkflowStepper steps={steps} onAdvance={onAdvance} pendingStep={pendingStep} />
       </Card>
 
       {/* 2. Customer — the phone affordance lives in PersonRow; the address

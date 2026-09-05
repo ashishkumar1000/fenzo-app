@@ -1,9 +1,10 @@
 /**
  * WorkflowStepper — the six-step workflow as a vertical rail with a
  * connector line (spec §9), rendered inside the detail screen's Progress
- * card. This story renders it read-only; `onAdvance`/`pendingStep` are the
- * seams Story 3.3 (interactive advance) and Story 4.2 (optimistic pending
- * state) will wire up.
+ * card. Story 3.3 wires the seams: when `onAdvance` is provided the 'next'
+ * row becomes tappable (a secondary target — the PRIMARY action is the
+ * bottom bar's button), and `pendingStep` gives the row being advanced a
+ * subtle pressed look while the request is in flight.
  */
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Check } from 'lucide-react-native';
@@ -13,10 +14,10 @@ import type { StepView, WorkflowStep } from '../stepperModel';
 
 type Props = {
   steps: StepView[];
-  /** 3.3 seam — absent here, so rows never render as pressable. */
+  /** 3.3 — present: the 'next' row is tappable to advance (secondary to the bottom bar). */
   onAdvance?: (step: WorkflowStep) => void;
-  /** 4.2 seam — the step optimistically applied but not yet synced. */
-  pendingStep?: string | null;
+  /** 3.3 — the step whose advance request is in flight: subtle pressed state. 4.2 reuses it for the optimistic queue. */
+  pendingStep?: WorkflowStep | null;
 };
 
 /** "2:14 PM" — the done-row caption format (spec §9). Unparseable input → raw. */
@@ -60,18 +61,26 @@ export function WorkflowStepper({ steps, onAdvance, pendingStep }: Props) {
             <RightCaption view={view} pending={isPending} />
           </>
         );
-        // With no advance handler, the rows are display-only — pressing must
-        // do nothing (and not even flash), so no Pressable is rendered.
-        return onAdvance ? (
+        // Only the 'next' row is ever tappable — done/locked/skipped rows stay
+        // display-only (no Pressable, not even a flash) whether or not the
+        // advance handler is wired. EXCEPTION: a `next` photos_uploaded row is
+        // display-only too — that step advances server-side when a photo is
+        // confirmed (fenzit-be Story 3.6), and the backend would 422 a direct
+        // photos_uploaded POST that skipped the upload, so the pill in the
+        // bottom bar (and 3.4's capture) is the only path forward.
+        const pressable =
+          onAdvance !== undefined && view.state === 'next' && view.step !== 'photos_uploaded';
+        return pressable ? (
           <Pressable
             key={view.step}
-            onPress={() => onAdvance(view.step)}
+            onPress={() => onAdvance?.(view.step)}
             accessibilityRole="button"
-            accessibilityLabel={label}>
-            <View style={styles.row}>{row}</View>
+            accessibilityLabel={label}
+            style={({ pressed }) => [styles.row, (pressed || isPending) && styles.pressedRow]}>
+            {row}
           </Pressable>
         ) : (
-          <View style={styles.row} key={view.step}>
+          <View style={[styles.row, isPending && styles.pressedRow]} key={view.step}>
             {row}
           </View>
         );
@@ -134,6 +143,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     minHeight: touch.min,
     gap: spacing.s2,
+  },
+  // The advance-in-flight look (spec §9 "subtle pressed state while pending").
+  pressedRow: {
+    opacity: 0.6,
   },
   rail: {
     width: 24,

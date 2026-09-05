@@ -36,6 +36,13 @@ import { colors, spacing, typography, radius, shadow } from '../theme';
 import { Button, Badge, Card, Input } from '../components/ui';
 ```
 
+**Component note — Button `loading`.** A mutating action whose request is in
+flight (a workflow advance, a submit) uses `<Button loading>` — the spinner
+takes the leading slot, pressing is blocked, and the press-scale feedback
+detaches — rather than swapping the button for a spinner or adding a disabled
+style inline. `loading` is transient (clears when the request settles);
+`disabled` is the settled, permanently-off state. They compose.
+
 ---
 
 ## Visual foundations (the discipline)

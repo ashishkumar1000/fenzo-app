@@ -4,9 +4,11 @@
  * regenerated per call — a refetch is the only retry, so the detail is
  * never cached, matching the owner detail's reasoning).
  *
- * This file owns state only: fetch/single-flight/abort, the back header,
- * the pull-to-refresh, and which view to show (error states vs the loaded
- * content, which lives in `TechJobDetailContent`).
+ * This file owns state only: fetch (single-flight, chained reloads, abort),
+ * the back header, the pull-to-refresh, and which view to show (error states
+ * vs the loaded content, which lives in `TechJobDetailContent`). The 3.3
+ * workflow advance lives in `useWorkflowAdvance`; this screen only routes
+ * its branches (a 403 → the unassigned view).
  *
  * A 403 means the job is no longer assigned to the caller (reassigned away)
  * — a dedicated view explains it and refetches Today on the way out, so the
@@ -30,12 +32,15 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Badge, IconButton } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import { jobService } from '../../services';
-import type { ApiError, ApiJob, JobDetail } from '../../services';
+import type { ApiError, JobDetail } from '../../services';
 import type { TechnicianRootStackParamList } from '../../navigation/types';
-import { loadToday, upsertTechnicianJob } from './useTechnicianJobs';
+import { apiJobOf, loadToday, upsertTechnicianJob } from './useTechnicianJobs';
 import { statusToBadge } from '../jobs/format';
+import { actionBarAction } from './workflowActionBarModel';
+import { useWorkflowAdvance } from './useWorkflowAdvance';
 import { FailedView, NotFoundView, UnassignedView } from './components/DetailErrorViews';
 import { TechJobDetailContent } from './components/TechJobDetailContent';
+import { WorkflowActionBar } from './components/WorkflowActionBar';
 
 type Navigation = NativeStackNavigationProp<TechnicianRootStackParamList, 'TechJobDetail'>;
 
@@ -46,23 +51,6 @@ const STATUS_LABEL = {
   scheduled: 'Scheduled',
   cancelled: 'Cancelled',
 } as const;
-
-/**
- * The list-store row for a freshly fetched detail — the ApiJob fields ONLY.
- * The detail's embedded technician/customer profiles, activity log and
- * attachments (whose presigned URLs are 1-hour and must never be persisted)
- * are stripped before anything lands in the shared store.
- */
-function apiJobOf(detail: JobDetail): ApiJob {
-  const {
-    technician: _technician,
-    customer: _customer,
-    activityLog: _activityLog,
-    attachments: _attachments,
-    ...row
-  } = detail;
-  return row;
-}
 
 /**
  * True when a failure is the app's own abort (the screen unmounted mid-request),
@@ -87,64 +75,100 @@ export default function TechJobDetailScreen() {
   const [error, setError] = useState<ApiError | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // One request at a time: a retry/refresh is ignored while a fetch is in
-  // flight, so responses can't interleave or land out of order.
-  const isBusyRef = useRef(false);
+  // The in-flight load's promise: new loads chain behind it (never silently
+  // dropped — the advance failure paths MUST land their refetch) but never
+  // overlap, so responses can't interleave or land out of order.
+  const inflightRef = useRef<Promise<void> | null>(null);
+  // Bumped when local truth moves ahead of a started refetch (3.3's advance
+  // landing while one is in flight) — the refetch's stale commit is dropped.
+  const detailGenRef = useRef(0);
   // The in-flight request's controller, aborted when the screen unmounts.
   const latestControllerRef = useRef<AbortController | null>(null);
+  // Flipped on unmount — a chained load must not fire a fresh request after
+  // the screen is gone.
+  const mountedRef = useRef(true);
   // Set when a 403 lands — the leaving refetch only fires for this case.
   const wasUnassignedRef = useRef(false);
+  // The advance hook's error-clearer, called on a fresh refetch commit —
+  // stale bar copy must not survive fresh server truth. A ref because load
+  // and the advance hook need each other.
+  const clearActionErrorRef = useRef<() => void>(() => {});
+
+  const showUnassigned = useCallback((apiError: ApiError) => {
+    // Armed on EVERY load and surfaced in every mode — a reassignment
+    // mid-session must show the unassigned view whether the 403 lands on
+    // mount, on a refresh, or mid-advance.
+    wasUnassignedRef.current = true;
+    setDetail(null);
+    setError(apiError);
+  }, []);
 
   const load = useCallback(
     async (showSpinner = true) => {
-      if (!jobId || isBusyRef.current) return;
-      isBusyRef.current = true;
+      if (!jobId) return;
+      const waiting = inflightRef.current;
+      if (waiting) {
+        await waiting;
+        // Only the FIRST chained caller proceeds — if another queued load
+        // claimed the slot while we waited, it owns the refresh (and an
+        // unmounted screen fires nothing).
+        if (!mountedRef.current || (inflightRef.current !== null && inflightRef.current !== waiting)) {
+          return;
+        }
+      }
       const controller = new AbortController();
       latestControllerRef.current = controller;
       const { signal } = controller;
-      // A pull-to-refresh keeps its content on screen (the RefreshControl
-      // spinner is feedback enough); only the first load shows the spinner.
-      if (showSpinner) {
-        setError(null);
-      }
-      try {
-        const fresh = await jobService.getById(jobId, signal);
-        setDetail(fresh);
-        setError(null);
-        // Push the ApiJob subset (NO presigned URLs) into the shared store so
-        // the list badges (the in-progress/scheduled grouping) stay honest
-        // without a list refetch.
-        upsertTechnicianJob(apiJobOf(fresh));
-      } catch (caught) {
-        const apiError = caught as ApiError;
-        if (isAbort(apiError, signal)) return;
-        if (apiError.status === 403) {
-          // Armed on EVERY load and surfaced in every mode — a reassignment
-          // mid-session must show the unassigned view whether the 403 lands
-          // on mount or on a refresh.
-          wasUnassignedRef.current = true;
-          setDetail(null);
-          setError(apiError);
-        } else if (showSpinner) {
-          setDetail(null);
-          setError(apiError);
-        } else {
-          // A failed refresh keeps its content on screen — the spinner
-          // ending is the only feedback; log so it isn't silent.
-          console.warn('[TechJobDetail] refresh failed →', apiError);
+      const gen = detailGenRef.current;
+      const request = (async () => {
+        // A pull-to-refresh keeps its content on screen (the RefreshControl
+        // spinner is feedback enough); only the first load shows the spinner.
+        if (showSpinner) {
+          setError(null);
         }
-      } finally {
-        isBusyRef.current = false;
-      }
+        try {
+          const fresh = await jobService.getById(jobId, signal);
+          // An advance landed while this request was away — the response
+          // predates local truth and would silently revert it.
+          if (detailGenRef.current !== gen) return;
+          setDetail(fresh);
+          setError(null);
+          clearActionErrorRef.current();
+          // Push the ApiJob subset (NO presigned URLs) into the shared store
+          // so the list badges (the in-progress/scheduled grouping) stay
+          // honest without a list refetch.
+          upsertTechnicianJob(apiJobOf(fresh));
+        } catch (caught) {
+          const apiError = caught as ApiError;
+          if (isAbort(apiError, signal)) return;
+          if (apiError.status === 403) {
+            showUnassigned(apiError);
+          } else if (showSpinner) {
+            setDetail(null);
+            setError(apiError);
+          } else {
+            // A failed refresh keeps its content on screen — the spinner
+            // ending is the only feedback; log so it isn't silent.
+            console.warn('[TechJobDetail] refresh failed →', apiError);
+          }
+        } finally {
+          inflightRef.current = null;
+        }
+      })();
+      inflightRef.current = request;
+      return request;
     },
-    [jobId],
+    [jobId, showUnassigned],
   );
 
   // Fetch on mount; the in-flight request is aborted if the screen unmounts.
   useEffect(() => {
     if (!jobId) return;
     void load();
-    return () => latestControllerRef.current?.abort();
+    return () => {
+      mountedRef.current = false;
+      latestControllerRef.current?.abort();
+    };
   }, [load, jobId]);
 
   // Back that works from anywhere: when this screen is the only route on the
@@ -175,12 +199,25 @@ export default function TechJobDetailScreen() {
   );
 
   const handleRefresh = useCallback(() => {
-    // Busy guard here too, so a swallowed refresh can't leave the
-    // RefreshControl spinner stuck on.
-    if (isBusyRef.current) return;
+    // No busy guard needed: load chains behind an in-flight request and
+    // always resolves, so the RefreshControl spinner can't stick.
     setIsRefreshing(true);
     void load(false).finally(() => setIsRefreshing(false));
   }, [load]);
+
+  // 3.3 — one-tap workflow advance (bottom action bar / next stepper row).
+  // The hook owns the in-flight step, the idempotency-key lifecycle and the
+  // failure branches (`useWorkflowAdvance` header has the race-hardening
+  // detail); the screen owns only where those branches route.
+  const { pendingStep, actionError, clearActionError, advance } = useWorkflowAdvance({
+    jobId,
+    detail,
+    setDetail,
+    detailGenRef,
+    load,
+    onUnassigned: showUnassigned,
+  });
+  clearActionErrorRef.current = clearActionError;
 
   if (!jobId) return null;
 
@@ -189,6 +226,11 @@ export default function TechJobDetailScreen() {
   const failedWithNoDetail = Boolean(error && !detail && !unassigned && !notFound);
   const urgent = detail?.priority === 'urgent';
   const statusBadge = detail ? statusToBadge(detail.status) : null;
+  // 3.3 — the bar's content is derived, never stored: it re-derives from the
+  // detail on every render (status, current step, activity log). `none`
+  // (cancelled) unmounts the bar entirely.
+  const action = detail ? actionBarAction(detail, detail.activityLog) : null;
+  const barAction = action && action.kind !== 'none' ? action : null;
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
@@ -235,19 +277,30 @@ export default function TechJobDetailScreen() {
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
-        <ScrollView
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={handleRefresh}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
+        <>
+          <ScrollView
+            contentContainerStyle={styles.content}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
+                colors={[colors.primary]}
+                tintColor={colors.primary}
+              />
+            }>
+            <TechJobDetailContent detail={detail} onAdvance={advance} pendingStep={pendingStep} />
+          </ScrollView>
+          {barAction ? (
+            <WorkflowActionBar
+              action={barAction}
+              pending={pendingStep !== null}
+              onAdvance={advance}
+              error={actionError}
+              onDismissError={clearActionError}
             />
-          }>
-          <TechJobDetailContent detail={detail} />
-        </ScrollView>
+          ) : null}
+        </>
       )}
     </SafeAreaView>
   );
