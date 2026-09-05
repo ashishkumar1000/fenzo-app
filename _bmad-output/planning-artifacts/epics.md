@@ -91,7 +91,7 @@ Findings from reviewing the epic plan against the actual codebase before story c
 
 **Definition of done.** `features/jobs/data.ts` and the MMKV `useJobs` are deleted; Jobs tab shows live data with working filters and pagination; a job created in NewJob appears on return; detail shows the activity log of a job a technician has advanced (verified with a second device or curl); edit/reassign/cancel round-trip with correct 409 handling.
 
-**Stories:** 1.1 Wire Jobs list to GET /jobs · 1.2 Owner Job Detail screen · 1.3 Edit, reassign & cancel · 1.4 Home stats refresh.
+**Stories:** 1.1 Wire Jobs list to GET /jobs · 1.2 Owner Job Detail screen · 1.3 Edit, reassign & cancel · 1.4 Home stats refresh · 1.7 Home — Today & needs attention section (added 2026-09-05; depends on fenzit-be 3-9, BE ships first; design contracts in fenzo-meta `artifacts/planning-artifacts/ux-designs/ux-Fenzo-2026-09-05-home-todays-jobs/`).
 
 ---
 
