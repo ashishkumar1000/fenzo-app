@@ -26,6 +26,12 @@ src/components/ui/         the component library (compose these in screens)
   Badge, Card, Avatar      feedback / surfaces / identity
   Input, Select, Switch    forms
   SegmentedControl         view switching (sunken track, raised active card)
+  Sheet                    bottom sheet (native TrueSheet — keyboard, drag-to-
+                           dismiss and safe areas handled by the OS; controlled
+                           via visible/onClose, title/subtitle header built in;
+                           scrollable for long forms, e.g. detents={[0.85]})
+                           NOTE: native module — new native deps need a rebuild
+                           (pod install on iOS) before the change runs
   index.ts                 barrel — import { Button, Badge, ... }
 src/assets/fonts/          Inter .ttf files (see README there)
 ```
@@ -42,6 +48,16 @@ takes the leading slot, pressing is blocked, and the press-scale feedback
 detaches — rather than swapping the button for a spinner or adding a disabled
 style inline. `loading` is transient (clears when the request settles);
 `disabled` is the settled, permanently-off state. They compose.
+
+**Component note — `Sheet` dismissal & focus.** Dismissal paths are the close
+button, drag-down and Android back — there is **no tap-outside-to-close**
+(the native sheet can't intercept taps on the dimmed area; the old Modal
+backdrop could). The close button routes through `onClose`, so a parent
+guarding it (mid-submit) still works — but drag-down and back dismiss
+natively before `onClose`, and a guarded parent cannot veto them. To focus
+an input when the sheet opens, pass `ref` to the `Input` (it forwards to the
+inner `TextInput`) and focus it in `Sheet`'s `onDidPresent` — never
+`autoFocus`, which fires before the native presentation finishes.
 
 ---
 
@@ -85,7 +101,9 @@ Nothing is sharp-cornered.
 
 **Elevation.** Light, cool-gray shadows (`shadow.xs|sm|md|lg`), never harsh
 black. Cards sit on `shadow.sm`. The primary button carries a blue-tinted lift
-(`shadow.primary`). Bottom sheets use `shadow.sheet` (upward). Cards use a 1px
+(`shadow.primary`). `shadow.sheet` (upward) is for JS-rendered overlays like
+dropdown menus — bottom sheets are native (`Sheet`/TrueSheet) and draw their
+own elevation. Cards use a 1px
 `colors.borderSubtle` hairline *and* a soft shadow together.
 
 **Backgrounds.** Flat color only. **No gradients, no photographic hero imagery,

@@ -6,7 +6,7 @@
  * comfortable touch target on native). Focus shows a soft-blue border;
  * errors turn the border red and swap helper text for the message.
  */
-import { useState, type ReactNode } from 'react';
+import { forwardRef, useState, type ReactNode } from 'react';
 import {
   StyleSheet,
   Text,
@@ -34,7 +34,9 @@ export type InputProps = {
   'keyboardType' | 'autoCapitalize' | 'autoCorrect' | 'secureTextEntry' | 'maxLength' | 'onBlur' | 'onFocus' | 'multiline' | 'numberOfLines' | 'autoFocus'
 >;
 
-export function Input({
+/** Ref forwards to the underlying `TextInput` (e.g. to focus it
+ *  programmatically when a native sheet finishes presenting). */
+export const Input = forwardRef<TextInput, InputProps>(function Input({
   label,
   value,
   onChangeText,
@@ -48,7 +50,7 @@ export function Input({
   onFocus,
   onBlur,
   ...rest
-}: InputProps) {
+}, ref) {
   const [focused, setFocused] = useState(false);
   const invalid = Boolean(error);
 
@@ -79,6 +81,7 @@ export function Input({
         ]}>
         {leadingIcon ? <View style={styles.leading}>{leadingIcon}</View> : null}
         <TextInput
+          ref={ref}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
@@ -104,7 +107,7 @@ export function Input({
       ) : null}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   wrap: {

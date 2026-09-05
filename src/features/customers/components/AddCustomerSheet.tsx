@@ -1,7 +1,8 @@
 /**
  * AddCustomerSheet — bottom-sheet form to add a customer (name + phone, plus
- * optional city, area and address). Matches the Fenzit sheet pattern used by
- * `AddTechnicianSheet`: rounded top, upward shadow, grabber.
+ * optional city, area and address). Uses the DS `Sheet` (native TrueSheet)
+ * at a fixed 85% detent with a scrollable body, so the submit button stays
+ * pinned and the form still reaches it on small screens with the keyboard up.
  *
  * Local form state lives here because it's tied to this form's own UX, but
  * persistence stays with the parent: `onSubmit` does the `POST /customers`
@@ -10,19 +11,14 @@
  */
 import { useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { MapPin, Phone, User, UserPlus, X } from 'lucide-react-native';
-import { Button, IconButton, Input } from '../../../components/ui';
-import { colors, radius, shadow, spacing, typography } from '../../../theme';
+import { MapPin, Phone, User, UserPlus } from 'lucide-react-native';
+import { Button, Input, Sheet } from '../../../components/ui';
+import { colors, spacing, typography } from '../../../theme';
 import type { ApiError } from '../../../services';
 import { DIAL_CODE, PHONE_LENGTH } from '../constants';
 import type { NewCustomerInput } from '../types';
@@ -121,180 +117,93 @@ export function AddCustomerSheet({ visible, onClose, onSubmit }: Props) {
   };
 
   return (
-    <Modal
+    <Sheet
       visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={handleClose}
-      statusBarTranslucent>
-      <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={handleClose} />
+      onClose={handleClose}
+      title="Add customer"
+      subtitle="Saved for future bookings too"
+      detents={[0.85]}
+      scrollable>
+      {/* Scrolls so the form still reaches the pinned submit button on small
+          screens with the keyboard up (the `scrollable` sheet hands drags
+          off to the native gesture). */}
+      <ScrollView
+        contentContainerStyle={styles.form}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}>
+        <Input
+          label="Customer name"
+          required
+          value={name}
+          onChangeText={editField(setName)}
+          placeholder="e.g. Ramesh Kumar"
+          autoCapitalize="words"
+          leadingIcon={<User size={18} color={colors.textMuted} strokeWidth={2} />}
+        />
 
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.sheetWrap}>
-          <SafeAreaView edges={['bottom']} style={styles.sheet}>
-            <View style={styles.grabber} />
-
-            <View style={styles.header}>
-              <View style={styles.headerText}>
-                <Text style={styles.title}>Add customer</Text>
-                <Text style={styles.subtitle}>Saved for future bookings too</Text>
-              </View>
-
-              <IconButton label="Close" size="sm" onPress={handleClose}>
-                <X size={20} color={colors.textBody} strokeWidth={2} />
-              </IconButton>
+        <Input
+          label="Phone number"
+          required
+          value={phone}
+          onChangeText={handlePhoneChange}
+          placeholder="98765 43210"
+          keyboardType="phone-pad"
+          maxLength={PHONE_LENGTH}
+          leadingIcon={
+            <View style={styles.dialRow}>
+              <Phone size={18} color={colors.textMuted} strokeWidth={2} />
+              <Text style={styles.dial}>{DIAL_CODE}</Text>
             </View>
+          }
+        />
 
-            {/* Scrolls so the form still reaches the submit button on small
-                screens with the keyboard up. */}
-            <ScrollView
-              style={styles.body}
-              contentContainerStyle={styles.form}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}>
-              <Input
-                label="Customer name"
-                required
-                value={name}
-                onChangeText={editField(setName)}
-                placeholder="e.g. Ramesh Kumar"
-                autoCapitalize="words"
-                leadingIcon={<User size={18} color={colors.textMuted} strokeWidth={2} />}
-              />
+        <View style={styles.row}>
+          <Input
+            label="City"
+            value={city}
+            onChangeText={editField(setCity)}
+            placeholder="Mumbai"
+            autoCapitalize="words"
+            style={styles.rowItem}
+          />
+          <Input
+            label="Area"
+            value={area}
+            onChangeText={editField(setArea)}
+            placeholder="Andheri West"
+            autoCapitalize="words"
+            style={styles.rowItem}
+          />
+        </View>
 
-              <Input
-                label="Phone number"
-                required
-                value={phone}
-                onChangeText={handlePhoneChange}
-                placeholder="98765 43210"
-                keyboardType="phone-pad"
-                maxLength={PHONE_LENGTH}
-                leadingIcon={
-                  <View style={styles.dialRow}>
-                    <Phone size={18} color={colors.textMuted} strokeWidth={2} />
-                    <Text style={styles.dial}>{DIAL_CODE}</Text>
-                  </View>
-                }
-              />
+        <Input
+          label="Address / map location"
+          value={address}
+          onChangeText={editField(setAddress)}
+          placeholder="Flat, building, street, landmark"
+          helper="Technician can open this in Google Maps"
+          leadingIcon={<MapPin size={18} color={colors.textMuted} strokeWidth={2} />}
+        />
+      </ScrollView>
 
-              <View style={styles.row}>
-                <Input
-                  label="City"
-                  value={city}
-                  onChangeText={editField(setCity)}
-                  placeholder="Mumbai"
-                  autoCapitalize="words"
-                  style={styles.rowItem}
-                />
-                <Input
-                  label="Area"
-                  value={area}
-                  onChangeText={editField(setArea)}
-                  placeholder="Andheri West"
-                  autoCapitalize="words"
-                  style={styles.rowItem}
-                />
-              </View>
+      {submitError ? <Text style={styles.submitError}>{submitError}</Text> : null}
 
-              <Input
-                label="Address / map location"
-                value={address}
-                onChangeText={editField(setAddress)}
-                placeholder="Flat, building, street, landmark"
-                helper="Technician can open this in Google Maps"
-                leadingIcon={<MapPin size={18} color={colors.textMuted} strokeWidth={2} />}
-              />
-            </ScrollView>
-
-            {submitError ? <Text style={styles.submitError}>{submitError}</Text> : null}
-
-            <Button
-              variant="primary"
-              size="lg"
-              fullWidth
-              disabled={!canSubmit}
-              onPress={handleSubmit}
-              leadingIcon={
-                <UserPlus size={20} color={colors.onPrimary} strokeWidth={2.5} />
-              }>
-              {submitting ? 'Saving…' : 'Add customer'}
-            </Button>
-          </SafeAreaView>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
+      <Button
+        variant="primary"
+        size="lg"
+        fullWidth
+        disabled={!canSubmit}
+        onPress={handleSubmit}
+        leadingIcon={
+          <UserPlus size={20} color={colors.onPrimary} strokeWidth={2.5} />
+        }>
+        {submitting ? 'Saving…' : 'Add customer'}
+      </Button>
+    </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: colors.scrim,
-  },
-  sheetWrap: {
-    width: '100%',
-    // Fixed 85% of the screen. The height lives here, not on the sheet: a
-    // percentage needs a parent with a definite height, and `overlay` (flex: 1)
-    // provides that — `sheetWrap` itself is content-sized.
-    height: '85%',
-  },
-  sheet: {
-    flex: 1,
-    backgroundColor: colors.surfaceCard,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    paddingHorizontal: spacing.s5,
-    paddingTop: spacing.s3,
-    paddingBottom: spacing.s4,
-    gap: spacing.s4,
-    ...shadow.sheet,
-  },
-  grabber: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: radius.pill,
-    backgroundColor: colors.borderDefault,
-    marginBottom: spacing.s2,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.s3,
-    paddingBottom: spacing.s4,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
-  },
-  headerText: {
-    flex: 1,
-    gap: spacing.s1,
-  },
-  title: {
-    ...typography.title,
-    fontSize: 22,
-    color: colors.textStrong,
-  },
-  subtitle: {
-    ...typography.bodySm,
-    color: colors.textMuted,
-  },
-  body: {
-    // Takes the space between the header and the submit button, so the button
-    // stays pinned to the bottom of the sheet and the form scrolls inside.
-    flex: 1,
-  },
   form: {
     gap: spacing.s4,
     paddingBottom: spacing.s2,

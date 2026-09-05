@@ -1,7 +1,8 @@
 /**
  * EditJobSheet — bottom-sheet form to edit, reassign or (via its parent) cancel
- * a scheduled job. Standard sheet chrome (scrim, rounded top, grabber), the
- * same as AddTechnicianSheet.
+ * a scheduled job. Uses the DS `Sheet` (native TrueSheet) at a fixed 85%
+ * detent with a scrollable body, so the hint + Save stay pinned below the
+ * form (the same layout as AddCustomerSheet).
  *
  * Form state is re-initialized from the job each time the sheet opens — but
  * only on the false→true transition: a background refetch landing while the
@@ -20,21 +21,11 @@
  * 422 renders the server's message. All of that lives in `resolveSaveError`.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Input, Switch } from '../../../components/ui';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Button, Input, Sheet, Switch } from '../../../components/ui';
 import { TechnicianPicker } from '../../../components/TechnicianPicker';
 import { DateTimeFields } from '../../newJob/components/DateTimeFields';
-import { colors, radius, shadow, spacing, touch, typography } from '../../../theme';
+import { colors, radius, spacing, touch, typography } from '../../../theme';
 import { jobService } from '../../../services';
 import type { ApiError, ApiJob, JobDetail, JobPriority, ProfileTechnician } from '../../../services';
 import { loadMyProfile } from '../../profile';
@@ -208,206 +199,147 @@ export function EditJobSheet({ visible, job, technicians, onClose, onSaved }: Pr
   };
 
   return (
-    <Modal
+    <Sheet
       visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={handleClose}
-      statusBarTranslucent>
-      <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={handleClose} />
+      onClose={handleClose}
+      title="Edit job"
+      subtitle="Only scheduled jobs can be edited."
+      detents={[0.85]}
+      scrollable>
+      {/* Scrolls so the pinned hint + Save stay reachable on small screens
+          with the keyboard up (the `scrollable` sheet hands drags off to the
+          native gesture). */}
+      <ScrollView
+        contentContainerStyle={styles.form}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}>
+        <Input
+          label="Description"
+          value={description}
+          onChangeText={text => {
+            setFormError('');
+            setDescription(text);
+          }}
+          placeholder="What needs doing?"
+          multiline
+          numberOfLines={3}
+        />
 
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.sheetWrap}>
-          <SafeAreaView edges={['bottom']} style={styles.sheet}>
-            <View style={styles.grabber} />
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Schedule</Text>
+          <DateTimeFields
+            value={scheduledAt}
+            onChange={next => {
+              setFormError('');
+              setScheduledAt(next);
+            }}
+          />
+        </View>
 
-            <Text style={styles.title}>Edit job</Text>
-            <Text style={styles.subtitle}>Only scheduled jobs can be edited.</Text>
+        <Input
+          label="Notes for technician"
+          value={notes}
+          onChangeText={text => {
+            setFormError('');
+            setNotes(text);
+          }}
+          placeholder="Any special instructions..."
+          multiline
+          numberOfLines={3}
+        />
 
-            <ScrollView
-              style={styles.formScroll}
-              contentContainerStyle={styles.form}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}>
-              <Input
-                label="Description"
-                value={description}
-                onChangeText={text => {
-                  setFormError('');
-                  setDescription(text);
-                }}
-                placeholder="What needs doing?"
-                multiline
-                numberOfLines={3}
-              />
-
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>Schedule</Text>
-                <DateTimeFields
-                  value={scheduledAt}
-                  onChange={next => {
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Priority</Text>
+          <View style={styles.pillRow}>
+            {PRIORITIES.map(option => {
+              const isSelected = option.value === priority;
+              return (
+                <Pressable
+                  key={option.value}
+                  testID={`edit-job-priority-${option.value}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
+                  onPress={() => {
                     setFormError('');
-                    setScheduledAt(next);
+                    setPriority(option.value);
                   }}
-                />
-              </View>
+                  style={[styles.pill, isSelected && styles.pillSelected]}>
+                  <Text
+                    style={[
+                      styles.pillLabel,
+                      isSelected && styles.pillLabelSelected,
+                    ]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
 
-              <Input
-                label="Notes for technician"
-                value={notes}
-                onChangeText={text => {
-                  setFormError('');
-                  setNotes(text);
-                }}
-                placeholder="Any special instructions..."
-                multiline
-                numberOfLines={3}
-              />
+        <View style={styles.section}>
+          {/* Deliberately before Technician here — New job shows the same
+              section last (after Notes). The sheet keeps job-level
+              attributes (priority, requirements) ahead of the roster, so
+              the technician list isn't pushed below the scroll fold. */}
+          <Text style={styles.sectionLabel}>Job requirements</Text>
+          <Switch
+            label="Require completion photos"
+            value={requireCompletionPhoto}
+            onValueChange={next => {
+              setFormError('');
+              setRequireCompletionPhoto(next);
+            }}
+          />
+          <Switch
+            label="Require customer signature"
+            value={requireCompletionSignature}
+            onValueChange={next => {
+              setFormError('');
+              setRequireCompletionSignature(next);
+            }}
+          />
+        </View>
 
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>Priority</Text>
-                <View style={styles.pillRow}>
-                  {PRIORITIES.map(option => {
-                    const isSelected = option.value === priority;
-                    return (
-                      <Pressable
-                        key={option.value}
-                        testID={`edit-job-priority-${option.value}`}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: isSelected }}
-                        onPress={() => {
-                          setFormError('');
-                          setPriority(option.value);
-                        }}
-                        style={[styles.pill, isSelected && styles.pillSelected]}>
-                        <Text
-                          style={[
-                            styles.pillLabel,
-                            isSelected && styles.pillLabelSelected,
-                          ]}>
-                          {option.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Technician</Text>
+          <TechnicianPicker
+            variant="rows"
+            technicians={assignableTechnicians}
+            selectedId={technicianId}
+            onSelect={id => {
+              setFormError('');
+              setTechnicianId(id);
+            }}
+          />
+        </View>
+      </ScrollView>
 
-              <View style={styles.section}>
-                {/* Deliberately before Technician here — New job shows the same
-                    section last (after Notes). The sheet keeps job-level
-                    attributes (priority, requirements) ahead of the roster, so
-                    the technician list isn't pushed below the scroll fold. */}
-                <Text style={styles.sectionLabel}>Job requirements</Text>
-                <Switch
-                  label="Require completion photos"
-                  value={requireCompletionPhoto}
-                  onValueChange={next => {
-                    setFormError('');
-                    setRequireCompletionPhoto(next);
-                  }}
-                />
-                <Switch
-                  label="Require customer signature"
-                  value={requireCompletionSignature}
-                  onValueChange={next => {
-                    setFormError('');
-                    setRequireCompletionSignature(next);
-                  }}
-                />
-              </View>
+      <Text style={styles.hint}>{NO_CLEAR_HINT}</Text>
 
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>Technician</Text>
-                <TechnicianPicker
-                  variant="rows"
-                  technicians={assignableTechnicians}
-                  selectedId={technicianId}
-                  onSelect={id => {
-                    setFormError('');
-                    setTechnicianId(id);
-                  }}
-                />
-              </View>
-            </ScrollView>
+      {formError ? (
+        <Text style={styles.formError} testID="edit-job-form-error">
+          {formError}
+        </Text>
+      ) : null}
 
-            <Text style={styles.hint}>{NO_CLEAR_HINT}</Text>
-
-            {formError ? (
-              <Text style={styles.formError} testID="edit-job-form-error">
-                {formError}
-              </Text>
-            ) : null}
-
-            <Button
-              variant="primary"
-              size="lg"
-              fullWidth
-              testID="edit-job-save"
-              disabled={!patch || submitting || isAutoClosing}
-              onPress={handleSave}>
-              {submitting ? 'Saving…' : 'Save changes'}
-            </Button>
-          </SafeAreaView>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
+      <Button
+        variant="primary"
+        size="lg"
+        fullWidth
+        testID="edit-job-save"
+        disabled={!patch || submitting || isAutoClosing}
+        onPress={handleSave}>
+        {submitting ? 'Saving…' : 'Save changes'}
+      </Button>
+    </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: colors.scrim,
-  },
-  sheetWrap: {
-    width: '100%',
-  },
-  sheet: {
-    backgroundColor: colors.surfaceCard,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    paddingHorizontal: spacing.s5,
-    paddingTop: spacing.s3,
-    paddingBottom: spacing.s4,
-    gap: spacing.s4,
-    ...shadow.sheet,
-  },
-  grabber: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: radius.pill,
-    backgroundColor: colors.borderDefault,
-    marginBottom: spacing.s2,
-  },
-  title: {
-    ...typography.title,
-    fontSize: 22,
-    color: colors.textStrong,
-  },
-  subtitle: {
-    ...typography.bodySm,
-    color: colors.textMuted,
-    marginTop: -spacing.s2,
-  },
   hint: {
     ...typography.bodySm,
     color: colors.textMuted,
-  },
-  formScroll: {
-    // Let the form grow with the roster instead of pushing the footer away.
-    maxHeight: 420,
   },
   form: {
     gap: spacing.s4,

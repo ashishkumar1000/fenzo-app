@@ -1,7 +1,7 @@
 /**
  * EditNameSheet — bottom-sheet form to edit the signed-in user's display
- * name (story 5.2). Chrome copied from `AddSkillSheet`: Modal with backdrop,
- * grabber, header row with a close button, KeyboardAvoidingView.
+ * name (story 5.2). Uses the DS `Sheet` (native TrueSheet): the OS handles
+ * the keyboard, drag-to-dismiss, and safe areas.
  *
  * Unlike the add-sheets, this one is self-contained: it calls `PATCH
  * /users/me` (`usersApi.updateMe`) and stores the response via
@@ -13,19 +13,9 @@
  * Errors (422 validation, network) render inline and keep the sheet open.
  */
 import { useEffect, useRef, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { X } from 'lucide-react-native';
-import { Button, IconButton, Input } from '../../../components/ui';
-import { colors, radius, shadow, spacing, typography } from '../../../theme';
+import { StyleSheet, Text, TextInput } from 'react-native';
+import { Button, Input, Sheet } from '../../../components/ui';
+import { colors, spacing, typography } from '../../../theme';
 import { usersApi } from '../../../services';
 import type { ApiError } from '../../../services';
 import { setProfileFromServer } from '../useMyProfile';
@@ -54,6 +44,9 @@ function createErrorMessage(err: ApiError): string {
 const MAX_NAME_LENGTH = 100;
 
 export function EditNameSheet({ visible, currentName, onClose }: Props) {
+  // Focused on did-present — TrueSheet discourages `autoFocus` (the keyboard
+  // would appear before the native sheet finishes presenting).
+  const inputRef = useRef<TextInput>(null);
   const [name, setName] = useState(currentName ?? '');
   const [submitting, setSubmitting] = useState(false);
   // Same-frame double-tap guard: `submitting` (and the Button's `loading`)
@@ -123,108 +116,37 @@ export function EditNameSheet({ visible, currentName, onClose }: Props) {
   };
 
   return (
-    <Modal
+    <Sheet
       visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={handleClose}
-      statusBarTranslucent>
-      <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={handleClose} />
+      onClose={handleClose}
+      title="Edit your name"
+      onDidPresent={() => inputRef.current?.focus()}>
+      <Input
+        ref={inputRef}
+        label="Your name"
+        required
+        value={name}
+        onChangeText={handleNameChange}
+        placeholder="e.g. Ramesh Kumar"
+        maxLength={MAX_NAME_LENGTH}
+      />
 
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.sheetWrap}>
-          <SafeAreaView edges={['bottom']} style={styles.sheet}>
-            <View style={styles.grabber} />
+      {submitError ? <Text style={styles.submitError}>{submitError}</Text> : null}
 
-            <View style={styles.header}>
-              <View style={styles.headerText}>
-                <Text style={styles.title}>Edit your name</Text>
-              </View>
-
-              <IconButton label="Close" size="sm" onPress={handleClose}>
-                <X size={20} color={colors.textBody} strokeWidth={2} />
-              </IconButton>
-            </View>
-
-            <Input
-              label="Your name"
-              required
-              value={name}
-              onChangeText={handleNameChange}
-              placeholder="e.g. Ramesh Kumar"
-              autoFocus
-              maxLength={MAX_NAME_LENGTH}
-            />
-
-            {submitError ? <Text style={styles.submitError}>{submitError}</Text> : null}
-
-            <Button
-              variant="primary"
-              size="lg"
-              fullWidth
-              disabled={!canSubmit}
-              loading={submitting}
-              onPress={handleSubmit}>
-              Save
-            </Button>
-          </SafeAreaView>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
+      <Button
+        variant="primary"
+        size="lg"
+        fullWidth
+        disabled={!canSubmit}
+        loading={submitting}
+        onPress={handleSubmit}>
+        Save
+      </Button>
+    </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: colors.scrim,
-  },
-  sheetWrap: {
-    width: '100%',
-  },
-  sheet: {
-    backgroundColor: colors.surfaceCard,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    paddingHorizontal: spacing.s5,
-    paddingTop: spacing.s3,
-    paddingBottom: spacing.s4,
-    gap: spacing.s4,
-    ...shadow.sheet,
-  },
-  grabber: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: radius.pill,
-    backgroundColor: colors.borderDefault,
-    marginBottom: spacing.s2,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.s3,
-  },
-  headerText: {
-    flex: 1,
-    gap: spacing.s1,
-  },
-  title: {
-    ...typography.title,
-    fontSize: 22,
-    color: colors.textStrong,
-  },
   submitError: {
     ...typography.bodySm,
     color: colors.danger,

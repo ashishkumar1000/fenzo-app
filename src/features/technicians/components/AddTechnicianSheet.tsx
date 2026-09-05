@@ -1,7 +1,7 @@
 /**
  * AddTechnicianSheet — bottom-sheet form to invite a technician (name +
- * phone + skills). Matches the Fenzit sheet pattern (rounded top, upward
- * shadow, grabber).
+ * phone + skills). Uses the DS `Sheet` (native TrueSheet): the OS handles
+ * the keyboard, drag-to-dismiss, and safe areas.
  *
  * The skill list comes from the shared `useSkills` store (loaded on sheet
  * open), NOT a private fetch — the Skills screen and this picker must show
@@ -14,19 +14,10 @@
  * show the error and stay open).
  */
 import { useEffect, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet, Text, View } from 'react-native';
 import { Phone, User } from 'lucide-react-native';
-import { Button, Input, MultiSelect } from '../../../components/ui';
-import { colors, radius, shadow, spacing, typography } from '../../../theme';
+import { Button, Input, MultiSelect, Sheet } from '../../../components/ui';
+import { colors, spacing, typography } from '../../../theme';
 import type { ApiError } from '../../../services';
 import { loadSkills, useSkills } from '../../skills';
 import { DIAL_CODE, PHONE_LENGTH } from '../constants';
@@ -130,121 +121,60 @@ export function AddTechnicianSheet({ visible, onClose, onSubmit }: Props) {
         : '');
 
   return (
-    <Modal
+    <Sheet
       visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={handleClose}
-      statusBarTranslucent>
-      <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={handleClose} />
-
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.sheetWrap}>
-          <SafeAreaView edges={['bottom']} style={styles.sheet}>
-            <View style={styles.grabber} />
-
-            <Text style={styles.title}>Add technician</Text>
-            <Text style={styles.subtitle}>
-              They'll get an SMS invite to download the Fenzit app and come online.
-            </Text>
-
-            <View style={styles.form}>
-              <Input
-                label="Name"
-                value={name}
-                onChangeText={setName}
-                placeholder="e.g. Suresh Kumar"
-                autoCapitalize="words"
-                leadingIcon={<User size={18} color={colors.textMuted} strokeWidth={2} />}
-              />
-              <Input
-                label="Phone number"
-                value={phone}
-                onChangeText={handlePhoneChange}
-                placeholder="98765 43210"
-                keyboardType="phone-pad"
-                maxLength={PHONE_LENGTH}
-                leadingIcon={
-                  <View style={styles.dialRow}>
-                    <Phone size={18} color={colors.textMuted} strokeWidth={2} />
-                    <Text style={styles.dial}>{DIAL_CODE}</Text>
-                  </View>
-                }
-              />
-              <MultiSelect
-                label="Skills"
-                value={skillIds}
-                onChange={setSkillIds}
-                options={skillOptions}
-                placeholder={loadingSkills ? 'Loading skills…' : 'Select skills'}
-                helper={skillsHelper}
-                disabled={loadingSkills || skills.length === 0}
-              />
+      onClose={handleClose}
+      title="Add technician"
+      subtitle="They'll get an SMS invite to download the Fenzit app and come online.">
+      <View style={styles.form}>
+        <Input
+          label="Name"
+          value={name}
+          onChangeText={setName}
+          placeholder="e.g. Suresh Kumar"
+          autoCapitalize="words"
+          leadingIcon={<User size={18} color={colors.textMuted} strokeWidth={2} />}
+        />
+        <Input
+          label="Phone number"
+          value={phone}
+          onChangeText={handlePhoneChange}
+          placeholder="98765 43210"
+          keyboardType="phone-pad"
+          maxLength={PHONE_LENGTH}
+          leadingIcon={
+            <View style={styles.dialRow}>
+              <Phone size={18} color={colors.textMuted} strokeWidth={2} />
+              <Text style={styles.dial}>{DIAL_CODE}</Text>
             </View>
-
-            {submitError ? <Text style={styles.submitError}>{submitError}</Text> : null}
-
-            <Button
-              variant="primary"
-              size="lg"
-              fullWidth
-              disabled={!canSubmit}
-              onPress={handleSubmit}>
-              {submitting ? 'Sending…' : 'Send invite'}
-            </Button>
-          </SafeAreaView>
-        </KeyboardAvoidingView>
+          }
+        />
+        <MultiSelect
+          label="Skills"
+          value={skillIds}
+          onChange={setSkillIds}
+          options={skillOptions}
+          placeholder={loadingSkills ? 'Loading skills…' : 'Select skills'}
+          helper={skillsHelper}
+          disabled={loadingSkills || skills.length === 0}
+        />
       </View>
-    </Modal>
+
+      {submitError ? <Text style={styles.submitError}>{submitError}</Text> : null}
+
+      <Button
+        variant="primary"
+        size="lg"
+        fullWidth
+        disabled={!canSubmit}
+        onPress={handleSubmit}>
+        {submitting ? 'Sending…' : 'Send invite'}
+      </Button>
+    </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: colors.scrim,
-  },
-  sheetWrap: {
-    width: '100%',
-  },
-  sheet: {
-    backgroundColor: colors.surfaceCard,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    paddingHorizontal: spacing.s5,
-    paddingTop: spacing.s3,
-    paddingBottom: spacing.s4,
-    gap: spacing.s4,
-    ...shadow.sheet,
-  },
-  grabber: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: radius.pill,
-    backgroundColor: colors.borderDefault,
-    marginBottom: spacing.s2,
-  },
-  title: {
-    ...typography.title,
-    fontSize: 22,
-    color: colors.textStrong,
-  },
-  subtitle: {
-    ...typography.body,
-    color: colors.textMuted,
-    marginTop: -spacing.s2,
-  },
   form: {
     gap: spacing.s4,
   },

@@ -5,6 +5,7 @@
     "": {
       "name": "FenzitApp",
       "dependencies": {
+        "@lodev09/react-native-true-sheet": "^3.11.12",
         "@react-native-community/datetimepicker": "^9.1.0",
         "@react-navigation/bottom-tabs": "^7.4.0",
         "@react-navigation/native": "^7.3.4",
@@ -433,6 +434,8 @@
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "https://packagerepo.orb.alkamitech.com/npm/npm.third-party/%40jridgewell/trace-mapping/-/trace-mapping-0.3.31.tgz", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
     "@kayvan/markdown-tree-parser": ["@kayvan/markdown-tree-parser@1.6.1", "https://packagerepo.orb.alkamitech.com/npm/npm.third-party/%40kayvan/markdown-tree-parser/-/markdown-tree-parser-1.6.1.tgz", { "dependencies": { "remark-parse": "^11.0.0", "remark-stringify": "^11.0.0", "unified": "^11.0.5", "unist-util-find": "^3.0.0", "unist-util-select": "^5.1.0", "unist-util-visit": "^5.0.0" }, "bin": { "md-tree": "bin/md-tree.js" } }, "sha512-a5HUxUxQup5fAkL5xqmDBmZBNHZVfBn7FNfAx9SYEaUANuoVHygGAxaaHdkHDTCerntNKB2UzNS4dGIYbfPiiQ=="],
+
+    "@lodev09/react-native-true-sheet": ["@lodev09/react-native-true-sheet@3.11.12", "https://packagerepo.orb.alkamitech.com/npm/npm.third-party/%40lodev09/react-native-true-sheet/-/react-native-true-sheet-3.11.12.tgz", { "peerDependencies": { "@radix-ui/react-dialog": ">=1", "@radix-ui/react-presence": ">=1", "@react-navigation/core": ">=7", "react": "*", "react-native": "*", "react-native-reanimated": ">=4", "react-native-worklets": "*" }, "optionalPeers": ["@radix-ui/react-dialog", "@radix-ui/react-presence", "@react-navigation/core", "react-native-reanimated", "react-native-worklets"] }, "sha512-eL7mfUw0p3dxqXKqck3k7H2Ja6UHGbPSqbVDRKeANuxZN4xctxF1iFSPYHj0LULVtheqxKBhWBiR4lJ25El57Q=="],
 
     "@nicolo-ribaudo/eslint-scope-5-internals": ["@nicolo-ribaudo/eslint-scope-5-internals@5.1.1-v1", "https://packagerepo.orb.alkamitech.com/npm/npm.third-party/%40nicolo-ribaudo/eslint-scope-5-internals/-/eslint-scope-5-internals-5.1.1-v1.tgz", { "dependencies": { "eslint-scope": "5.1.1" } }, "sha512-54/JRvkLIzzDWshCWfuhadfrfZVPiElY8Fcgmg1HroEly/EDSszzhBAsarCux+D/kOslTRquNzuyGSmUSTTHGg=="],
 

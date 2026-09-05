@@ -38,6 +38,13 @@ jest.mock('react-native-signature-canvas', () => {
   };
 });
 
+// TrueSheet is a native TurboModule/Fabric component — it cannot boot in
+// jest. The library ships its own mock (a plain View that records
+// present/dismiss calls on the ref); route the real entry to it globally.
+jest.mock('@lodev09/react-native-true-sheet', () =>
+  require('@lodev09/react-native-true-sheet/mock'),
+);
+
 // Pin the test timezone: the screens format dates with toLocaleDateString
 // ('en-IN', …) on UTC timestamps, which shifts a day in behind-UTC timezones
 // — assertions like "12 Aug 2026" must not depend on the host TZ. IST is the

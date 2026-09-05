@@ -43,3 +43,6 @@ export type { InlineErrorProps } from './InlineError';
 
 export { SegmentedControl } from './SegmentedControl';
 export type { SegmentOption } from './SegmentedControl';
+
+export { Sheet } from './Sheet';
+export type { SheetProps } from './Sheet';
