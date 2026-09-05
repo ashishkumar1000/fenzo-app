@@ -23,6 +23,12 @@ const mockCanGoBack = jest.fn(() => true);
 // Captured navigation listeners — a test simulates "the screen is leaving"
 // by invoking the captured beforeRemove callback.
 const navListeners: Record<string, () => void> = {};
+// Captured focus effects (one per mount — cleared in the mount helper).
+let mockFocusCbs: Array<() => void> = [];
+// The real useFocusEffect fires on focus TRANSITIONS, not re-renders — the
+// mount focus is fired once per test; a test re-invokes a captured callback
+// to simulate a refocus (returning from Signature).
+let mockFocusFired = false;
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
@@ -35,6 +41,15 @@ jest.mock('@react-navigation/native', () => ({
     },
   }),
   useRoute: () => ({ params: { jobId: 'j-1' } }),
+  // Captured focus callbacks — a test simulates "returning to the screen"
+  // (e.g. from the Signature screen) by invoking the captured callback.
+  useFocusEffect: (cb: () => void) => {
+    mockFocusCbs.push(cb);
+    if (!mockFocusFired) {
+      mockFocusFired = true;
+      cb();
+    }
+  },
 }));
 
 jest.mock('../src/services', () => ({
@@ -203,6 +218,8 @@ async function mountScreen(): Promise<Renderer> {
 beforeEach(() => {
   clearTechnicianJobs();
   mockLastPhotoProps = null;
+  mockFocusCbs = [];
+  mockFocusFired = false;
 });
 
 afterEach(() => {
@@ -324,15 +341,15 @@ it('a 403 leaving refetches Today with force (AC 5)', async () => {
   expect(list).toHaveBeenCalledTimes(1);
 });
 
-it('the signature card always renders — placeholder for a captured-less terminal job', async () => {
+it('a terminal job renders no signature card (AC 6, revised 2026-09-05)', async () => {
   getById.mockResolvedValueOnce(
     makeDetail({ status: 'cancelled', currentStep: 'arrived' as JobDetail['currentStep'] }),
   );
   const renderer = await mountScreen();
 
   const text = renderedText(renderer);
-  expect(text).toContain('Customer signature');
-  expect(text).toContain('Captured at the signature step.');
+  expect(text).not.toContain('Customer signature');
+  expect(text).not.toContain('Captured at the signature step.');
   // Terminal + no photos → the photos card stays hidden (the stepper's
   // "Photos uploaded" label may still exist, so match the card title only).
   const photosCardTitle = renderer.root.findAll(
@@ -445,6 +462,30 @@ it('advancing posts the next step with a fresh idempotency key and merges the re
   const row = storeSnapshot!.today.find(j => j.id === 'j-1');
   expect(row!.status).toBe('in_progress');
   expect(row!.currentStep).toBe('on_my_way');
+});
+
+it('advancing the signature step navigates to Signature — it never POSTs (3.5)', async () => {
+  list.mockResolvedValue({ data: [listRow], nextCursor: null, hasMore: false });
+  await loadToday({ force: true });
+  // A signature-required job whose photos are done: the effective chain's
+  // next step is signature_captured — the bar's "Capture signature".
+  getById.mockResolvedValueOnce(
+    makeDetail({
+      status: 'in_progress',
+      currentStep: 'photos_uploaded',
+      requireCompletionSignature: true,
+    }),
+  );
+  const renderer = await mountScreen();
+  expect(renderedText(renderer)).toContain('Capture signature'); // bar button
+
+  await ReactTestRenderer.act(async () => {
+    advanceButton(renderer)[0].props.onPress();
+  });
+
+  // The capture screen owns upload → advance; the hook must only navigate.
+  expect(mockNavigate).toHaveBeenCalledWith('Signature', { jobId: 'j-1' });
+  expect(advanceWorkflow).not.toHaveBeenCalled();
 });
 
 it('422 step race reconciles silently — step patched locally and in the store, no error copy (AC5)', async () => {
@@ -569,4 +610,17 @@ it('a terminal job with photos renders the grid read-only (AC 6)', async () => {
 
   expect(mockLastPhotoProps!.readOnly).toBe(true);
   expect(mockLastPhotoProps!.photos).toHaveLength(1);
+});
+it('refocusing (returning from Signature) silently refetches the detail', async () => {
+  getById.mockResolvedValueOnce(makeDetail());
+  await mountScreen();
+  expect(getById).toHaveBeenCalledTimes(1);
+
+  // Simulate the navigation stack re-focusing this screen (the Signature
+  // screen popped) — the silent refetch lands fresh server truth.
+  getById.mockResolvedValueOnce(makeDetail());
+  await ReactTestRenderer.act(async () => {
+    mockFocusCbs[mockFocusCbs.length - 1]();
+  });
+  expect(getById).toHaveBeenCalledTimes(2);
 });

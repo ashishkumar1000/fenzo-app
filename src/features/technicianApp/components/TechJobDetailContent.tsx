@@ -20,7 +20,7 @@ import {
   Snowflake,
   Wrench,
 } from 'lucide-react-native';
-import { Card } from '../../../components/ui';
+import { Button, Card } from '../../../components/ui';
 import { colors, radius, spacing, touch, typography } from '../../../theme';
 import type { JobDetail } from '../../../services';
 import { openMaps } from '../../../utils/linking';
@@ -32,7 +32,7 @@ import {
   serviceTypeLabel,
   serviceTypeToIcon,
 } from '../../jobs/format';
-import { STEP_ORDER, buildStepper, type WorkflowStep } from '../stepperModel';
+import { buildStepper, type WorkflowStep } from '../stepperModel';
 import { WorkflowStepper } from './WorkflowStepper';
 import { SignatureTile } from './SignatureTile';
 import { PhotoSection } from './PhotoSection';
@@ -62,16 +62,30 @@ type Props = {
   pendingStep?: WorkflowStep | null;
   /** 3.4 — fired per confirmed photo upload (the screen's silent refetch). */
   onPhotosConfirmed?: () => void;
+  /**
+   * 3.5 — opens the Signature screen for the captured signature's Re-capture
+   * affordance (AC 6). Absent → the tile renders without the affordance.
+   */
+  onRecaptureSignature?: () => void;
 };
 
-export function TechJobDetailContent({ detail, onAdvance, pendingStep, onPhotosConfirmed }: Props) {
+export function TechJobDetailContent({
+  detail,
+  onAdvance,
+  pendingStep,
+  onPhotosConfirmed,
+  onRecaptureSignature,
+}: Props) {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   const isTerminal = detail.status === 'completed' || detail.status === 'cancelled';
   const steps = buildStepper(detail, detail.activityLog);
   const doneCount = steps.filter(s => s.state === 'done').length;
   const photos = detail.attachments.filter(a => a.type === 'photo');
-  const signature = detail.attachments.find(a => a.type === 'signature') ?? null;
+  // Attachments are ordered oldest-first (api-contracts §1); the re-captured
+  // signature is the newest — display the LAST one (server last-write-wins).
+  const signature =
+    detail.attachments.filter(a => a.type === 'signature').slice(-1)[0] ?? null;
   const description = detail.description;
   const customerAddress = detail.customer.address;
   const customerCity = detail.customer.city;
@@ -81,13 +95,15 @@ export function TechJobDetailContent({ detail, onAdvance, pendingStep, onPhotosC
 
   return (
     <>
-      {/* 1. Progress — the stepper is the story of the job; "N of 6" counts
-          finished steps, collapsing to "Done" when complete. */}
+      {/* 1. Progress — the stepper is the story of the job; "X of N" counts
+          finished steps against the rows the job's effective chain actually
+          has (a signature-less job drops that row), collapsing to "Done"
+          when complete. */}
       <Card padding="md" style={styles.cardGap}>
         <View style={styles.progressRow}>
           <Text style={styles.progressLabel}>Progress</Text>
           <Text style={styles.progressCount}>
-            {detail.status === 'completed' ? 'Done' : `${doneCount} of ${STEP_ORDER.length}`}
+            {detail.status === 'completed' ? 'Done' : `${doneCount} of ${steps.length}`}
           </Text>
         </View>
         <WorkflowStepper steps={steps} onAdvance={onAdvance} pendingStep={pendingStep} />
@@ -168,25 +184,39 @@ export function TechJobDetailContent({ detail, onAdvance, pendingStep, onPhotosC
         </Card>
       ) : null}
 
-      {/* 6. Customer signature — the captured tile, or the dashed placeholder
-          until 3.5 fills it. Always rendered (spec §8 defines only
-          tile-or-placeholder — a cancelled job that never reached the
-          signature step still shows the placeholder). */}
-      <Card padding="md">
-        <Text style={styles.sectionTitle}>Customer signature</Text>
-        {signature ? (
-          // Keyed by the presigned URL: a refetch that mints a new one
-          // remounts the tile, clearing any failed state from the old URL.
-          <SignatureTile key={signature.url ?? 'none'} attachment={signature} />
-        ) : (
-          <View style={styles.signaturePlaceholder}>
-            <PenLine size={20} color={colors.textMuted} strokeWidth={2} />
-            <Text style={styles.signaturePlaceholderText}>
-              Captured at the signature step.
-            </Text>
-          </View>
-        )}
-      </Card>
+      {/* 6. Customer signature — only when the owner requires one on a
+          non-terminal job (spec §8 + §11; AC 6: flag-off and terminal jobs
+          show no signature card, and there is no voluntary capture). The
+          captured tile offers Re-capture; the dashed placeholder stands until
+          the signature step happens. */}
+      {detail.requireCompletionSignature && !isTerminal ? (
+        <Card padding="md">
+          <Text style={styles.sectionTitle}>Customer signature</Text>
+          {signature ? (
+            // Keyed by the presigned URL: a refetch that mints a new one
+            // remounts the tile, clearing any failed state from the old URL.
+            <>
+              <SignatureTile key={signature.url ?? 'none'} attachment={signature} />
+              {onRecaptureSignature ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onPress={onRecaptureSignature}
+                  style={styles.recaptureRow}>
+                  Re-capture
+                </Button>
+              ) : null}
+            </>
+          ) : (
+            <View style={styles.signaturePlaceholder}>
+              <PenLine size={20} color={colors.textMuted} strokeWidth={2} />
+              <Text style={styles.signaturePlaceholderText}>
+                Captured at the signature step.
+              </Text>
+            </View>
+          )}
+        </Card>
+      ) : null}
 
       {/* 7. History — collapsed by default; the disclosure keeps the scroll
           focused on what's actionable. The timeline renders nothing when the
@@ -295,6 +325,11 @@ const styles = StyleSheet.create({
   signaturePlaceholderText: {
     ...typography.caption,
     color: colors.textMuted,
+  },
+  // The Re-capture affordance under the captured signature tile (AC 6).
+  recaptureRow: {
+    alignSelf: 'flex-end',
+    marginTop: spacing.s1,
   },
   historyRow: {
     flexDirection: 'row',

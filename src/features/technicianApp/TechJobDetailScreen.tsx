@@ -27,7 +27,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+  type RouteProp,
+} from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Badge, IconButton } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
@@ -171,6 +176,20 @@ export default function TechJobDetailScreen() {
     };
   }, [load, jobId]);
 
+  // 3.5 — returning from the Signature screen (capture done or abandoned)
+  // silently refetches: the new signature attachment and the advanced step
+  // land without a spinner. The first focus IS the mount load — skip it.
+  const hasFocusedRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasFocusedRef.current) {
+        hasFocusedRef.current = true;
+        return;
+      }
+      void load(false);
+    }, [load]),
+  );
+
   // Back that works from anywhere: when this screen is the only route on the
   // stack (deep link), `goBack` would strand the user — reset to the tabs.
   const goBackSafely = useCallback(() => {
@@ -216,6 +235,10 @@ export default function TechJobDetailScreen() {
     detailGenRef,
     load,
     onUnassigned: showUnassigned,
+    // 3.5 — the signature step captures on the dedicated screen.
+    onCaptureSignature: () => {
+      if (jobId) navigation.navigate('Signature', { jobId });
+    },
   });
   clearActionErrorRef.current = clearActionError;
 
@@ -297,6 +320,11 @@ export default function TechJobDetailScreen() {
               // spinner): the grid re-renders from server truth, including a
               // fresh read URL for the just-uploaded photo.
               onPhotosConfirmed={() => void load(false)}
+              // 3.5 — the captured tile's Re-capture affordance reopens the
+              // pad (AC 6; the refetch on the focus effect above refreshes it).
+              onRecaptureSignature={() => {
+                if (jobId) navigation.navigate('Signature', { jobId });
+              }}
             />
           </ScrollView>
           {barAction ? (

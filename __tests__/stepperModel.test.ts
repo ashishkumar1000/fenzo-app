@@ -11,6 +11,8 @@ import type { ActivityLogEntry } from '../src/services';
 const job = (over: Partial<StepperJob>): StepperJob => ({
   currentStep: null,
   requireCompletionPhoto: true,
+  // Full effective chain by default — the legacy states pin all rows.
+  requireCompletionSignature: true,
   status: 'scheduled',
   ...over,
 });

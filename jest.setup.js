@@ -18,6 +18,26 @@ jest.mock('react-native-reanimated/src/css/native/proxy', () => ({
 
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 
+// The signature pad renders a real WebView (native TurboModule) — it cannot
+// boot in jest. Every suite that transitively imports SignatureScreen gets a
+// fake pad whose props/ref mirror the library's contract (onOK/onBegin/
+// onEmpty, readSignature/clearSignature; clear routes to the onClear prop —
+// the real library never fires onEmpty on clear); the pad's own suite mocks
+// it too and drives the callbacks directly.
+jest.mock('react-native-signature-canvas', () => {
+  const React = require('react');
+  return {
+    __esModule: true,
+    default: React.forwardRef((props, ref) => {
+      React.useImperativeHandle(ref, () => ({
+        readSignature: () => props.onOK?.('data:image/png;base64,MOCK'),
+        clearSignature: () => props.onClear?.(),
+      }));
+      return null;
+    }),
+  };
+});
+
 // Pin the test timezone: the screens format dates with toLocaleDateString
 // ('en-IN', …) on UTC timestamps, which shifts a day in behind-UTC timezones
 // — assertions like "12 Aug 2026" must not depend on the host TZ. IST is the

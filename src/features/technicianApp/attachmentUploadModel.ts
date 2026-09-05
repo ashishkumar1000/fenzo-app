@@ -74,7 +74,7 @@ function statusOf(error: unknown): number {
  * renders "[object Object]" — read `.message` when it's a usable string and
  * fall back to `String()` for genuine Errors (which stringify fine).
  */
-function errorMessage(error: unknown): string {
+export function errorMessage(error: unknown): string {
   const message = (error as { message?: unknown } | null)?.message;
   return typeof message === 'string' && message.length > 0 ? message : String(error);
 }

@@ -1,5 +1,5 @@
 # generated: 2026-09-01
-# last_updated: 2026-09-05  # 1-6 → done (review: 1 decision + 6 patches + 5 defers)
+# last_updated: 2026-09-05  # 3-5 → done (code review passed; smoke test pending)
 # project: fenzo-app
 # project_key: NOKEY
 # tracking_system: file-system
@@ -33,7 +33,7 @@ development_status:
   3-2-technician-job-detail: done  # committed 71fc05d (review round 1: 2 decisions + 8 patches)
   3-3-workflow-step-advancement: done  # committed aba7b75 (review: 1 decision + 20 patches)
   3-4-photo-capture-upload-r2: done  # committed e189daa (2 review rounds: 18 patches + second pass)
-  3-5-signature-capture: ready-for-dev  # revised 2026-09-05: optional signature (requireCompletionSignature); depends on fenzit-be 3-8
+  3-5-signature-capture: done  # reviewed 2026-09-05: 15 patches applied, 450 tests green; on-device pad smoke test pending
   epic-3-retrospective: optional
 
   # Epic 4: Offline-First Sync

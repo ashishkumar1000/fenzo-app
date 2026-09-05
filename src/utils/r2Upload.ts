@@ -28,7 +28,20 @@
  * with `TypeError: Network request failed` (known RN blob incompatibility —
  * react-native#22681; expo/firebase-storage-upload-example#13). The XHR blob
  * is the long-standing workaround. The PUT itself stays on `fetch`.
+ *
+ * The XHR read also cannot handle `data:` URIs (the signature pad's export):
+ * RN's XHR resolves one as a 0-byte blob (RN's documented XHR data-URL
+ * handling; NOT yet device-verified — the 3.5 on-device smoke test is
+ * pending, see the story's Dev Agent Record). A PUT would send nothing and
+ * the pipeline would reject the empty upload. Data URIs therefore skip the
+ * read AND the Blob entirely: the base64 payload is decoded in JS
+ * (`utils/base64`) and the Uint8Array goes straight into the fetch body —
+ * RN's network layer converts ArrayBuffer views to raw bytes natively
+ * (convertRequestBody), byte-exact on both platforms. A Blob built from a
+ * binary string would be UTF-8-mangled here, so it is never an option for
+ * binary payloads.
  */
+import { base64ToUint8Array } from './base64';
 
 /**
  * Deadline for both the file read and the PUT. A hung request must not leave
@@ -36,6 +49,23 @@
  * attempt fails, landing the tile on Retry (which restarts from presign).
  */
 const REQUEST_TIMEOUT_MS = 60_000;
+
+/**
+ * Extracts and decodes the payload of a `data:<mime>;base64,<payload>` URI,
+ * or returns null for anything that is not a data URI at all (the `file://`
+ * URIs the photo picker hands us). A data URI WITHOUT the base64 marker is
+ * rejected explicitly: falling through to the XHR read would produce the
+ * 0-byte blob described in the header — a silent empty upload is worse than
+ * a loud failure.
+ */
+function dataUriBytes(fileUri: string): Uint8Array | null {
+  if (!fileUri.startsWith('data:')) return null;
+  const match = /^data:[^,]*;base64,(.*)$/.exec(fileUri);
+  if (!match) {
+    throw new Error(`unsupported data URI (expected base64): ${fileUri.slice(0, 40)}…`);
+  }
+  return base64ToUint8Array(match[1]);
+}
 
 /** Reads a local `file://` uri into a Blob via XHR (see the module header). */
 function readBlob(fileUri: string): Promise<Blob> {
@@ -69,8 +99,10 @@ export async function putToPresignedUrl(
   mimeType: string,
   maxBytes: number,
 ): Promise<number> {
-  const blob = await readBlob(fileUri);
-  if (blob.size > maxBytes) {
+  const dataBytes = dataUriBytes(fileUri);
+  const blob = dataBytes === null ? await readBlob(fileUri) : null;
+  const size = dataBytes !== null ? dataBytes.byteLength : blob!.size;
+  if (size > maxBytes) {
     throw new Error(`file exceeds the ${Math.round(maxBytes / (1024 * 1024))} MB limit`);
   }
   // AbortController deadline: a hung R2 request rejects instead of pinning
@@ -82,7 +114,7 @@ export async function putToPresignedUrl(
     res = await fetch(url, {
       method: 'PUT',
       headers: { 'Content-Type': mimeType },
-      body: blob,
+      body: dataBytes ?? blob!,
       signal: controller.signal,
     });
   } catch (caught) {
@@ -96,5 +128,5 @@ export async function putToPresignedUrl(
   if (!res.ok) {
     throw new Error(`R2 PUT failed: ${res.status}`);
   }
-  return blob.size;
+  return size;
 }

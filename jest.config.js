@@ -7,7 +7,8 @@ module.exports = {
   // only ESM builds under lib/module — jest must transform them, not skip
   // node_modules wholesale. react-native-image-picker publishes raw TS at
   // "main" (src/index.ts), so it needs the same treatment.
+  // react-native-signature-canvas ships raw ESM (JSX) at "main".
   transformIgnorePatterns: [
-    'node_modules/(?!(react-native|@react-native|@react-navigation|react-native-safe-area-context|react-native-reanimated|react-native-worklets|@react-native-community/datetimepicker|react-native-image-picker)/)',
+    'node_modules/(?!(react-native|@react-native|@react-navigation|react-native-safe-area-context|react-native-reanimated|react-native-worklets|@react-native-community/datetimepicker|react-native-image-picker|react-native-signature-canvas|react-native-webview)/)',
   ],
 };

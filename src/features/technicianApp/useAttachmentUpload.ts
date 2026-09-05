@@ -20,7 +20,7 @@
  * post-PUT/pre-confirm boundary.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { attachmentService } from '../../services';
+import { attachmentService, type ConfirmResponse } from '../../services';
 import { generateIdempotencyKey } from '../../utils/idempotency';
 import { putToPresignedUrl } from '../../utils/r2Upload';
 import { MAX_BYTES } from './photoPicker';
@@ -29,6 +29,17 @@ import {
   type UploadDeps,
   type UploadEntry,
 } from './attachmentUploadModel';
+
+/** Rethrows through, remembering the error for a non-tile caller. */
+function captureError<T>(promise: Promise<T>, onError: (error: unknown) => void): Promise<T> {
+  return promise.then(
+    value => value,
+    error => {
+      onError(error);
+      throw error;
+    },
+  );
+}
 
 /** Epic-4 seam: complete a stored upload's confirm without re-PUTting. */
 export { confirmOnly } from './attachmentUploadModel';
@@ -171,5 +182,58 @@ export function useAttachmentUpload({ jobId, attachmentType, onConfirmed, onLimi
     [patchEntry, runPipeline],
   );
 
-  return { entries, limitReached, start, retry };
+  /**
+   * Story 3.5 — the signature screen's single-file convenience: one file
+   * through the SAME pipeline (presign → PUT → confirm, fresh keys, the 410
+   * auto-restart), no tile lifecycle. Resolves with the ConfirmResponse;
+   * rejects with the underlying error (an ApiError-shaped plain object —
+   * read `.message` via the shared `errorMessage` helper, never `String()`).
+   * A 409 (limit) rejects the same way — the screen renders its copy.
+   */
+  const uploadOne = useCallback(
+    async (file: { fileUri: string; filename: string; mimeType: string }) => {
+      if (!jobId) throw new Error('signature upload needs a job');
+      let confirmed: ConfirmResponse | undefined;
+      let lastError: unknown;
+      // The pipeline fails some branches WITHOUT a dep throwing (incomplete
+      // presign, expired presign, 0-byte PUT) — the copy lives on the emitted
+      // entry alone and must reach the caller, not be replaced by a generic.
+      let lastEntryError: string | undefined;
+      const remember = (error: unknown) => {
+        lastError = error;
+      };
+      const deps: UploadDeps = {
+        presign: (id, body, key) => captureError(attachmentService.requestUpload(id, body, key), remember),
+        put: (url, fileUri, mimeType) => captureError(putToPresignedUrl(url, fileUri, mimeType, MAX_BYTES), remember),
+        confirm: (id, uploadId, sizeBytes, key) =>
+          captureError(attachmentService.confirmUpload(id, uploadId, sizeBytes, key), remember).then(res => {
+            confirmed = res;
+            return res;
+          }),
+        now: Date.now,
+        freshKey: generateIdempotencyKey,
+      };
+      const entry: UploadEntry = {
+        localId: generateIdempotencyKey(),
+        fileUri: file.fileUri,
+        filename: file.filename,
+        mimeType: file.mimeType,
+        phase: 'presigning',
+      };
+      const outcome = await runUploadPipeline(jobId, attachmentType, entry, deps, emitted => {
+        if (emitted.error) lastEntryError = emitted.error;
+      });
+      if (outcome !== 'done') {
+        throw lastError ?? new Error(lastEntryError ?? 'signature upload failed');
+      }
+      // 'done' implies the confirm resolved — but never hand an undefined
+      // response to the screen (the advance would run without a confirmed
+      // attachment).
+      if (!confirmed) throw new Error('signature upload finished without a confirm response');
+      return confirmed;
+    },
+    [jobId, attachmentType],
+  );
+
+  return { entries, limitReached, start, retry, uploadOne };
 }

@@ -135,3 +135,18 @@
   the CLAUDE.md `@/` aliases; repo-wide alias migration already deferred from the 2-1 review.
 - **Sheet controls not disabled while submitting** — the new Switches stay enabled during an in-flight save like
   every other sheet control (pre-existing pattern); if it matters, disable the whole form in one pass.
+
+## Deferred from: code review of 3-5-signature-capture (2026-09-05)
+
+- **Owner-side signature display picks the oldest attachment** — `AttachmentGrid.tsx:86` uses
+  `attachments.find(...)`; after a technician re-capture the owner keeps seeing the first
+  (oldest) signature image. Parity fix is the same `filter().slice(-1)` the technician side
+  got in 3.5. Shipped with 1-6, outside the 3.5 diff.
+- **Owner timeline still counts the fixed 6-step chain** — owner job detail renders
+  "Step N of 6" from `STEP_ORDER.length`, so a signature-off job shows a 6-step chain to the
+  owner while the technician rail shows 5. Owner-side, untouched in the 3.5 diff.
+- **sprint-status 1-6 done-line lacks a commit hash** — unlike every sibling done story's
+  comment. Doc nit, committed in c7a9e67.
+- **Relative imports in new files** — `SignatureScreen`, `signatureExport`, `base64` follow
+  each file's existing relative style rather than the CLAUDE.md `@/` aliases; part of the
+  repo-wide alias migration already deferred from 1-6 and 2-1 reviews.

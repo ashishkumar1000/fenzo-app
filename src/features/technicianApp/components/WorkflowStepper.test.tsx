@@ -24,6 +24,7 @@ function job(overrides: Partial<StepperJob> = {}): StepperJob {
   return {
     currentStep: null,
     requireCompletionPhoto: false,
+    requireCompletionSignature: false,
     status: 'scheduled',
     ...overrides,
   };
@@ -69,10 +70,48 @@ describe('WorkflowStepper', () => {
 
   it('only the next row is tappable — done/locked/skipped rows render no Pressable', () => {
     const onAdvance = jest.fn();
-    // Mid-progress, no photo required: three done rows, one skipped
-    // (photos_uploaded), signature next, completed locked.
-    const root = renderStepper(job({ currentStep: 'in_progress', status: 'in_progress' }), { onAdvance });
+    // Mid-progress, photos skipped (not required), signature REQUIRED: three
+    // done rows, one skipped (photos_uploaded), signature next, completed locked.
+    const root = renderStepper(
+      job({ currentStep: 'in_progress', status: 'in_progress', requireCompletionSignature: true }),
+      { onAdvance },
+    );
     expect(tappableLabels(root)).toEqual(['Signature captured']);
+  });
+
+  it('signature not required → the signature row is ABSENT, completed is next', () => {
+    const onAdvance = jest.fn();
+    // Both flags off: from in_progress the effective chain jumps straight to
+    // completed — no "skipped" signature row either (deliberate asymmetry
+    // with photos, which keep their skipped row: photo upload stays available
+    // on every job, signature capture does not).
+    const root = renderStepper(job({ currentStep: 'in_progress', status: 'in_progress' }), { onAdvance });
+    const labels = root
+      .findAllByProps({ accessibilityLabel: 'Signature captured' })
+      .concat(root.findAllByProps({ accessibilityLabel: 'Completed' }));
+    expect(labels.filter(p => typeof p.props.onPress === 'function').map(p => p.props.accessibilityLabel))
+      .toEqual(['Completed']);
+  });
+
+  it('photos required + signature not → after photos, completed is next (signature row gone)', () => {
+    const root = renderStepper(
+      job({ currentStep: 'photos_uploaded', status: 'in_progress', requireCompletionPhoto: true }),
+      { onAdvance: jest.fn() },
+    );
+    expect(tappableLabels(root)).toEqual(['Completed']);
+    expect(root.findAllByProps({ accessibilityLabel: 'Signature captured' })).toHaveLength(0);
+  });
+
+  it('dynamic flag: currentStep signature_captured while the flag is off → row done, completed next', () => {
+    // A flag flipped off mid-job (owner edit) after the signature was already
+    // captured must not strand the rail: the historical row renders as done.
+    const root = renderStepper(job({ currentStep: 'signature_captured', status: 'in_progress' }), {
+      onAdvance: jest.fn(),
+    });
+    expect(tappableLabels(root)).toEqual(['Completed']);
+    // The historical row renders (as done — no Pressable, hence no
+    // accessibilityLabel; the label Text is the marker).
+    expect(root.findAllByProps({ children: 'Signature captured' }).length).toBeGreaterThan(0);
   });
 
   it('a next photos_uploaded row (photo required) is display-only — never onAdvance', () => {

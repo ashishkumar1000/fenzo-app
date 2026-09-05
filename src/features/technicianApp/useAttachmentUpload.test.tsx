@@ -62,6 +62,7 @@ type HookState = {
   limitReached: boolean;
   start: (files: PickedFile[]) => void;
   retry: (localId: string) => void;
+  uploadOne?: (file: { fileUri: string; filename: string; mimeType: string }) => Promise<unknown>;
 };
 
 let latest: HookState | null = null;
@@ -206,5 +207,74 @@ describe('useAttachmentUpload', () => {
     await act(async () => {});
     expect(confirmUpload).toHaveBeenCalled(); // the pipeline itself ran on
     expect(onConfirmed).not.toHaveBeenCalled(); // but the screen never heard
+  });
+
+  // Story 3.5 — the signature screen's single-file convenience: one file in,
+  // the ConfirmResponse out, no tile lifecycle (the screen owns its UI).
+  describe('uploadOne', () => {
+    function SigProbe(props: { jobId: string }) {
+      const hook = useAttachmentUpload({
+        jobId: props.jobId,
+        attachmentType: 'signature',
+      });
+      latest = hook;
+      return <Text>{hook.entries.map(e => `${e.localId}:${e.phase}`).join(',')}</Text>;
+    }
+
+    async function renderSigHook(props: { jobId: string }) {
+      let renderer!: ReactTestRenderer;
+      await act(async () => {
+        renderer = create(<SigProbe {...props} />);
+      });
+      return renderer;
+    }
+
+    it('resolves with the ConfirmResponse and touches no tile entries', async () => {
+      await renderSigHook({ jobId: 'job-1' });
+      let result!: unknown;
+      await act(async () => {
+        result = await latest!.uploadOne!({
+          fileUri: 'data:image/png;base64,AAA',
+          filename: 'signature-job-1.png',
+          mimeType: 'image/png',
+        });
+      });
+      expect(result).toEqual({ id: 'att-1', type: 'photo', createdAt: '2026-09-05T00:01:00.000Z' });
+      expect(requestUpload).toHaveBeenCalledWith(
+        'job-1',
+        { filename: 'signature-job-1.png', mimeType: 'image/png', attachmentType: 'signature' },
+        expect.any(String),
+      );
+      expect(latest!.entries).toHaveLength(0); // no tile lifecycle
+    });
+
+    it('rejects with the underlying ApiError (not a swallowed string) on failure', async () => {
+      const apiError = { status: 0, code: 'NETWORK_ERROR', message: 'offline' };
+      requestUpload.mockRejectedValue(apiError);
+      await renderSigHook({ jobId: 'job-1' });
+      await expect(
+        act(async () => {
+          await latest!.uploadOne!({
+            fileUri: 'data:image/png;base64,AAA',
+            filename: 'signature-job-1.png',
+            mimeType: 'image/png',
+          });
+        }),
+      ).rejects.toEqual(apiError);
+    });
+
+    it('rejects with the pipeline\'s 409 → limit as an error (the screen renders the copy)', async () => {
+      requestUpload.mockRejectedValue({ status: 409, code: 'PHOTO_LIMIT', message: 'limit' });
+      await renderSigHook({ jobId: 'job-1' });
+      await expect(
+        act(async () => {
+          await latest!.uploadOne!({
+            fileUri: 'data:image/png;base64,AAA',
+            filename: 'signature-job-1.png',
+            mimeType: 'image/png',
+          });
+        }),
+      ).rejects.toEqual({ status: 409, code: 'PHOTO_LIMIT', message: 'limit' });
+    });
   });
 });

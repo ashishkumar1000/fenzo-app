@@ -10,6 +10,11 @@
  *   — the Blob is created via XMLHttpRequest (`responseType: 'blob'`), not
  *     `fetch(uri).blob()` — fetch-created blobs fail the PUT on iOS
  *     (device-verified 2026-09-05; see the module header in r2Upload.ts);
+ *   — a `data:` URI (the signature pad's export) never touches the XHR: its
+ *     base64 payload is decoded in JS and the Uint8Array is the PUT body
+ *     (RN's XHR reads a data: URI as a 0-byte blob — per RN's XHR data-URL
+ *     handling, pending the on-device smoke test); a data URI without the
+ *     base64 marker is rejected outright;
  *   — both the read and the PUT run under a 60 s deadline: a hung request
  *     rejects ("timed out") instead of pinning the tile on Uploading forever.
  */
@@ -195,6 +200,62 @@ describe('putToPresignedUrl', () => {
     const expectation = expect(pending).rejects.toThrow('timed out reading the file');
     await jest.advanceTimersByTimeAsync(60_000);
     await expectation;
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('decodes a data: URI in JS and PUTs its bytes — never the XHR read', async () => {
+    // RN's XHR reads a data: URI as a 0-byte blob (pending the on-device
+    // smoke test), so the data branch must bypass readBlob entirely: the
+    // XHR is left configured to fail, proving it is never touched.
+    xhrFails = true;
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 200 }));
+
+    const size = await putToPresignedUrl(
+      'https://r2.example.com/put?sig=1',
+      'data:image/png;base64,aGVsbG8=',
+      'image/png',
+      CAP,
+    );
+
+    expect(size).toBe(5); // 'hello' — the confirm phase's sizeBytes
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.method).toBe('PUT');
+    expect(init.headers).toEqual({ 'Content-Type': 'image/png' });
+    // The body is the decoded bytes themselves — RN's network layer puts
+    // ArrayBuffer views on the wire byte-exact (no Blob, no UTF-8 mangling).
+    expect(init.body).toBeInstanceOf(Uint8Array);
+    expect(Array.from(init.body as Uint8Array)).toEqual([
+      104, 101, 108, 108, 111,
+    ]);
+  });
+
+  it('enforces the size cap on a decoded data: URI before the PUT', async () => {
+    // Base64 decodes to ¾ of its char count — 2×CAP chars → 1.5×CAP bytes.
+    const oversized = `data:image/png;base64,${'A'.repeat(CAP * 2)}`;
+    await expect(
+      putToPresignedUrl(
+        'https://r2.example.com/put?sig=1',
+        oversized,
+        'image/png',
+        CAP,
+      ),
+    ).rejects.toThrow('exceeds the 10 MB limit');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a data URI without the base64 marker instead of falling through to the XHR', async () => {
+    // A non-base64 data URI would silently become the 0-byte XHR blob — a
+    // loud failure is the contract.
+    xhrFails = true;
+    await expect(
+      putToPresignedUrl(
+        'https://r2.example.com/put?sig=1',
+        'data:image/png;charset=utf-8,hello',
+        'image/png',
+        CAP,
+      ),
+    ).rejects.toThrow('unsupported data URI');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

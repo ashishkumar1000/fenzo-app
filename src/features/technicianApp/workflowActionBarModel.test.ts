@@ -66,9 +66,19 @@ describe('actionBarAction', () => {
       .toEqual({ kind: 'photoHint' });
   });
 
-  it('in_progress without photo required → Capture signature (photos skipped)', () => {
-    expect(actionBarAction(job({ currentStep: 'in_progress', status: 'in_progress', requireCompletionPhoto: false }), [stepLog('in_progress')]))
+  it('in_progress, photos skipped, signature required → Capture signature', () => {
+    expect(actionBarAction(job({ currentStep: 'in_progress', status: 'in_progress', requireCompletionPhoto: false, requireCompletionSignature: true }), [stepLog('in_progress')]))
       .toEqual({ kind: 'button', step: 'signature_captured', label: 'Capture signature' });
+  });
+
+  it('in_progress with both flags off → straight to Mark complete (effective chain)', () => {
+    expect(actionBarAction(job({ currentStep: 'in_progress', status: 'in_progress', requireCompletionPhoto: false, requireCompletionSignature: false }), [stepLog('in_progress')]))
+      .toEqual({ kind: 'button', step: 'completed', label: 'Mark complete' });
+  });
+
+  it('photos required + signature off → after photos, Mark complete', () => {
+    expect(actionBarAction(job({ currentStep: 'photos_uploaded', status: 'in_progress', requireCompletionPhoto: true, requireCompletionSignature: false }), [stepLog('photos_uploaded')]))
+      .toEqual({ kind: 'button', step: 'completed', label: 'Mark complete' });
   });
 
   it('signature_captured → Mark complete', () => {

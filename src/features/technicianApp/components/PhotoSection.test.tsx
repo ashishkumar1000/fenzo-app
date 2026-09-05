@@ -49,6 +49,12 @@ function hookReturn(partial: Partial<HookReturn>): HookReturn {
     limitReached: false,
     start: jest.fn(),
     retry: jest.fn(),
+    // uploadOne is required on the hook's return; photo fixtures never call it.
+    uploadOne: jest.fn(async () => ({
+      id: 'att',
+      type: 'photo' as const,
+      createdAt: '',
+    })),
     ...partial,
   };
 }

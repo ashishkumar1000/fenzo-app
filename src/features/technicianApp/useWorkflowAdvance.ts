@@ -43,6 +43,13 @@ type Params = {
   load: (showSpinner?: boolean) => Promise<void>;
   /** 403 — the job was reassigned away; the screen routes to its unassigned view. */
   onUnassigned: (error: ApiError) => void;
+  /**
+   * 3.5 — the `signature_captured` step captures on a dedicated screen: this
+   * hook never POSTs it directly. The screen navigates to `Signature`; the
+   * screen's own Save runs upload → advance (the direct POST remains the
+   * 422-reconcile fallback there and for Epic 4's replay).
+   */
+  onCaptureSignature: () => void;
 };
 
 export function useWorkflowAdvance({
@@ -52,6 +59,7 @@ export function useWorkflowAdvance({
   detailGenRef,
   load,
   onUnassigned,
+  onCaptureSignature,
 }: Params) {
   const [pendingStep, setPendingStep] = useState<WorkflowStep | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -68,12 +76,15 @@ export function useWorkflowAdvance({
   const advance = useCallback(
     async (step: WorkflowStep) => {
       if (!jobId || pendingRef.current) return;
+      // The signature step navigates instead of posting — the Signature
+      // screen owns capture → upload → advance (see onCaptureSignature).
+      if (step === 'signature_captured') {
+        onCaptureSignature();
+        return;
+      }
       pendingRef.current = true;
       setPendingStep(step);
       setActionError(null);
-      // TODO(3.5): for step === 'signature_captured', navigate to the
-      // Signature screen ({ jobId }) instead of posting directly — this
-      // direct post is the interim dev path until 3.5 merges.
       try {
         const key = (keyRef.current ??= generateIdempotencyKey());
         const job = await jobService.advanceWorkflow(jobId, step, key);
@@ -139,7 +150,7 @@ export function useWorkflowAdvance({
         setPendingStep(null);
       }
     },
-    [jobId, setDetail, detailGenRef, load, onUnassigned],
+    [jobId, setDetail, detailGenRef, load, onUnassigned, onCaptureSignature],
   );
 
   return { pendingStep, actionError, clearActionError: () => setActionError(null), advance };

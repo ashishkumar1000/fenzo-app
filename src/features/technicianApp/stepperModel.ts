@@ -35,7 +35,10 @@ export interface StepView {
   timestamp: string | null;
 }
 
-export type StepperJob = Pick<JobDetail, 'currentStep' | 'requireCompletionPhoto' | 'status'>;
+export type StepperJob = Pick<
+  JobDetail,
+  'currentStep' | 'requireCompletionPhoto' | 'requireCompletionSignature' | 'status'
+>;
 
 /** The `step_<name>` activity entry's timestamp for a step, if logged. */
 function loggedAt(log: ActivityLogEntry[], step: WorkflowStep): string | null {
@@ -43,39 +46,65 @@ function loggedAt(log: ActivityLogEntry[], step: WorkflowStep): string | null {
 }
 
 /**
- * Builds the six stepper rows for a job.
+ * The one step the effective chain routes to next, from `curIdx`: optional
+ * steps whose flag is off are walked over (`photos_uploaded` without the
+ * photo flag, `signature_captured` without the signature flag) until the
+ * first surviving step — the only legal advance target (BE
+ * `workflow.service.ts` effective-chain rule). True exactly when `stepIdx`
+ * is that step.
+ */
+function isEffectiveNext(job: StepperJob, stepIdx: number, curIdx: number): boolean {
+  let idx = curIdx + 1;
+  while (idx < STEP_ORDER.length) {
+    const skippedByFlag =
+      (STEP_ORDER[idx] === 'photos_uploaded' && !job.requireCompletionPhoto) ||
+      (STEP_ORDER[idx] === 'signature_captured' && !job.requireCompletionSignature);
+    if (!skippedByFlag) return idx === stepIdx;
+    idx += 1;
+  }
+  return false;
+}
+
+/**
+ * Builds the stepper rows for a job — one row per step the job's effective
+ * chain actually has (api-contracts §1: `signature_captured` skippable only
+ * when `requireCompletionSignature === false`).
  *
  * - At or before `currentStep`: `done` — except `photos_uploaded`, which
  *   renders `skipped` when photos aren't required and no `step_photos_uploaded`
  *   entry was ever logged (the server allows advancing straight over it).
- * - The single actionable position of a non-terminal job is `next` — normally
- *   `currentStep + 1`, but when photos aren't required and work is under way,
- *   signature is the actionable step while photos shows `skipped`.
+ * - The single actionable position of a non-terminal job is `next` — the
+ *   first step the effective chain routes to (see `isEffectiveNext`): with
+ *   both flags off, `completed` is reachable straight from `in_progress`.
  * - Everything else is `locked`. Terminal jobs (completed/cancelled) never
  *   have a `next`.
+ *
+ * Two deliberate asymmetries with photos:
+ *   - `photos_uploaded` KEEPS its row even when not required (renders
+ *     `skipped`) — photo upload stays available on every job (3.4 ships it
+ *     unconditionally). The signature row is DROPPED when not required —
+ *     capture does not exist at all (requirement decision 2026-09-05: no
+ *     voluntary capture).
+ *   - Exception to the drop: `currentStep === 'signature_captured'` with the
+ *     flag since switched off (an owner edit mid-job) — the step happened,
+ *     so its historical row renders `done` rather than vanishing.
  */
 export function buildStepper(job: StepperJob, log: ActivityLogEntry[]): StepView[] {
   const curIdx = job.currentStep === null ? -1 : STEP_ORDER.indexOf(job.currentStep);
   const terminal = job.status === 'completed' || job.status === 'cancelled';
+  const showSignatureRow = job.requireCompletionSignature || job.currentStep === 'signature_captured';
 
-  return STEP_ORDER.map((step, i) => {
-    if (i <= curIdx) {
+  return STEP_ORDER.filter(step => step !== 'signature_captured' || showSignatureRow).map(step => {
+    const stepIdx = STEP_ORDER.indexOf(step);
+    if (stepIdx <= curIdx) {
       const at = loggedAt(log, step);
       const skipped = step === 'photos_uploaded' && !job.requireCompletionPhoto && !at;
       return { step, state: skipped ? 'skipped' : 'done', timestamp: at };
     }
-    const isNext =
-      !terminal &&
-      (i === curIdx + 1 ||
-        // Photo skip: with no photo required, signature (two ahead of
-        // in_progress) is the real actionable step — the server takes it
-        // directly (workflow.service validateStep).
-        (i === curIdx + 2 &&
-          STEP_ORDER[curIdx + 1] === 'photos_uploaded' &&
-          !job.requireCompletionPhoto));
     if (!job.requireCompletionPhoto && step === 'photos_uploaded' && curIdx === STEP_ORDER.indexOf('in_progress')) {
       return { step, state: 'skipped', timestamp: null };
     }
-    return { step, state: isNext ? 'next' : 'locked', timestamp: null };
+    const state = !terminal && isEffectiveNext(job, stepIdx, curIdx) ? 'next' : 'locked';
+    return { step, state, timestamp: null };
   });
 }
