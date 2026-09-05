@@ -375,7 +375,7 @@ it('a background refresh does not flip isLoading when a profile exists (AC 5)', 
   expect(probe?.error).toBeNull();
 });
 
-it('setProfileFromServer stores the PATCH payload wholesale, clears error, and stamps lastLoadedAt (story 5.2)', async () => {
+it('setProfileFromServer stores the PATCH payload (except `jobs`), clears error, and stamps lastLoadedAt (story 5.2)', async () => {
   getMe.mockResolvedValueOnce(makeProfile());
   await mountProbeAt(T0);
 
@@ -433,6 +433,20 @@ it('a PATCH stored while a GET is in flight is not overwritten by that GET (stor
     await slow;
   });
   expect(probe?.profile?.name).toBe('Patched Name');
+});
+
+it("setProfileFromServer keeps the store's existing `jobs` page — PATCH /users/me has no jobsScope (story 1.7)", async () => {
+  const todayJobs = { data: [{ id: 'today-job' }], nextCursor: null, hasMore: false } as MyProfile['jobs'];
+  getMe.mockResolvedValueOnce(makeProfile({ jobs: todayJobs }));
+  await mountProbeAt(T0);
+  expect(probe?.profile?.jobs).toBe(todayJobs);
+
+  // The PATCH response's `jobs` is the unscoped default (a different page) —
+  // writing it wholesale would swap Home's today-scoped list for it.
+  const unscopedJobs = { data: [{ id: 'unscoped-job' }], nextCursor: null, hasMore: false } as MyProfile['jobs'];
+  await run(() => setProfileFromServer(makeProfile({ name: 'Patched Name', jobs: unscopedJobs })));
+  expect(probe?.profile?.name).toBe('Patched Name');
+  expect(probe?.profile?.jobs).toBe(todayJobs);
 });
 
 it('clearMyProfile resets the store to the pre-login state (story 5.3)', async () => {

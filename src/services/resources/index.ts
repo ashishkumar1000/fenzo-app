@@ -51,6 +51,9 @@ export type {
   MyProfile,
   ProfileTenant,
   ProfileTechnician,
+  ProfileTechnicianSummary,
+  ProfileCustomerSummary,
+  ProfileJob,
   JobCounts,
   UserStatus,
 } from './users';

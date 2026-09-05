@@ -1,5 +1,5 @@
 # generated: 2026-09-01
-# last_updated: 2026-09-05  # 1-7 created (ready-for-dev) — Home Today & needs attention section; depends on fenzit-be 3-9 (ships first)
+# last_updated: 2026-09-05  # 1-7 implemented, awaiting review — Home Today & needs attention section
 # project: fenzo-app
 # project_key: NOKEY
 # tracking_system: file-system
@@ -23,7 +23,7 @@ development_status:
   1-4-home-stats-refresh: done  # review complete (follow-up commit 98ba957); story file already says done
   1-5-jobs-timeline-scopes: done  # committed 37a92e2 (review: 3 decisions + 10 patches + 3 defers)
   1-6-job-requirement-toggles: done  # review closed 2026-09-05 (1 decision + 6 patches + 5 defers); deps: fenzit-be 3-8 (done)
-  1-7-home-todays-jobs-section: ready-for-dev  # depends on fenzit-be 3-9 (BE first); design: fenzo-meta ux-Fenzo-2026-09-05-home-todays-jobs
+  1-7-home-todays-jobs-section: review  # implemented 2026-09-05; tests 524/524 green, tsc clean; design: fenzo-meta ux-Fenzo-2026-09-05-home-todays-jobs
   epic-1-retrospective: optional
 
   # Epic 2: Customer Depth

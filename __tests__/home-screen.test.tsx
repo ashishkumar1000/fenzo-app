@@ -36,11 +36,18 @@ jest.mock('../src/features/profile', () => ({
 jest.mock('../src/features/home', () => ({
   QuickActions: () => null,
   hasAnyJobCount: jest.requireActual('../src/features/home').hasAnyJobCount,
+  // Real implementation — Story 1.7's filtering/strip/empty-state behaviour
+  // is exactly what these tests pin.
+  TodaysJobsSection: jest.requireActual('../src/features/home').TodaysJobsSection,
 }));
 
 import HomeScreen from '../src/screens/HomeScreen';
 import { loadMyProfile, useMyProfile } from '../src/features/profile';
-import type { MyProfile } from '../src/services';
+import { JobCard } from '../src/features/jobs/components/JobCard';
+import { OverdueStrip } from '../src/features/home/components/OverdueStrip';
+import { TodaysJobsSection } from '../src/features/home/components/TodaysJobsSection';
+import { Button } from '../src/components/ui';
+import type { MyProfile, ProfileJob } from '../src/services';
 
 const useMyProfileMock = useMyProfile as jest.Mock;
 const loadMyProfileMock = loadMyProfile as jest.Mock;
@@ -68,6 +75,47 @@ function makeProfile(overrides: Partial<MyProfile> = {}): MyProfile {
     customers: { data: [], nextCursor: null, hasMore: false },
     jobs: { data: [], nextCursor: null, hasMore: false },
     jobCounts: { today: 1, upcoming: 2, overdue: 0, completed: 3, cancelled: 1 },
+    ...overrides,
+  };
+}
+
+/** A `/users/me` today-scoped job row, embeds included (fenzit-be Story 3-9). */
+function makeProfileJob(overrides: Partial<ProfileJob> = {}): ProfileJob {
+  return {
+    id: 'j-1',
+    jobNumber: 'JB-2026-0001',
+    tenantId: 't-1',
+    customerId: 'c-1',
+    technicianId: 'tech-1',
+    serviceLocation: 'Chennai',
+    serviceType: 'plumbing',
+    scheduledStart: '2026-09-05T04:00:00.000Z',
+    scheduledEnd: null,
+    status: 'scheduled',
+    currentStep: null,
+    priority: 'normal',
+    requireCompletionPhoto: false,
+    requireCompletionSignature: false,
+    description: null,
+    notesForTechnician: null,
+    createdAt: '2026-09-05T03:00:00.000Z',
+    completedAt: null,
+    updatedAt: '2026-09-05T03:00:00.000Z',
+    technician: {
+      id: 'tech-1',
+      name: 'Ramesh',
+      countryCode: '+91',
+      phoneNumber: '9000000001',
+      skills: [],
+    },
+    customer: {
+      id: 'c-1',
+      name: 'Priya Sharma',
+      countryCode: '+91',
+      phoneNumber: '9000000002',
+      address: null,
+      city: null,
+    },
     ...overrides,
   };
 }
@@ -238,4 +286,204 @@ it('the Technicians tile is inert (disabled, no Jobs navigation)', async () => {
     tile.props.onPress?.(); // no-op even if invoked
   });
   expect(mockNavigation.navigate).not.toHaveBeenCalled();
+});
+
+// --- Today & needs attention section (Story 1.7) ----------------------------
+
+it('shows only scheduled/in-progress jobs, sorted by scheduledStart ascending', async () => {
+  const early = makeProfileJob({
+    id: 'j-early',
+    status: 'in_progress',
+    scheduledStart: '2026-09-05T03:00:00.000Z',
+    customer: { id: 'c-1', name: 'Early Customer', countryCode: '+91', phoneNumber: '1', address: null, city: null },
+  });
+  const late = makeProfileJob({
+    id: 'j-late',
+    status: 'scheduled',
+    scheduledStart: '2026-09-05T09:00:00.000Z',
+    customer: { id: 'c-2', name: 'Late Customer', countryCode: '+91', phoneNumber: '2', address: null, city: null },
+  });
+  const done = makeProfileJob({
+    id: 'j-done',
+    status: 'completed',
+    customer: { id: 'c-3', name: 'Done Customer', countryCode: '+91', phoneNumber: '3', address: null, city: null },
+  });
+  const cancelled = makeProfileJob({
+    id: 'j-cancelled',
+    status: 'cancelled',
+    customer: { id: 'c-4', name: 'Cancelled Customer', countryCode: '+91', phoneNumber: '4', address: null, city: null },
+  });
+
+  const renderer = await mountWithProfile({
+    jobs: { data: [late, done, early, cancelled], nextCursor: null, hasMore: false },
+  });
+
+  const text = allText(renderer);
+  expect(text).toContain('Early Customer');
+  expect(text).toContain('Late Customer');
+  expect(text).not.toContain('Done Customer');
+  expect(text).not.toContain('Cancelled Customer');
+  expect(text.indexOf('Early Customer')).toBeLessThan(text.indexOf('Late Customer'));
+});
+
+it('shows the overdue strip only when jobCounts.overdue > 0', async () => {
+  const noOverdue = await mountWithProfile({ jobCounts: { today: 0, upcoming: 0, overdue: 0, completed: 0, cancelled: 0 } });
+  expect(noOverdue.root.findAllByType(OverdueStrip).length).toBe(0);
+
+  const withOverdue = await mountWithProfile({ jobCounts: { today: 0, upcoming: 0, overdue: 2, completed: 0, cancelled: 0 } });
+  const strips = withOverdue.root.findAllByType(OverdueStrip);
+  expect(strips.length).toBe(1);
+  expect(strips[0].props.count).toBe(2);
+});
+
+it('renders the strip alone when there are no today jobs but overdue > 0 — the section never fully empties', async () => {
+  const renderer = await mountWithProfile({
+    jobs: { data: [], nextCursor: null, hasMore: false },
+    jobCounts: { today: 0, upcoming: 0, overdue: 3, completed: 0, cancelled: 0 },
+  });
+
+  expect(renderer.root.findAllByType(OverdueStrip).length).toBe(1);
+  expect(allText(renderer)).not.toContain('Nothing scheduled today');
+});
+
+it('shows the empty state (with CTA) when there are no today jobs and overdue is 0', async () => {
+  // Established dashboard requires `hasAnyJobCount` true (Story 1.5 gate);
+  // history-only counts (completed/cancelled) keep it established while
+  // today/overdue — the fields this section renders — stay empty.
+  const renderer = await mountWithProfile({
+    jobs: { data: [], nextCursor: null, hasMore: false },
+    jobCounts: { today: 0, upcoming: 0, overdue: 0, completed: 3, cancelled: 1 },
+    technicianCount: 2,
+  });
+
+  const text = allText(renderer);
+  expect(text).toContain('Nothing scheduled today');
+  expect(text).toContain("You're all clear. Overdue or upcoming work shows in the tiles above.");
+  const cta = renderer.root.findAllByType(Button).find(b => b.props.children === 'Create a job');
+  expect(cta).toBeDefined();
+});
+
+it('hides the "Create a job" CTA when the tenant has no technicians', async () => {
+  // `technicianCount: 0` never reaches HomeScreen's established branch (the
+  // first-run gate requires a technician) — rendered directly to pin the
+  // component's own conditional (AC 7).
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(
+      React.createElement(TodaysJobsSection, {
+        jobs: [],
+        overdueCount: 0,
+        technicianCount: 0,
+        technicians: [],
+        onPressJob: jest.fn(),
+        onPressStrip: jest.fn(),
+        onPressCreate: jest.fn(),
+      }),
+    );
+  });
+
+  const cta = renderer.root.findAllByType(Button).find(b => b.props.children === 'Create a job');
+  expect(cta).toBeUndefined();
+});
+
+it("resolves a job card's names from the embed, falling back when the embed's name is null", async () => {
+  const embedded = makeProfileJob({ id: 'j-embed' });
+  const anomaly = makeProfileJob({
+    id: 'j-anomaly',
+    customerId: 'c-9',
+    technicianId: 'tech-9',
+    scheduledStart: '2026-09-05T05:00:00.000Z',
+    serviceType: 'electrical',
+    customer: { id: 'c-9', name: null, countryCode: '', phoneNumber: '', address: null, city: null },
+    technician: { id: 'tech-9', name: null, countryCode: '', phoneNumber: '', skills: [] },
+  });
+
+  const renderer = await mountWithProfile({
+    jobs: { data: [embedded, anomaly], nextCursor: null, hasMore: false },
+    technicians: [{ id: 'tech-9', name: 'Roster Fallback', countryCode: '+91', phoneNumber: '9', status: 'active', skills: [], skillIds: [], createdAt: '2026-01-01T00:00:00.000Z' }],
+  });
+
+  const text = allText(renderer);
+  // Embedded row: names come straight from the embed.
+  expect(text).toContain('Priya Sharma');
+  expect(text).toContain('Ramesh');
+  // Anomaly row: null customer name falls back to the service label,
+  // null technician name falls back to the roster lookup.
+  expect(text).toContain('Electrical');
+  expect(text).toContain('Roster Fallback');
+});
+
+it("falls back for an empty-string embed name too, not just null", async () => {
+  // A `||`, not `??`, chain: an empty string is falsy but not nullish, and
+  // must still fall through to the next name source rather than render blank.
+  const job = makeProfileJob({
+    id: 'j-empty-name',
+    serviceType: 'pest_control',
+    customer: { id: 'c-1', name: '', countryCode: '', phoneNumber: '', address: null, city: null },
+    technician: { id: 'tech-1', name: '', countryCode: '', phoneNumber: '', skills: [] },
+  });
+
+  const renderer = await mountWithProfile({
+    jobs: { data: [job], nextCursor: null, hasMore: false },
+    technicians: [{ id: 'tech-1', name: 'Roster Name', countryCode: '+91', phoneNumber: '9', status: 'active', skills: [], skillIds: [], createdAt: '2026-01-01T00:00:00.000Z' }],
+  });
+
+  const text = allText(renderer);
+  expect(text).toContain('Pest control');
+  expect(text).toContain('Roster Name');
+});
+
+it('does not crash and keeps a stable order when a job has a malformed scheduledStart', async () => {
+  const malformed = makeProfileJob({ id: 'j-malformed', scheduledStart: 'not-a-date' });
+  const valid = makeProfileJob({
+    id: 'j-valid',
+    scheduledStart: '2026-09-05T06:00:00.000Z',
+    customerId: 'c-valid',
+    customer: { id: 'c-valid', name: 'Valid Customer', countryCode: '+91', phoneNumber: '1', address: null, city: null },
+  });
+
+  const renderer = await mountWithProfile({
+    jobs: { data: [malformed, valid], nextCursor: null, hasMore: false },
+  });
+
+  const text = allText(renderer);
+  expect(text).toContain('Valid Customer');
+  expect(text).toContain('Priya Sharma'); // the malformed row's own (default) customer name
+});
+
+it('pressing a today job card navigates to Owner Job Detail', async () => {
+  const job = makeProfileJob({ id: 'j-press' });
+  const renderer = await mountWithProfile({ jobs: { data: [job], nextCursor: null, hasMore: false } });
+
+  const card = renderer.root.findAllByType(JobCard).find(c => c.props.job.id === 'j-press');
+  await act(async () => {
+    card?.props.onPress?.(job);
+  });
+  expect(mockNavigation.navigate).toHaveBeenCalledWith('JobDetail', { jobId: 'j-press' });
+});
+
+it('pressing the overdue strip navigates to the Jobs tab pre-set to the overdue scope', async () => {
+  const renderer = await mountWithProfile({
+    jobCounts: { today: 0, upcoming: 0, overdue: 1, completed: 0, cancelled: 0 },
+  });
+
+  const strip = renderer.root.findByType(OverdueStrip);
+  await act(async () => {
+    strip.props.onPress();
+  });
+  expect(mockNavigation.navigate).toHaveBeenCalledWith('Jobs', { scope: 'overdue' });
+});
+
+it('pressing "Create a job" in the empty state navigates to NewJob', async () => {
+  const renderer = await mountWithProfile({
+    jobs: { data: [], nextCursor: null, hasMore: false },
+    jobCounts: { today: 0, upcoming: 0, overdue: 0, completed: 3, cancelled: 1 },
+    technicianCount: 2,
+  });
+
+  const cta = renderer.root.findAllByType(Button).find(b => b.props.children === 'Create a job');
+  await act(async () => {
+    cta?.props.onPress();
+  });
+  expect(mockNavigation.navigate).toHaveBeenCalledWith('NewJob');
 });

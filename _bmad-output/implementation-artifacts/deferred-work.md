@@ -164,3 +164,23 @@
 - **Reset registry has no ordering/async contract** — `src/services/resetRegistry.ts` runs resets
   in Set-insertion order, sync only. Today's resets are order-independent; Epic 4's sync store /
   action queue may need ordering or async semantics. Document the contract when that store lands.
+
+## Deferred from: code review of 1-7-home-todays-jobs-section (2026-09-05)
+
+- **Today's jobs section has no pagination / truncation notice** — `HomeScreen.tsx` passes only
+  `profile.jobs.data` into `TodaysJobsSection`; `hasMore`/`nextCursor` are dropped. A tenant with
+  more scheduled/in-progress jobs today than the backend's page size sees `jobCounts.today`
+  (header tile) disagree with the list below it, with no "load more" or truncation signal. No AC
+  in this story calls for pagination here — needs a UX decision (load-more vs. "view all in
+  Jobs") before it's built.
+- **`Card` doesn't forward `accessibilityRole`** — `src/components/ui/Card.tsx`'s `interactive`
+  mode wraps its own `Pressable` but never accepts/forwards an `accessibilityRole` prop, so an
+  accessible tappable card (this story's `OverdueStrip`, and `HomeHeader`'s pre-existing
+  `StatCard`) has to hand-roll a `Pressable`-wraps-non-interactive-`Card` workaround instead of
+  using `interactive` directly. Now two independent copies of the same workaround. Fix once by
+  adding an `accessibilityRole` prop to `CardProps` and forwarding it on both the `View` and
+  `Pressable` branches; migrate both call sites when next touched.
+- **Relative imports in new files** — `TodaysJobsSection.tsx`, `OverdueStrip.tsx`,
+  `selectTodayJobs.ts` follow each sibling file's existing relative style rather than the
+  CLAUDE.md `@/` aliases; same repo-wide alias migration already deferred from 1-6/2-1/3-5
+  reviews.

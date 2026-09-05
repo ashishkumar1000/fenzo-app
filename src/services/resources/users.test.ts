@@ -46,8 +46,24 @@ describe('usersApi.getMe', () => {
     get.mockResolvedValueOnce({ data: PROFILE });
     const returned = await usersApi.getMe();
     expect(returned).toBe(PROFILE);
-    expect(get).toHaveBeenCalledWith('/users/me', { signal: undefined });
+    expect(get).toHaveBeenCalledWith('/users/me', { signal: undefined, params: {} });
     expect(get).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends jobsScope=today when requested (Story 1.7)', async () => {
+    get.mockResolvedValueOnce({ data: PROFILE });
+    await usersApi.getMe(undefined, 'today');
+    expect(get).toHaveBeenCalledWith('/users/me', {
+      signal: undefined,
+      params: { jobsScope: 'today' },
+    });
+  });
+
+  it('omits jobsScope from params when explicitly "all"-less callers pass none', async () => {
+    const signal = new AbortController().signal;
+    get.mockResolvedValueOnce({ data: PROFILE });
+    await usersApi.getMe(signal);
+    expect(get).toHaveBeenCalledWith('/users/me', { signal, params: {} });
   });
 });
 

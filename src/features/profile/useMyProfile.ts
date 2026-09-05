@@ -86,7 +86,10 @@ async function fetchProfile(): Promise<void> {
   // background focus refresh — only the FIRST load shows the spinner).
   setState({ isLoading: state.profile === null, error: null });
   try {
-    const profile = await usersApi.getMe();
+    // 'today' — Home's dispatch section renders only today's jobs (Story 1.7);
+    // More/profile screens never read `jobs`, so the shared fetch narrowing
+    // here doesn't cost them anything.
+    const profile = await usersApi.getMe(undefined, 'today');
     // A forced request can supersede this one (both run in parallel); a late
     // settling response from the older request must not overwrite the newer
     // state or stamp an older success.
@@ -123,10 +126,18 @@ async function fetchProfile(): Promise<void> {
  * flight — one that started before the PATCH can only carry pre-PATCH data,
  * so its late-settling response fails the fetch guard instead of
  * overwriting this write.
+ *
+ * `jobs` is the one field NOT taken from this payload: `PATCH /users/me`
+ * has no `jobsScope` param (it's a GET-only query field), so its `jobs` page
+ * is always the unscoped default — writing it wholesale would silently swap
+ * Home's today-scoped, `scheduledStart`-sorted list for an unrelated one
+ * until the next throttled refetch. The store's existing `jobs` (already
+ * `jobsScope=today`, or absent before any load) is kept instead.
  */
 export function setProfileFromServer(profile: MyProfile) {
   requestSeq += 1;
-  setState({ profile, error: null, isLoading: false, lastLoadedAt: Date.now() });
+  const jobs = state.profile?.jobs ?? profile.jobs;
+  setState({ profile: { ...profile, jobs }, error: null, isLoading: false, lastLoadedAt: Date.now() });
 }
 
 /**

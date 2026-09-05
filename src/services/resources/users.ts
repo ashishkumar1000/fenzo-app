@@ -19,6 +19,7 @@
  */
 import { apiClient } from '../api/apiClient';
 import type { UserRole } from './authApi';
+import type { ApiJob } from './jobs';
 
 export type { Paginated } from '../api/pagination';
 import type { Paginated } from '../api/pagination';
@@ -92,6 +93,41 @@ export interface ProfileTechnician {
   createdAt: string;
 }
 
+/**
+ * The technician embedded on a profile job row (`/users/me` jobs.data[].technician`).
+ * Same shape as `JobDetailTechnician`, but nullable-name: unlike the job-detail
+ * endpoint (which 500s on a data anomaly), a profile row still renders with
+ * `name: null` / empty strings when the mid-page lookup can't find the
+ * technician — see fenzit-be Story 3-9 review notes.
+ */
+export interface ProfileTechnicianSummary {
+  id: string;
+  name: string | null;
+  countryCode: string;
+  phoneNumber: string;
+  skills: string[];
+}
+
+/** The customer embedded on a profile job row. Same nullable-on-anomaly note as `ProfileTechnicianSummary`. */
+export interface ProfileCustomerSummary {
+  id: string;
+  name: string | null;
+  countryCode: string;
+  phoneNumber: string;
+  address: string | null;
+  city: string | null;
+}
+
+/**
+ * One `/users/me` job row: the plain `ApiJob` fields plus the technician and
+ * customer embeds (fenzit-be Story 3-9) — always present (`technician_id` is
+ * NOT NULL, so unassigned jobs cannot exist), never re-fetched by id on-device.
+ */
+export type ProfileJob = ApiJob & {
+  technician: ProfileTechnicianSummary;
+  customer: ProfileCustomerSummary;
+};
+
 export interface MyProfile {
   id: string;
   /**
@@ -114,13 +150,25 @@ export interface MyProfile {
   technicians: ProfileTechnician[];
   technicianCount: number;
   customers: Paginated<unknown>;
-  jobs: Paginated<unknown>;
+  jobs: Paginated<ProfileJob>;
   jobCounts: JobCounts;
 }
 
-/** `GET /users/me` — requires auth. Returns the signed-in user's profile. */
-async function getMe(signal?: AbortSignal): Promise<MyProfile> {
-  const res = await apiClient.get<MyProfile>('/users/me', { signal });
+/**
+ * `GET /users/me` — requires auth. Returns the signed-in user's profile.
+ *
+ * `jobsScope` narrows `jobs` to today's exclusive IST window, sorted
+ * `scheduledStart` ASC (fenzit-be Story 3-9). Omitting it sends no
+ * `jobsScope` param at all — the byte-compatible default (`created_at DESC`,
+ * no day filter). Passing `'all'` explicitly sends `?jobsScope=all` on the
+ * wire rather than omitting the param; the backend treats both identically
+ * (fenzit-be 3-9 AC 2), so there's no behavioural difference — just no
+ * caller currently exercises `'all'` explicitly.
+ */
+async function getMe(signal?: AbortSignal, jobsScope?: 'today' | 'all'): Promise<MyProfile> {
+  const params: Record<string, unknown> = {};
+  if (jobsScope) params.jobsScope = jobsScope;
+  const res = await apiClient.get<MyProfile>('/users/me', { signal, params });
   return res.data;
 }
 

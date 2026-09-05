@@ -19,7 +19,7 @@ import HomeHeader from '../components/HomeHeader';
 import { Card, EmptyState, InlineError } from '../components/ui';
 import { colors, radius, spacing, typography } from '../theme';
 import { firstName, loadMyProfile, useMyProfile } from '../features/profile';
-import { QuickActions, hasAnyJobCount } from '../features/home';
+import { QuickActions, TodaysJobsSection, hasAnyJobCount } from '../features/home';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Home'>,
@@ -56,6 +56,13 @@ export default function HomeScreen({ navigation }: Props) {
   const handleNewJob = useCallback(() => {
     navigation.navigate('NewJob');
   }, [navigation]);
+
+  const handlePressJob = useCallback(
+    (jobId: string) => {
+      navigation.navigate('JobDetail', { jobId });
+    },
+    [navigation],
+  );
 
   const quickActions = (
     <QuickActions
@@ -187,18 +194,15 @@ export default function HomeScreen({ navigation }: Props) {
         {errorBanner}
         {quickActions}
 
-        <View style={styles.jobsSection}>
-          <Text style={styles.sectionTitle}>Today's jobs</Text>
-          {/* The profile payload returns a `jobs` page, but its item shape
-              isn't modelled yet — so no list here rather than invented rows.
-              Wire this to `profile.jobs.data` once the job shape is known. */}
-          <Card padding="lg" style={styles.noJobsCard}>
-            <View style={styles.noJobsIconBadge}>
-              <Calendar size={24} color={colors.primary} strokeWidth={1.5} />
-            </View>
-            <Text style={styles.noJobsTitle}>Nothing scheduled today</Text>
-          </Card>
-        </View>
+        <TodaysJobsSection
+          jobs={profile.jobs.data}
+          overdueCount={jobCounts.overdue}
+          technicianCount={technicianCount}
+          technicians={profile.technicians}
+          onPressJob={handlePressJob}
+          onPressStrip={() => handleTilePress('overdue')}
+          onPressCreate={handleNewJob}
+        />
       </ScrollView>
     </>
   );
