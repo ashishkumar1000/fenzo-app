@@ -41,6 +41,8 @@ export type RootStackParamList = {
   JobDetail: { jobId: string };
   /** Owner-only customer profile + job history — opened with the customer's uuid. */
   CustomerDetail: { customerId: string };
+  /** Tenant skill list management (More tab → Skills row). */
+  Skills: undefined;
 };
 
 /**

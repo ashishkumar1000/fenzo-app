@@ -31,7 +31,7 @@ export type InputProps = {
   style?: StyleProp<ViewStyle>;
 } & Pick<
   TextInputProps,
-  'keyboardType' | 'autoCapitalize' | 'autoCorrect' | 'secureTextEntry' | 'maxLength' | 'onBlur' | 'onFocus' | 'multiline' | 'numberOfLines'
+  'keyboardType' | 'autoCapitalize' | 'autoCorrect' | 'secureTextEntry' | 'maxLength' | 'onBlur' | 'onFocus' | 'multiline' | 'numberOfLines' | 'autoFocus'
 >;
 
 export function Input({

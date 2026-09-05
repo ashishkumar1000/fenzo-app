@@ -3,11 +3,15 @@
  * phone + skills). Matches the Fenzit sheet pattern (rounded top, upward
  * shadow, grabber).
  *
- * Local form state (including the skill list fetch and the submit
- * loading/error state) lives here since it's tied directly to this form's
- * own UX — but persistence itself stays with the parent: `onSubmit` does the
- * actual API call and this sheet only reacts to whether that promise
- * resolves or rejects (close + reset vs. show the error and stay open).
+ * The skill list comes from the shared `useSkills` store (loaded on sheet
+ * open), NOT a private fetch — the Skills screen and this picker must show
+ * the same rows, so a skill added there is selectable here immediately.
+ *
+ * Local form state (and the submit loading/error state) lives here since
+ * it's tied directly to this form's own UX — but persistence itself stays
+ * with the parent: `onSubmit` does the actual API call and this sheet only
+ * reacts to whether that promise resolves or rejects (close + reset vs.
+ * show the error and stay open).
  */
 import { useEffect, useState } from 'react';
 import {
@@ -23,8 +27,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Phone, User } from 'lucide-react-native';
 import { Button, Input, MultiSelect } from '../../../components/ui';
 import { colors, radius, shadow, spacing, typography } from '../../../theme';
-import { skillService } from '../../../services';
-import type { ApiError, Skill } from '../../../services';
+import type { ApiError } from '../../../services';
+import { loadSkills, useSkills } from '../../skills';
 import { DIAL_CODE, PHONE_LENGTH } from '../constants';
 import type { NewTechnicianInput } from '../types';
 
@@ -57,35 +61,18 @@ export function AddTechnicianSheet({ visible, onClose, onSubmit }: Props) {
   const [phone, setPhone] = useState('');
   const [skillIds, setSkillIds] = useState<string[]>([]);
 
-  const [skills, setSkills] = useState<Skill[]>([]);
-  const [loadingSkills, setLoadingSkills] = useState(false);
-  const [skillsError, setSkillsError] = useState('');
-
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
-  // Fetch the tenant's skill list fresh each time the sheet opens — the
-  // multi-select can only offer skills that exist right now (from GET
-  // /skills), it doesn't create new ones.
+  // Shared skill store — the same rows the Skills screen manages. Loaded on
+  // sheet open (force: false — the store dedupes in-flight requests and
+  // throttles repeats), so the multi-select offers skills that exist right
+  // now; it doesn't create new ones.
+  const { skills, isLoading: loadingSkills, error: skillsError } = useSkills();
+
   useEffect(() => {
     if (!visible) return;
-    let cancelled = false;
-    setLoadingSkills(true);
-    setSkillsError('');
-    skillService
-      .list()
-      .then(list => {
-        if (!cancelled) setSkills(list);
-      })
-      .catch(err => {
-        if (!cancelled) setSkillsError((err as ApiError).message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingSkills(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    void loadSkills();
   }, [visible]);
 
   const canSubmit =
@@ -137,7 +124,7 @@ export function AddTechnicianSheet({ visible, onClose, onSubmit }: Props) {
   const skillsHelper =
     skillsError ||
     (!loadingSkills && skills.length === 0
-      ? 'No skills set up yet — add one from Settings first.'
+      ? 'No skills set up yet — add one from the Skills screen (More tab).'
       : skillIds.length >= MAX_SKILLS
         ? `Maximum ${MAX_SKILLS} skills per technician.`
         : '');

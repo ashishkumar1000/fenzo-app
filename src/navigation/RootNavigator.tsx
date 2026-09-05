@@ -4,6 +4,7 @@ import { TechniciansScreen } from '../features/technicians';
 import { NewJobScreen } from '../features/newJob';
 import { JobDetailScreen } from '../features/jobDetail';
 import { CustomerDetailScreen } from '../features/customerDetail';
+import { SkillsScreen } from '../features/skills';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -40,6 +41,11 @@ export default function RootNavigator() {
       <Stack.Screen
         name="CustomerDetail"
         component={CustomerDetailScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="Skills"
+        component={SkillsScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

@@ -3,6 +3,9 @@ module.exports = {
   // re-exports this package — the dependency is the real requirement).
   preset: '@react-native/jest-preset',
   setupFiles: ['./jest.setup.js'],
+  // Watchman can't be relied on in sandboxed environments (its state dir sits
+  // outside the repo and mkdirs fail) — use jest's own crawler instead.
+  watchman: false,
   // Some deps (notably @react-navigation, react-native-reanimated) publish
   // only ESM builds under lib/module — jest must transform them, not skip
   // node_modules wholesale. react-native-image-picker publishes raw TS at

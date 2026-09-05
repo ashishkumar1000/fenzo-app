@@ -1,5 +1,5 @@
 # generated: 2026-09-01
-# last_updated: 2026-09-05  # plan reordered: Epic 5 (except 5-4) now ships before Epic 4 — see epics.md "Sequencing Update (2026-09-05)"
+# last_updated: 2026-09-05  # 5-1 done (code review complete)
 # project: fenzo-app
 # project_key: NOKEY
 # tracking_system: file-system
@@ -49,7 +49,7 @@ development_status:
 
   # Epic 5: Account, Session & Polish — 5-1..5-3 ship BEFORE Epic 4 (plan reordered 2026-09-05); 5-4 stays last
   epic-5: in-progress
-  5-1-skills-management-screen: ready-for-dev
+  5-1-skills-management-screen: done
   5-2-profile-edit: ready-for-dev
   5-3-session-expiry-global-401: ready-for-dev
   5-4-error-envelope-consistency: ready-for-dev
