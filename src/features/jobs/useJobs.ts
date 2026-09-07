@@ -110,6 +110,14 @@ const filterToStatuses = (f: JobFilter) => (f === 'all' ? undefined : [f]);
  * (pull-to-refresh). A scope or filter change always loads fresh: it's a
  * different query, not a refresh.
  *
+ * KNOWN NARROW RACE (code-review pass, PLAUSIBLE): a focus-effect refetch
+ * can queue behind a `loadMoreJobs` fetch that was in flight when the screen
+ * regained focus, so the queued page-1 load runs after the page-2 commit.
+ * The window is sub-second (the queued continuation runs in the same
+ * microtask chain as `inFlight`'s finally, and `loadMoreJobs` early-returns
+ * while `inFlight`), so the worst visible symptom is a one-frame render of
+ * old rows under the incoming query; no cursor replay is reachable.
+ *
  * A scope change behaves exactly like a filter change: the loader shows over
  * the old rows (they are NOT cleared eagerly), the previous scope's cursor is
  * dropped, and a failure clears rows/cursor so the old scope's rows never
@@ -228,6 +236,15 @@ export function loadMoreJobs(): Promise<void> {
  *     in today's list before the server has ever been asked for it.
  *   - Filter: skipped when the active chip excludes the job's status — a
  *     freshly created (scheduled) job must not appear under a Done chip.
+ *
+ * KNOWN GAP (code-review pass, accepted): this function is deliberately NOT
+ * covered by the reset-epoch guard (services/resetRegistry.ts). After a 401's
+ * `clearJobs`, INITIAL's scope is 'today', so a response landing post-reset
+ * passes every guard here and writes the previous session's row into the
+ * cleared store. That's in-memory only (this store is not MMKV-persisted)
+ * and the next session's first `loadJobs()` overwrites it — so the one-row
+ * blip is accepted; noted so a future caller doesn't read the guards as
+ * airtight. (Call sites: NewJobScreen's create, JobDetailScreen's edit/cancel.)
  */
 export function upsertJob(job: ApiJob): void {
   if (state.scope !== 'today' || !isSameIstDay(job.scheduledStart)) return;

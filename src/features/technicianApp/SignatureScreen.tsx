@@ -4,53 +4,37 @@
  * here" baseline until the first stroke, an inline error line, and the
  * Clear/Save footer.
  *
- * Save's sequence is capture → upload → advance → pop, and it is deliberately
- * resumable: `confirmedThisSession` latches after a successful upload so a
- * hard advance failure (offline) retries ONLY the advance on the next Save —
- * the bytes are already stored and re-uploading would fork the attachment.
- * Clear resets the latch: a cleared pad is a fresh drawing, so the next Save
- * must re-upload (the server's last-write-wins replaces the old signature).
- * A 422 on the advance (step already recorded — an offline race) reconciles
- * silently and still pops, mirroring 3.3 AC 5; a 422 whose server currentStep
- * is BEFORE signature_captured is a real rejection and surfaces as an error.
+ * The Save orchestration (export → upload → advance → pop, its resumable
+ * latch and 422 reconciliation) lives in `useSignatureSave`, extracted
+ * verbatim (file split, behaviour unchanged) — see that file for the
+ * failure-branch details.
  *
  * A failed upload keeps the screen (and the drawing) up — the pad is never
- * cleared on failure. A network-class failure (status 0) gets the story's
- * offline copy instead of the raw transport message. // EPIC4: NetInfo gate
- * — Epic 4 swaps the post-failure copy for a pre-flight reachability check.
+ * cleared on failure. // EPIC4: NetInfo gate — Epic 4 swaps the post-failure
+ * copy for a pre-flight reachability check.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  useNavigation,
-  useRoute,
-  type RouteProp,
-} from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import SignatureView, {
   type SignatureViewRef,
 } from 'react-native-signature-canvas';
 import { Button, Card, IconButton } from '../../components/ui';
 import { ChevronLeft } from 'lucide-react-native';
 import { colors, fontSize, leading, spacing, typography } from '../../theme';
-import { jobService, type ApiError } from '../../services';
-import { workflowCurrentStep } from '../../services/api/apiError';
 import type { TechnicianRootStackParamList } from '../../navigation/types';
-import { generateIdempotencyKey } from '../../utils/idempotency';
-import { useAttachmentUpload } from './useAttachmentUpload';
-import { errorMessage } from './attachmentUploadModel';
-import { SIGNATURE_MIME_TYPE, signatureFilename } from '../../utils/signatureExport';
-import { STEP_ORDER, type WorkflowStep } from './stepperModel';
-
-type Navigation = NativeStackNavigationProp<TechnicianRootStackParamList, 'Signature'>;
+import { useSignatureSave } from './useSignatureSave';
 
 /** The library ships its own footer buttons — ours replace them. */
 const HIDE_PAD_FOOTER = '.m-signature-pad--footer { display: none; }';
 
-/** AC 7's offline copy — shown for a network-class failure until Epic 4's
- * pre-flight reachability check lands (// EPIC4: NetInfo gate). */
-const OFFLINE_COPY = 'Signature upload needs internet.';
+type Navigation = NativeStackScreenProps<
+  TechnicianRootStackParamList,
+  'Signature'
+>['navigation'];
 
 export default function SignatureScreen() {
   const navigation = useNavigation<Navigation>();
@@ -61,28 +45,6 @@ export default function SignatureScreen() {
 
   const padRef = useRef<SignatureViewRef | null>(null);
   const [hasStroke, setHasStroke] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // Latched once the upload confirms: a retry after that must only re-run the
-  // advance, never re-upload (the bytes are already stored — see header).
-  const confirmedThisSession = useRef(false);
-  // Real busy guard: state alone can't close the window between the Save tap
-  // and the native readSignature roundtrip that fires onOK.
-  const busyRef = useRef(false);
-  // The save chain outlives the screen (user can hit back mid-upload) — an
-  // unmounted screen must not pop the route underneath or setState.
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
-  const { uploadOne } = useAttachmentUpload({
-    jobId,
-    attachmentType: 'signature',
-  });
 
   const goBackSafely = useCallback(() => {
     if (navigation.canGoBack()) {
@@ -96,58 +58,8 @@ export default function SignatureScreen() {
     if (!jobId) goBackSafely();
   }, [jobId, goBackSafely]);
 
-  const onOK = useCallback(
-    async (dataUri: string) => {
-      if (!jobId || busyRef.current) return;
-      busyRef.current = true;
-      setBusy(true);
-      setError(null);
-      try {
-        if (!confirmedThisSession.current) {
-          await uploadOne({
-            fileUri: dataUri,
-            filename: signatureFilename(jobId),
-            mimeType: SIGNATURE_MIME_TYPE,
-          });
-          confirmedThisSession.current = true;
-        }
-        try {
-          await jobService.advanceWorkflow(
-            jobId,
-            'signature_captured',
-            generateIdempotencyKey(),
-          );
-        } catch (caught) {
-          // A 422 whose body names signature_captured (or a later step) means
-          // the step is already recorded (an offline race) — that IS success.
-          // An earlier currentStep is a real rejection — the step never
-          // happened — and must surface as the inline error.
-          const currentStep = workflowCurrentStep(caught as ApiError);
-          // An unknown step string also reconciles to "not recorded" — the
-          // server's vocabulary is the source of truth here.
-          const recorded =
-            currentStep != null &&
-            STEP_ORDER.includes(currentStep as WorkflowStep) &&
-            STEP_ORDER.indexOf(currentStep as WorkflowStep) >=
-              STEP_ORDER.indexOf('signature_captured');
-          if (!recorded) throw caught;
-        }
-        if (mountedRef.current) navigation.goBack();
-      } catch (caught) {
-        // A network-class failure (status 0) is not a server verdict — show
-        // the story's offline copy instead of the raw transport message.
-        setError(
-          (caught as ApiError).status === 0
-            ? OFFLINE_COPY
-            : errorMessage(caught),
-        );
-      } finally {
-        busyRef.current = false;
-        if (mountedRef.current) setBusy(false);
-      }
-    },
-    [jobId, navigation, uploadOne],
-  );
+  const { busy, error, submitSignature, resetForNewDrawing, reportPadFailure } =
+    useSignatureSave({ jobId, pop: () => navigation.goBack() });
 
   const onSave = useCallback(() => {
     padRef.current?.readSignature(); // → onOK
@@ -159,11 +71,8 @@ export default function SignatureScreen() {
     // so the stroke state is reset here, not via the pad.
     padRef.current?.clearSignature();
     setHasStroke(false);
-    // A cleared pad is a fresh drawing: the latch no longer describes what's
-    // on the pad, so the next Save re-uploads (server last-write-wins).
-    confirmedThisSession.current = false;
-    setError(null);
-  }, []);
+    resetForNewDrawing();
+  }, [resetForNewDrawing]);
 
   if (!jobId) return null;
 
@@ -199,11 +108,11 @@ export default function SignatureScreen() {
               webStyle={HIDE_PAD_FOOTER}
               onBegin={() => setHasStroke(true)}
               onEmpty={() => setHasStroke(false)}
-              onOK={(dataUri: string) => void onOK(dataUri)}
+              onOK={(dataUri: string) => void submitSignature(dataUri)}
               onError={() => {
                 // A broken pad has no drawing to save — disable Save with it.
                 setHasStroke(false);
-                setError('Signature pad failed to load — go back and try again.');
+                reportPadFailure();
               }}
             />
             {!hasStroke ? (
@@ -237,9 +146,9 @@ export default function SignatureScreen() {
             Save signature
           </Button>
         </View>
-        {/* EPIC4: NetInfo gate — a network-class failure shows OFFLINE_COPY
-            above; Epic 4 replaces this post-failure copy with a pre-flight
-            reachability check that disables Save up front. */}
+        {/* EPIC4: NetInfo gate — a network-class failure shows the offline
+            copy above; Epic 4 replaces this post-failure copy with a
+            pre-flight reachability check that disables Save up front. */}
       </View>
     </SafeAreaView>
   );
