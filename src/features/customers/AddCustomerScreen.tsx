@@ -97,8 +97,40 @@ export default function AddCustomerScreen({ navigation, route }: Props) {
   // pick lands — 0 = no highlight (transparent ring), 1 = full tint.
   const addressPulse = useRef(new Animated.Value(0)).current;
 
+  // A JS-driven pulse keeps rescheduling animation frames while it runs —
+  // stop it on unmount so nothing is left ticking after this screen is gone
+  // (in Jest this surfaces as a post-teardown crash of the test worker).
+  useEffect(
+    () => () => {
+      addressPulse.stopAnimation();
+    },
+    [addressPulse],
+  );
+
   const canSubmit =
     name.trim().length > 0 && phone.length === PHONE_LENGTH && !submitting;
+
+  // While the POST is in flight, hardware/gesture back is blocked — the old
+  // Modal-based AddCustomerSheet vetoed it via `onRequestClose`; on a full
+  // page only a navigation guard covers the gesture path (the header back
+  // button's `disabled` does not). Without it the screen pops mid-request,
+  // the resolve still lands (`upsertCustomer` + possible NewJob redirect)
+  // and a retry of the same phone then 409s. The listener re-arms on every
+  // `submitting` flip, so navigation is free again once the request settles.
+  const bypassBackGuardRef = useRef(false);
+
+  useEffect(() => {
+    if (!submitting) return;
+    return navigation.addListener('beforeRemove', e => {
+      // The screen's OWN post-save navigation (goBack / navigate to NewJob)
+      // dispatches while `submitting` is still true — the listener is only
+      // disarmed by the next render, after React Navigation has already
+      // evaluated the removal. A prevented removal is never retried, so
+      // without this bypass a successful save would leave the screen open.
+      if (bypassBackGuardRef.current) return;
+      e.preventDefault();
+    });
+  }, [submitting, navigation]);
 
   const handleAddressResolved = (resolved: ResolvedPlace) => {
     setAddress(resolved.formattedAddress);
@@ -185,6 +217,9 @@ export default function AddCustomerScreen({ navigation, route }: Props) {
       // it must never surface as a create error via the catch below.
       await loadCustomers({ force: true }).catch(() => {});
 
+      // This removal is our own — let the still-armed back guard through
+      // (see its comment above).
+      bypassBackGuardRef.current = true;
       if (returnRouteName === 'NewJob') {
         navigation.navigate({
           name: 'NewJob',

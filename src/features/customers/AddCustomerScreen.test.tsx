@@ -29,7 +29,7 @@ import { act, create } from 'react-test-renderer';
 import { Text, TextInput } from 'react-native';
 import { Button } from '../../components/ui';
 import { customerService } from '../../services';
-import type { ResolvedPlace } from '../../services';
+import type { CreatedCustomer, ResolvedPlace } from '../../services';
 import { upsertCustomer, loadCustomers } from './useCustomers';
 import AddCustomerScreen from './AddCustomerScreen';
 
@@ -37,7 +37,20 @@ const createSpy = jest.spyOn(customerService, 'create');
 const upsertCustomerMock = upsertCustomer as jest.Mock;
 const loadCustomersMock = loadCustomers as jest.Mock;
 
-const noopNavigation = { navigate: jest.fn(), goBack: jest.fn(), setParams: jest.fn() };
+// `addListener` returns the unsubscribe function navigation effects rely on.
+const noopNavigation = {
+  navigate: jest.fn(),
+  goBack: jest.fn(),
+  setParams: jest.fn(),
+  addListener: jest.fn(() => jest.fn()),
+};
+
+// react-test-renderer has no automatic cleanup (unlike RTL's `render`), so
+// every renderer is tracked here and unmounted in afterEach — a live screen
+// whose `Animated` pulse is still running otherwise keeps rescheduling
+// animation frames after the test environment tears down, crashing the
+// Jest worker.
+const mountedRenderers: ReactTestRenderer.ReactTestRenderer[] = [];
 
 function renderScreen(returnRouteName: 'Customers' | 'NewJob' = 'Customers') {
   const navigation = { ...noopNavigation, navigate: jest.fn(), goBack: jest.fn() };
@@ -48,8 +61,16 @@ function renderScreen(returnRouteName: 'Customers' | 'NewJob' = 'Customers') {
       <AddCustomerScreen navigation={navigation as never} route={route as never} />,
     );
   });
+  mountedRenderers.push(renderer);
   return { root: renderer.root, navigation };
 }
+
+afterEach(() => {
+  act(() => {
+    mountedRenderers.forEach(renderer => renderer.unmount());
+  });
+  mountedRenderers.length = 0;
+});
 
 function inputByPlaceholder(
   root: ReactTestRenderer.ReactTestInstance,
@@ -230,6 +251,52 @@ describe('submitting with returnRouteName: NewJob', () => {
     });
     expect(navigation.goBack).not.toHaveBeenCalled();
   });
+});
+
+it('blocks hardware/gesture back while the save is in flight, then frees it', async () => {
+  let resolveCreate!: (customer: CreatedCustomer) => void;
+  createSpy.mockReturnValueOnce(
+    new Promise(resolve => {
+      resolveCreate = resolve;
+    }),
+  );
+  const { root, navigation } = renderScreen('Customers');
+  typeName(root, 'Ramesh Kumar');
+  typePhone(root, '9876543210');
+
+  // No guard while the form is idle — leaving the screen is allowed.
+  expect(navigation.addListener).not.toHaveBeenCalledWith(
+    'beforeRemove',
+    expect.any(Function),
+  );
+
+  act(() => {
+    void submit(root);
+  });
+
+  const listenerCalls = (
+    navigation.addListener as jest.Mock
+  ).mock.calls.filter(
+    ([event]: [string, unknown]) => event === 'beforeRemove',
+  );
+  expect(listenerCalls).toHaveLength(1);
+  const beforeRemove = listenerCalls[0][1];
+  const event = { preventDefault: jest.fn() };
+  beforeRemove(event);
+  expect(event.preventDefault).toHaveBeenCalled();
+
+  // Once the save settles, the guard is removed — navigation is free again.
+  await act(async () => {
+    resolveCreate({
+      id: 'cust-4',
+      name: 'Ramesh Kumar',
+      countryCode: '+91',
+      phoneNumber: '9876543210',
+      address: null,
+      city: null,
+    });
+  });
+  expect(navigation.goBack).toHaveBeenCalledTimes(1);
 });
 
 it('sends the 5 resolved fields alongside existing fields on submit', async () => {
