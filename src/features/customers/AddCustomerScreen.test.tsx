@@ -199,6 +199,121 @@ it('the address field is not directly editable — only the picker sets it', () 
   );
 });
 
+describe('manual address entry (no-results fallback)', () => {
+  const MANUAL = {
+    addressLine: 'Flat 302, Sunrise Apartments, Andheri West',
+    city: 'Mumbai',
+  };
+
+  function pickManually(root: ReactTestRenderer.ReactTestInstance) {
+    act(() => {
+      addressFieldTrigger(root)?.props.onPress();
+    });
+    act(() => {
+      addressPickerProps(root).onManualAddress(MANUAL);
+    });
+  }
+
+  it('populates the address and city fields and closes the sheet', () => {
+    const { root } = renderScreen();
+
+    pickManually(root);
+
+    expect(
+      inputByPlaceholder(root, 'Tap to search for an address').props.value,
+    ).toBe(MANUAL.addressLine);
+    expect(inputByPlaceholder(root, 'Mumbai').props.value).toBe(MANUAL.city);
+    expect(addressPickerProps(root).visible).toBe(false);
+  });
+
+  it('leaves the City field untouched when the entry carries no city', () => {
+    const { root } = renderScreen();
+    act(() => {
+      inputByPlaceholder(root, 'Mumbai').props.onChangeText('Pune');
+    });
+
+    act(() => {
+      addressPickerProps(root).onManualAddress({ ...MANUAL, city: null });
+    });
+
+    expect(inputByPlaceholder(root, 'Mumbai').props.value).toBe('Pune');
+    // The address line itself still lands.
+    expect(
+      inputByPlaceholder(root, 'Tap to search for an address').props.value,
+    ).toBe(MANUAL.addressLine);
+  });
+
+  it('omits all 5 resolved snapshot fields from the create payload', async () => {
+    createSpy.mockResolvedValueOnce({
+      id: 'cust-6',
+      name: 'Ramesh Kumar',
+      countryCode: '+91',
+      phoneNumber: '9876543210',
+      address: MANUAL.addressLine,
+      city: MANUAL.city,
+    });
+    const { root } = renderScreen();
+    typeName(root, 'Ramesh Kumar');
+    typePhone(root, '9876543210');
+
+    pickManually(root);
+
+    await act(async () => {
+      submit(root);
+    });
+
+    // A hand-typed address has no placeId/coordinates — the manual pincode
+    // must NOT sneak into the structured snapshot either (that field belongs
+    // to a resolved place only).
+    const [payload] = createSpy.mock.calls[0] as unknown as [Record<string, unknown>];
+    expect(payload.address).toBe(MANUAL.addressLine);
+    expect(payload.city).toBe(MANUAL.city);
+    expect(payload).not.toHaveProperty('formattedAddress');
+    expect(payload).not.toHaveProperty('pincode');
+    expect(payload).not.toHaveProperty('latitude');
+    expect(payload).not.toHaveProperty('longitude');
+    expect(payload).not.toHaveProperty('placeId');
+  });
+
+  it('drops a previously resolved snapshot when a manual entry replaces it', async () => {
+    createSpy.mockResolvedValueOnce({
+      id: 'cust-7',
+      name: 'Ramesh Kumar',
+      countryCode: '+91',
+      phoneNumber: '9876543210',
+      address: MANUAL.addressLine,
+      city: MANUAL.city,
+    });
+    const { root } = renderScreen();
+    typeName(root, 'Ramesh Kumar');
+    typePhone(root, '9876543210');
+
+    // First a resolved pick (snapshot fields set), then the user reopens
+    // and enters a manual address instead.
+    act(() => {
+      addressFieldTrigger(root)?.props.onPress();
+    });
+    act(() => {
+      addressPickerProps(root).onResolved(RESOLVED);
+    });
+    pickManually(root);
+
+    await act(async () => {
+      submit(root);
+    });
+
+    // The OLD pick's placeId/coordinates must not ride along with the NEW
+    // text — the map pin would silently point at the abandoned place.
+    const [payload] = createSpy.mock.calls[0] as unknown as [Record<string, unknown>];
+    expect(payload.address).toBe(MANUAL.addressLine);
+    expect(payload).not.toHaveProperty('formattedAddress');
+    expect(payload).not.toHaveProperty('pincode');
+    expect(payload).not.toHaveProperty('latitude');
+    expect(payload).not.toHaveProperty('longitude');
+    expect(payload).not.toHaveProperty('placeId');
+  });
+});
+
 describe('submitting with returnRouteName: Customers', () => {
   it('creates the customer, updates the shared store, and goes back — no params needed', async () => {
     createSpy.mockResolvedValueOnce({

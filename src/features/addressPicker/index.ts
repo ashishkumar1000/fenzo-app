@@ -4,5 +4,6 @@
  * registered route.
  */
 export { default as AddressPickerSheet } from './AddressPickerSheet';
+export { ManualAddressForm, type ManualAddressEntry } from './ManualAddressForm';
 export { useAddressAutosuggest } from './useAddressAutosuggest';
 export type { AddressPickerPhase } from './useAddressAutosuggest';

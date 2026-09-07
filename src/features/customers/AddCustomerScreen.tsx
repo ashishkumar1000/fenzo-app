@@ -40,7 +40,7 @@ import { colors, radius, spacing, typography } from '../../theme';
 import { customerService } from '../../services';
 import type { ApiError, ResolvedPlace } from '../../services';
 import type { RootStackParamList } from '../../navigation/types';
-import { AddressPickerSheet } from '../addressPicker';
+import { AddressPickerSheet, type ManualAddressEntry } from '../addressPicker';
 import { DIAL_CODE, PHONE_LENGTH } from './constants';
 import { loadCustomers, upsertCustomer } from './useCustomers';
 import { toCreateCustomerRequest } from './requestMapping';
@@ -132,19 +132,9 @@ export default function AddCustomerScreen({ navigation, route }: Props) {
     });
   }, [submitting, navigation]);
 
-  const handleAddressResolved = (resolved: ResolvedPlace) => {
-    setAddress(resolved.formattedAddress);
-    // `area` has no equivalent in `ResolvedPlace` and is left untouched.
-    if (resolved.city) setCity(resolved.city);
-
-    setFormattedAddress(resolved.formattedAddress);
-    setPincode(resolved.pincode);
-    setLatitude(resolved.latitude);
-    setLongitude(resolved.longitude);
-    setPlaceId(resolved.placeId);
-
-    setAddressPickerVisible(false);
-
+  // Soft primary-tint border pulse shared by both pick paths (resolved and
+  // manual) — the visual "your pick landed" feedback.
+  const startAddressPulse = () => {
     addressPulse.setValue(0);
     Animated.sequence([
       Animated.timing(addressPulse, {
@@ -158,6 +148,47 @@ export default function AddCustomerScreen({ navigation, route }: Props) {
         useNativeDriver: false,
       }),
     ]).start();
+  };
+
+  const handleAddressResolved = (resolved: ResolvedPlace) => {
+    setAddress(resolved.formattedAddress);
+    // `area` has no equivalent in `ResolvedPlace` and is left untouched.
+    if (resolved.city) setCity(resolved.city);
+
+    setFormattedAddress(resolved.formattedAddress);
+    setPincode(resolved.pincode);
+    setLatitude(resolved.latitude);
+    setLongitude(resolved.longitude);
+    setPlaceId(resolved.placeId);
+
+    setAddressPickerVisible(false);
+    startAddressPulse();
+  };
+
+  /**
+   * Manual entry (no-results fallback in the picker) lands here instead of
+   * `handleAddressResolved`: a hand-typed address has no `placeId` or
+   * coordinates, so ANY previously-resolved snapshot is wiped — otherwise a
+   * "pick a place, then enter manually" sequence would send the OLD pick's
+   * `placeId`/coordinates alongside the NEW text and the job's map pin
+   * would silently point at the abandoned place. The create payload's
+   * resolved-fields block therefore stays omitted (see `handleSubmit`'s
+   * gating on `placeId`).
+   */
+  const handleManualAddress = (entry: ManualAddressEntry) => {
+    setAddress(entry.addressLine);
+    // An entry without a city must not wipe one the user already typed in
+    // the City field above.
+    if (entry.city) setCity(entry.city);
+
+    setFormattedAddress('');
+    setPincode(null);
+    setLatitude(null);
+    setLongitude(null);
+    setPlaceId('');
+
+    setAddressPickerVisible(false);
+    startAddressPulse();
   };
 
   const addressBorderColor = addressPulse.interpolate({
@@ -320,11 +351,11 @@ export default function AddCustomerScreen({ navigation, route }: Props) {
             <Animated.View
               style={[styles.addressHighlight, { borderColor: addressBorderColor }]}>
               <Input
-                label="Address / map location"
+                label="Address"
                 value={address}
                 editable={false}
                 placeholder="Tap to search for an address"
-                helper="Technician can open this in Google Maps"
+                helper="Shown to the technician on the job"
                 leadingIcon={<MapPin size={18} color={colors.textMuted} strokeWidth={2} />}
               />
             </Animated.View>
@@ -353,6 +384,7 @@ export default function AddCustomerScreen({ navigation, route }: Props) {
         visible={addressPickerVisible}
         onClose={() => setAddressPickerVisible(false)}
         onResolved={handleAddressResolved}
+        onManualAddress={handleManualAddress}
       />
     </SafeAreaView>
   );

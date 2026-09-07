@@ -13,10 +13,11 @@ jest.mock('./useAddressAutosuggest', () => ({
 import type ReactTestRenderer from 'react-test-renderer';
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { AccessibilityInfo, ActivityIndicator, Text } from 'react-native';
-import { EmptyState, InlineError, Input, Sheet } from '../../components/ui';
+import { AccessibilityInfo, ActivityIndicator, Text, TextInput } from 'react-native';
+import { Button, EmptyState, InlineError, Input, Sheet } from '../../components/ui';
 import { useAddressAutosuggest } from './useAddressAutosuggest';
 import AddressPickerSheet from './AddressPickerSheet';
+import { ManualAddressForm } from './ManualAddressForm';
 
 const useAddressAutosuggestMock = useAddressAutosuggest as jest.Mock;
 
@@ -42,13 +43,20 @@ function mockHook(overrides: Partial<ReturnType<typeof useAddressAutosuggest>> =
 function renderSheet(props: Partial<Parameters<typeof AddressPickerSheet>[0]> = {}) {
   const onClose = jest.fn();
   const onResolved = jest.fn();
+  const onManualAddress = jest.fn();
   let renderer!: ReactTestRenderer.ReactTestRenderer;
   act(() => {
     renderer = create(
-      <AddressPickerSheet visible onClose={onClose} onResolved={onResolved} {...props} />,
+      <AddressPickerSheet
+        visible
+        onClose={onClose}
+        onResolved={onResolved}
+        onManualAddress={onManualAddress}
+        {...props}
+      />,
     );
   });
-  return { root: renderer.root, renderer, onClose, onResolved };
+  return { root: renderer.root, renderer, onClose, onResolved, onManualAddress };
 }
 
 /**
@@ -128,7 +136,7 @@ it('renders each suggestion as an accessible row labeled with the full address',
   expect(row.props.accessibilityLabel).toBe('Andheri West, Mumbai, Maharashtra, India');
 });
 
-it('shows EmptyState with an Enter-manually CTA that closes the sheet, on no results', () => {
+it('shows EmptyState with an Enter-manually CTA that swaps in the manual form, on no results', () => {
   mockHook({ phase: 'no-results', query: 'zzz' });
   const { root, onClose } = renderSheet();
   const emptyState = root.findByType(EmptyState);
@@ -137,7 +145,10 @@ it('shows EmptyState with an Enter-manually CTA that closes the sheet, on no res
   act(() => {
     emptyState.props.onPressCta();
   });
-  expect(onClose).toHaveBeenCalledTimes(1);
+  // The sheet stays open — manual entry happens inside it (the caller only
+  // closes after a pick, same contract as `onResolved`).
+  expect(onClose).not.toHaveBeenCalled();
+  expect(root.findByType(ManualAddressForm)).toBeTruthy();
 });
 
 it('shows EmptyState with a Retry CTA that re-fires the last query, on autosuggest failure', () => {
@@ -266,5 +277,77 @@ describe('live-region announcement on entering Results', () => {
     mockHook({ phase: 'idle' });
     renderSheet();
     expect(AccessibilityInfo.announceForAccessibility).not.toHaveBeenCalled();
+  });
+});
+
+describe('manual-entry mode (no-results fallback)', () => {
+  /** Renders the sheet, then presses the no-results "Enter manually" CTA. */
+  function openManual() {
+    mockHook({ phase: 'no-results', query: 'zzz' });
+    const utils = renderSheet();
+    act(() => {
+      utils.root.findByType(EmptyState).props.onPressCta();
+    });
+    return utils;
+  }
+
+  function hasSearchInput(root: ReactTestRenderer.ReactTestInstance) {
+    return root
+      .findAllByType(Input)
+      .some(input => input.props.placeholder === 'Search address...');
+  }
+
+  it('hides the search UI and swaps the sheet chrome to the manual title', () => {
+    const { root } = openManual();
+    expect(hasSearchInput(root)).toBe(false);
+    expect(root.findByType(Sheet).props.title).toBe('Enter address');
+  });
+
+  it('emits the entry through onManualAddress and leaves closing to the caller', () => {
+    const { root, onManualAddress, onClose } = openManual();
+    const addressInput = root
+      .findAllByType(TextInput)
+      .find(t => t.props.placeholder?.startsWith('e.g. Flat 302'));
+    act(() => {
+      addressInput?.props.onChangeText('12 MG Road');
+    });
+
+    const useButton = root
+      .findAllByType(Button)
+      .find(b => b.props.children === 'Use this address');
+    act(() => {
+      useButton?.props.onPress();
+    });
+
+    expect(onManualAddress).toHaveBeenCalledWith({
+      addressLine: '12 MG Road',
+      city: null,
+    });
+    // The caller closes after a pick — same contract as `onResolved`.
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('"Back to search" restores the search UI with the hook state intact', () => {
+    const { root } = openManual();
+    act(() => {
+      root.findByProps({ accessibilityLabel: 'Back to address search' }).props.onPress();
+    });
+
+    expect(root.findByType(EmptyState)).toBeTruthy();
+    expect(hasSearchInput(root)).toBe(true);
+  });
+
+  it('returns to search mode when the sheet is reopened', () => {
+    const { root, renderer, onClose, onResolved, onManualAddress } = openManual();
+    const props = { onClose, onResolved, onManualAddress };
+
+    act(() => {
+      renderer.update(<AddressPickerSheet visible={false} {...props} />);
+    });
+    act(() => {
+      renderer.update(<AddressPickerSheet visible {...props} />);
+    });
+
+    expect(hasSearchInput(root)).toBe(true);
   });
 });

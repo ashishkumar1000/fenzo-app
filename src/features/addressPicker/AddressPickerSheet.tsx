@@ -19,9 +19,16 @@
  * Sheet content stays mounted while hidden (see `Sheet`'s own doc), so this
  * calls `reset()` every time `visible` turns true — otherwise a second
  * search within the same "Add customer" visit would reuse the first
- * search's session token and stale results.
+ * search's session token and stale results. The same effect also returns the
+ * sheet to search mode: a manual-entry session must never carry over into
+ * the next open.
+ *
+ * Besides searching, this hosts the no-results fallback: "Enter manually"
+ * swaps the search UI for `ManualAddressForm` (mode: 'manual'), which emits
+ * a `ManualAddressEntry` through `onManualAddress` — no `placeId` or
+ * coordinates, since a hand-typed address has none.
  */
-import { useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   AccessibilityInfo,
   ActivityIndicator,
@@ -36,6 +43,7 @@ import { EmptyState, InlineError, Input, Sheet } from '../../components/ui';
 import { colors, radius, spacing, touch, typography } from '../../theme';
 import type { PlaceSuggestion, ResolvedPlace } from '../../services';
 import { useAddressAutosuggest } from './useAddressAutosuggest';
+import { ManualAddressForm, type ManualAddressEntry } from './ManualAddressForm';
 
 type Props = {
   visible: boolean;
@@ -44,9 +52,17 @@ type Props = {
    *  populates its own fields and is responsible for closing the sheet —
    *  this component never closes itself. */
   onResolved: (place: ResolvedPlace) => void;
+  /** Fires on "Use this address" from the manual-entry form (no-results
+   *  fallback). Same close-the-sheet-yourself contract as `onResolved`. */
+  onManualAddress: (entry: ManualAddressEntry) => void;
 };
 
-export default function AddressPickerSheet({ visible, onClose, onResolved }: Props) {
+export default function AddressPickerSheet({
+  visible,
+  onClose,
+  onResolved,
+  onManualAddress,
+}: Props) {
   const {
     query,
     setQuery,
@@ -59,9 +75,16 @@ export default function AddressPickerSheet({ visible, onClose, onResolved }: Pro
     reset,
   } = useAddressAutosuggest();
 
-  // Fresh search session every time the sheet opens — see file doc.
+  // 'manual' swaps the search UI for the manual-entry form (see file doc).
+  const [mode, setMode] = useState<'search' | 'manual'>('search');
+
+  // Fresh search session (and search mode) every time the sheet opens — see
+  // file doc.
   useEffect(() => {
-    if (visible) reset();
+    if (visible) {
+      setMode('search');
+      reset();
+    }
     // `reset` is stable (empty dep `useCallback`); only `visible` should
     // retrigger this.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -163,7 +186,7 @@ export default function AddressPickerSheet({ visible, onClose, onResolved }: Pro
           description={`We couldn't find a match for "${query.trim()}".`}
           ctaLabel="Enter manually"
           ctaVariant="secondary"
-          onPressCta={onClose}
+          onPressCta={() => setMode('manual')}
         />
       );
       break;
@@ -207,6 +230,22 @@ export default function AddressPickerSheet({ visible, onClose, onResolved }: Pro
 
     default:
       body = null;
+  }
+
+  // Manual mode replaces the whole search UI — the hook's phase/query are
+  // untouched underneath, so "Back to search" restores the no-results view
+  // the user came from.
+  if (mode === 'manual') {
+    return (
+      <Sheet
+        visible={visible}
+        onClose={onClose}
+        title="Enter address"
+        subtitle="Saved as text — no map pin"
+        detents={[0.9]}>
+        <ManualAddressForm onBack={() => setMode('search')} onUse={onManualAddress} />
+      </Sheet>
+    );
   }
 
   return (
