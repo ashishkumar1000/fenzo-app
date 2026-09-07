@@ -14,6 +14,7 @@ jest.mock('../useAttachmentUpload', () => ({
 }));
 
 import ReactTestRenderer, { act, create } from 'react-test-renderer';
+import { Linking } from 'react-native';
 import { TechJobDetailContent } from './TechJobDetailContent';
 import type { JobDetail } from '../../../services';
 
@@ -41,7 +42,7 @@ function detail(overrides: Partial<JobDetail> = {}): JobDetail {
     completedAt: null,
     updatedAt: '2026-09-01T06:00:00.000Z',
     technician: { id: 'tech-1', name: 'Suresh', countryCode: '+91', phoneNumber: '9876543210', skills: [] },
-    customer: { id: 'customer-1', name: 'Anita', countryCode: '+91', phoneNumber: '9123456780', address: null, city: null },
+    customer: { id: 'customer-1', name: 'Anita', countryCode: '+91', phoneNumber: '9123456780', address: null, city: null, latitude: null, longitude: null },
     activityLog: [],
     attachments: [],
     ...overrides,
@@ -159,5 +160,70 @@ describe('TechJobDetailContent — signature card gate', () => {
       }),
     });
     expect(textCount(root, 'Customer signature')).toBe(0);
+  });
+});
+
+describe('TechJobDetailContent — maps row deep link', () => {
+  let openURL: jest.SpyInstance;
+
+  beforeEach(() => {
+    useHook.mockReturnValue({
+      entries: [],
+      limitReached: false,
+      start: jest.fn(),
+      retry: jest.fn(),
+    });
+    openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    openURL.mockRestore();
+  });
+
+  function mapsRow(root: ReactTestRenderer.ReactTestInstance): ReactTestRenderer.ReactTestInstance {
+    return root.findByProps({ accessibilityLabel: 'Open in maps' });
+  }
+
+  const withAddress = (customer: Partial<JobDetail['customer']> = {}) =>
+    detail({ customer: { ...detail().customer, address: '12 MG Road', city: 'Bengaluru', ...customer } });
+
+  it('customer with coordinates → the press opens the coordinate deep link', () => {
+    const root = renderContent({
+      detail: withAddress({ latitude: 12.9716, longitude: 77.5946 }),
+    });
+    act(() => {
+      void mapsRow(root).props.onPress();
+    });
+    // The jest preset's platform is iOS; the Android form is pinned in
+    // linking.test.ts.
+    expect(openURL).toHaveBeenCalledWith('maps://?q=12.9716,77.5946');
+  });
+
+  it('customer without coordinates → the press opens the exact text query', () => {
+    const root = renderContent({ detail: withAddress({ latitude: null, longitude: null }) });
+    act(() => {
+      void mapsRow(root).props.onPress();
+    });
+    expect(openURL).toHaveBeenCalledWith('maps:0,0?q=12%20MG%20Road%2C%20Bengaluru');
+  });
+
+  it('half-present coordinates → the text query fallback, never a fabricated link', () => {
+    const root = renderContent({ detail: withAddress({ latitude: 12.9716, longitude: null }) });
+    act(() => {
+      void mapsRow(root).props.onPress();
+    });
+    expect(openURL).toHaveBeenCalledWith('maps:0,0?q=12%20MG%20Road%2C%20Bengaluru');
+  });
+
+  it('the row renders identically in both modes — no precision badge anywhere', () => {
+    for (const coords of [
+      { latitude: 12.9716, longitude: 77.5946 },
+      { latitude: null, longitude: null },
+    ]) {
+      const root = renderContent({ detail: withAddress(coords) });
+      expect(mapsRow(root)).toBeDefined();
+      expect(textCount(root, 'Precise')).toBe(0);
+      expect(textCount(root, 'Approximate')).toBe(0);
+    }
   });
 });

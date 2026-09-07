@@ -84,6 +84,8 @@ function makeDetail(overrides: Partial<JobDetail> = {}): JobDetail {
       phoneNumber: '9000000002',
       address: '12 Anna Nagar',
       city: 'Chennai',
+      latitude: null,
+      longitude: null,
     },
     activityLog: [
       {

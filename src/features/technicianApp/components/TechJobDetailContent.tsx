@@ -123,7 +123,12 @@ export function TechJobDetailContent({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Open in maps"
-            onPress={() => void openMaps(customerAddress, customerCity)}
+            onPress={() =>
+              void openMaps(customerAddress, customerCity, {
+                latitude: detail.customer.latitude,
+                longitude: detail.customer.longitude,
+              })
+            }
             style={styles.mapsRow}>
             <MapPin size={15} color={colors.primary} strokeWidth={2} />
             <Text style={styles.mapsText} numberOfLines={2}>

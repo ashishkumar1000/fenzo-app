@@ -60,6 +60,8 @@ const BASE_JOB: JobDetail = {
     phoneNumber: '9123456780',
     address: null,
     city: null,
+    latitude: null,
+    longitude: null,
   },
   activityLog: [],
   attachments: [],

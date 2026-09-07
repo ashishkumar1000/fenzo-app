@@ -217,6 +217,12 @@ export interface JobDetailCustomer {
   /** Null when the customer was created without one. */
   address: string | null;
   city: string | null;
+  /**
+   * Saved coordinates (Story 2.1's additive read). Always present, null
+   * when the customer has none — never fabricated, never half-used.
+   */
+  latitude: number | null;
+  longitude: number | null;
 }
 
 /**

@@ -33,11 +33,46 @@ export async function openTel(countryCode: string, phoneNumber: string): Promise
 }
 
 /**
- * Opens the device's maps app centered on a search for `address` (plus
- * `city` when the caller has one — iOS `maps:` and Android `geo:` both take
- * the same `0,0?q=` query form, so the difference is the scheme alone).
+ * Coordinates for a precise maps deep link — the response's own values,
+ * usable only when both halves are non-null (the columns are independently
+ * optional, so a half-present pair is not a location).
  */
-export async function openMaps(address: string, city?: string | null): Promise<void> {
+export type MapCoordinates = { latitude: number | null; longitude: number | null };
+
+/**
+ * Opens the device's maps app. Two modes:
+ *
+ * - Usable `coords` (both halves non-null) → a coordinate deep link that
+ *   centers the maps app on the exact point (iOS `maps://?q={lat},{lng}` —
+ *   Apple's documented form; Android `geo:{lat},{lng}?q=...`). The numbers
+ *   need no encoding and the `0,0` search prefix is deliberately dropped —
+ *   no text-match guess involved.
+ * - Otherwise the text-query fallback for `address` (plus `city` when the
+ *   caller has one — iOS `maps:` and Android `geo:` both take the same
+ *   `0,0?q=` query form, so the difference is the scheme alone).
+ */
+export async function openMaps(
+  address: string,
+  city?: string | null,
+  coords?: MapCoordinates | null,
+): Promise<void> {
+  if (coords && coords.latitude != null && coords.longitude != null) {
+    const point = `${coords.latitude},${coords.longitude}`;
+    // iOS takes Apple's documented query form (`maps://?q=`); the
+    // `maps:{lat},{lng}` path variant is an undocumented community pattern.
+    const url = Platform.select({
+      ios: `maps://?q=${point}`,
+      android: `geo:${point}?q=${point}`,
+      // `default` never applies on iOS/Android — a belt for a web/other build.
+      default: `maps://?q=${point}`,
+    });
+    try {
+      await Linking.openURL(url);
+    } catch (error) {
+      console.warn('[linking] openMaps failed →', error);
+    }
+    return;
+  }
   // Nothing to search (both halves blank) → nothing to open.
   if (!address.trim() && !(city && city.trim())) return;
   const prefix = Platform.select({
