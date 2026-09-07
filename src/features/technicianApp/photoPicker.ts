@@ -13,6 +13,12 @@
  * picked asset BEFORE anything reaches the network, filter the rejects out
  * and surface the inline copy.
  *
+ * Both launch paths also pass the picker's downscale options
+ * (`PHOTO_QUALITY` + `MAX_DIMENSION` bounds) so gallery picks — which used to
+ * upload uncompressed originals — are resized and re-encoded to JPEG natively
+ * before any bytes reach the upload pipeline. The 10 MB validation stays as
+ * a backstop for whatever the picker still returns.
+ *
  * Android camera needs the runtime CAMERA permission BEFORE launchCamera —
  * requested here so callers can't forget it. The gallery path uses the
  * system Photo Picker on modern Android and needs no storage permission.
@@ -26,6 +32,20 @@ export const MAX_PHOTOS = 5;
 
 /** The attachment contract's per-file size cap. */
 export const MAX_BYTES = 10 * 1024 * 1024;
+
+/**
+ * The longest-edge bound handed to the picker on BOTH launch paths
+ * (research: technical-client-side-image-compression-before-upl-2026-09-07).
+ * The picker downscales aspect-preservingly to fit within this box before
+ * any bytes exist, and by maintainer-documented intent setting these bounds
+ * (or `quality`) converts the output to JPEG — so a High-Efficiency (HEIC)
+ * gallery pick is transcoded at pick time, not at upload time. A 4032px
+ * phone photo lands ~500 KB–1 MB here instead of 4–10 MB.
+ */
+export const MAX_DIMENSION = 2048;
+
+/** The JPEG re-encode quality the camera path already used. */
+export const PHOTO_QUALITY = 0.8;
 
 /** Mimes the backend accepts for attachments (HEIC passes untranscoded). */
 const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/heic'];
@@ -90,7 +110,13 @@ async function takePhoto(onPicked: (outcome: PickOutcome) => void): Promise<void
       }
     }
     const res = await launchCamera(
-      { mediaType: 'photo', quality: 0.8, saveToPhotos: false },
+      {
+        mediaType: 'photo',
+        quality: PHOTO_QUALITY,
+        maxWidth: MAX_DIMENSION,
+        maxHeight: MAX_DIMENSION,
+        saveToPhotos: false,
+      },
       undefined,
     );
     // Mirrors the gallery check: a denial or camera_unavailable otherwise
@@ -111,8 +137,16 @@ async function pickFromGallery(
   onPicked: (outcome: PickOutcome) => void,
 ): Promise<void> {
   try {
+    // Same resize/quality options as the camera path — the gallery path is
+    // the one that used to upload uncompressed originals (up to 10 MB).
     const res = await launchImageLibrary(
-      { mediaType: 'photo', selectionLimit },
+      {
+        mediaType: 'photo',
+        quality: PHOTO_QUALITY,
+        maxWidth: MAX_DIMENSION,
+        maxHeight: MAX_DIMENSION,
+        selectionLimit,
+      },
       undefined,
     );
     if (res.errorCode) {

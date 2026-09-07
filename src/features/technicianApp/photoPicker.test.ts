@@ -13,7 +13,9 @@ import { Alert, PermissionsAndroid, Platform } from 'react-native';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import {
   MAX_BYTES,
+  MAX_DIMENSION,
   MAX_PHOTOS,
+  PHOTO_QUALITY,
   showPhotoSourceAlert,
   validateAsset,
   type PickOutcome,
@@ -70,6 +72,14 @@ describe('photo picker limits', () => {
     expect(MAX_PHOTOS).toBe(5);
     expect(MAX_BYTES).toBe(10 * 1024 * 1024);
   });
+
+  // The downscale constants: 2048px longest-edge bound + q0.8 re-encode are
+  // what keeps gallery picks from uploading uncompressed 4–10 MB originals
+  // (research report: technical-client-side-image-compression-before-upl).
+  it('pins the downscale constants (2048px bound, q0.8)', () => {
+    expect(MAX_DIMENSION).toBe(2048);
+    expect(PHOTO_QUALITY).toBe(0.8);
+  });
 });
 
 /** Shows the alert and presses button `index`, resolving with the outcome. */
@@ -91,20 +101,32 @@ describe('showPhotoSourceAlert', () => {
     expect(buttons?.map(b => b.text)).toEqual(['Take photo', 'Choose from gallery', 'Cancel']);
   });
 
-  it("passes the remaining slots as the gallery's selectionLimit", async () => {
+  it("passes the remaining slots AND the downscale options to the gallery launcher", async () => {
     launchLibraryMock.mockResolvedValue({ assets: [] });
     await pressButton(1);
     expect(launchLibraryMock).toHaveBeenCalledWith(
-      { mediaType: 'photo', selectionLimit: 4 },
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        selectionLimit: 4,
+      },
       undefined,
     );
   });
 
-  it("launches the camera with the contract's options (quality 0.8, no saveToPhotos)", async () => {
+  it("launches the camera with the downscale options and no saveToPhotos", async () => {
     launchCameraMock.mockResolvedValue({ assets: [] });
     await pressButton(0);
     expect(launchCameraMock).toHaveBeenCalledWith(
-      { mediaType: 'photo', quality: 0.8, saveToPhotos: false },
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        saveToPhotos: false,
+      },
       undefined,
     );
   });
