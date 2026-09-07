@@ -143,3 +143,31 @@ it('styles the active segment as a raised card on a sunken track', async () => {
   expect(segmentStyle.backgroundColor).toBe(colors.surfaceCard);
   expect(segmentStyle.elevation).toBe(shadow.sm.elevation); // raised, not filled
 });
+
+/**
+ * The optional count badge (e.g. the overdue count on the Jobs screen): an
+ * option with `badge` renders the number, and an option without one renders
+ * no badge — segments stay label-only otherwise.
+ */
+it('renders a count badge only for options that carry one', async () => {
+  type Scope = 'today' | 'overdue';
+  const badgeOptions: ReadonlyArray<{ value: Scope; label: string; badge?: number }> = [
+    { value: 'today', label: 'Today' },
+    { value: 'overdue', label: 'Overdue', badge: 3 },
+  ];
+  let renderer!: ReactTestRenderer.ReactTestRenderer;
+  await ReactTestRenderer.act(async () => {
+    renderer = ReactTestRenderer.create(
+      React.createElement(SegmentedControl<Scope>, {
+        options: badgeOptions,
+        value: 'today',
+        onChange: jest.fn(),
+      }),
+    );
+  });
+
+  const badges = renderer.root.findAll(
+    node => node.type === Text && node.props.children === 3,
+  );
+  expect(badges).toHaveLength(1);
+});

@@ -39,16 +39,17 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button, EmptyState, InlineError, SegmentedControl } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import type { MainTabParamList, RootStackParamList } from '../../navigation/types';
-import { useMyProfile } from '../profile';
+import { loadMyProfile, useMyProfile } from '../profile';
 import { useCustomers } from '../customers';
 import { JobCard } from './components/JobCard';
 import { StatusFilterBar } from './components/StatusFilterBar';
+import { DispatchTip } from './components/DispatchTip';
 import { useJobs } from './useJobs';
 import { filterForScope, HISTORY_FILTERS } from './scopeFilters';
 import type { ApiJob, JobFilter, JobScope } from './types';
 
 /** Scope selector labels — the four timeline buckets. */
-const SCOPES: { value: JobScope; label: string }[] = [
+const SCOPES: { value: JobScope; label: string; badge?: number }[] = [
   { value: 'today', label: 'Today' },
   { value: 'upcoming', label: 'Upcoming' },
   { value: 'overdue', label: 'Overdue' },
@@ -143,8 +144,14 @@ export default function JobsScreen({ navigation, route }: Props) {
   const { customers } = useCustomers();
   const { profile } = useMyProfile();
 
-  // Refetch on every focus — the store throttles (skips within 15s of a
+  // Server-computed overdue count for the segment badge — the same figure
+  // Home's Overdue strip shows, so the two screens can never disagree.
+  const overdueCount = profile?.jobCounts.overdue ?? 0;
+
+  // Refetch on every focus — the stores throttle (skipping within 15s of a
   // success), so returning from a created job shows it without extra load.
+  // The profile refetch keeps the Overdue badge live; job mutations elsewhere
+  // already force-refresh it (NewJob, JobDetail), this covers tab hopping.
   // Home's tiles land here with a one-shot `scope` param: applied when it
   // differs from the store's scope, then cleared immediately — tab params
   // persist across navigations, so leaving it would re-apply on every later
@@ -161,6 +168,7 @@ export default function JobsScreen({ navigation, route }: Props) {
         navigation.setParams({ scope: undefined });
       }
       void loadJobs();
+      void loadMyProfile();
     }, [route.params?.scope, scope, filter, loadJobs, navigation]),
   );
 
@@ -200,11 +208,15 @@ export default function JobsScreen({ navigation, route }: Props) {
 
   // Pull-to-refresh runs over rows already on screen, where the store's
   // `isLoading` deliberately stays false — so the spinner is local state.
+  // The profile is force-refreshed alongside: the Overdue badge and the
+  // dispatch tip read `jobCounts`, and a stale badge next to a fresh list
+  // would contradict itself. Forced past the 15s focus throttle, as on Home.
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
     void refresh().finally(() => setIsRefreshing(false));
+    void loadMyProfile({ force: true });
   }, [refresh]);
 
   const isEmpty = !isLoading && !failedWithNoData && !hasData;
@@ -247,7 +259,13 @@ export default function JobsScreen({ navigation, route }: Props) {
       </View>
 
       <View style={styles.filterWrap}>
-        <SegmentedControl options={SCOPES} value={scope} onChange={handleScopeChange} />
+        <SegmentedControl
+          options={SCOPES.map(s =>
+            s.value === 'overdue' && overdueCount > 0 ? { ...s, badge: overdueCount } : s,
+          )}
+          value={scope}
+          onChange={handleScopeChange}
+        />
         {/* Chips only where status is user-selectable: all five under Today,
             All/Done/Cancelled under History. Upcoming and Overdue hide the
             row — the server pre-narrows status there, so chips would lie.
@@ -274,7 +292,13 @@ export default function JobsScreen({ navigation, route }: Props) {
               message while the store still holds the error — Retry is the
               way out, so this banner stays non-dismissible. */}
           <InlineError message={error ?? 'Something went wrong'} />
-          <Button variant="secondary" size="md" onPress={() => void refresh()}>
+          <Button
+            variant="secondary"
+            size="md"
+            onPress={() => {
+              void refresh();
+              void loadMyProfile({ force: true }); // fresh jobCounts for the badge too
+            }}>
             Retry
           </Button>
         </View>
@@ -318,13 +342,28 @@ export default function JobsScreen({ navigation, route }: Props) {
               />
             }
             ListEmptyComponent={
-              // No CTA here — the "New job" button in the header is the single
-              // entry point, so the centre of the page stays informational.
-              <EmptyState
-                icon={<EmptyIcon size={36} color={colors.primary} strokeWidth={1.5} />}
-                title={emptyTitle}
-                description={emptyDescription}
-              />
+              // One empty state for every scope — copy and icon come from
+              // emptyStateFor(). Upcoming adds the "Schedule a job" CTA
+              // (the header "New job" stays the single entry point on the
+              // other scopes) and, when work is actually overdue, the tip
+              // strip pointing at the Overdue segment.
+              <View style={styles.emptyList}>
+                <EmptyState
+                  icon={<EmptyIcon size={36} color={colors.primary} strokeWidth={1.5} />}
+                  title={emptyTitle}
+                  description={emptyDescription}
+                  ctaLabel={scope === 'upcoming' ? 'Schedule a job' : undefined}
+                  ctaIcon={
+                    scope === 'upcoming' ? (
+                      <Plus size={20} color={colors.onPrimary} strokeWidth={2.5} />
+                    ) : undefined
+                  }
+                  onPressCta={scope === 'upcoming' ? handleNewJob : undefined}
+                />
+                {scope === 'upcoming' && overdueCount > 0 ? (
+                  <DispatchTip overdueCount={overdueCount} />
+                ) : null}
+              </View>
             }
             showsVerticalScrollIndicator={false}
           />
@@ -381,6 +420,9 @@ const styles = StyleSheet.create({
   listContentEmpty: {
     flexGrow: 1,
     paddingHorizontal: 0,
+  },
+  emptyList: {
+    flex: 1,
   },
   separator: {
     height: spacing.s3,

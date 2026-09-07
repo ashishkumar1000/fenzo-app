@@ -23,7 +23,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, fontSize, radius, shadow, spacing, touch, weight } from '../../theme';
 
-export type SegmentOption<V extends string> = { value: V; label: string };
+export type SegmentOption<V extends string> = { value: V; label: string; badge?: number };
 
 type Props<V extends string> = {
   options: ReadonlyArray<SegmentOption<V>>;
@@ -52,11 +52,18 @@ export function SegmentedControl<V extends string>({ options, value, onChange }:
               active ? styles.segmentActive : null,
               pressed ? styles.segmentPressed : null,
             ]}>
-            <Text
-              numberOfLines={1}
-              style={[styles.label, active ? styles.labelActive : null]}>
-              {option.label}
-            </Text>
+            <View style={styles.labelContainer}>
+              <Text
+                numberOfLines={1}
+                style={[styles.label, active ? styles.labelActive : null]}>
+                {option.label}
+              </Text>
+              {option.badge !== undefined && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{option.badge}</Text>
+                </View>
+              )}
+            </View>
           </Pressable>
         );
       })}
@@ -88,6 +95,11 @@ const styles = StyleSheet.create({
   segmentPressed: {
     opacity: 0.8,
   },
+  labelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s1,
+  },
   label: {
     fontSize: fontSize.sm,
     fontWeight: weight.semibold,
@@ -95,5 +107,19 @@ const styles = StyleSheet.create({
   },
   labelActive: {
     color: colors.textStrong,
+  },
+  badge: {
+    minWidth: spacing.s5,
+    height: spacing.s5,
+    borderRadius: radius.pill,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.s1,
+  },
+  badgeText: {
+    fontSize: fontSize.xs,
+    fontWeight: weight.bold,
+    color: colors.textOnColor,
   },
 });

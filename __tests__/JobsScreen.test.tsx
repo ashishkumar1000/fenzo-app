@@ -24,12 +24,19 @@ jest.mock('@react-navigation/native', () => {
 jest.mock('../src/services', () => ({
   jobService: { list: jest.fn(), create: jest.fn() },
 }));
+// Swappable profile fixture — the screen reads `jobCounts.overdue` (the
+// segment badge and the dispatch tip) plus `technicians` (row names).
+let mockProfile = {
+  technicians: [{ id: 'tech-1', name: 'Anil' }],
+  jobCounts: { today: 0, upcoming: 0, overdue: 0, completed: 0, cancelled: 0 },
+};
 jest.mock('../src/features/profile', () => ({
   useMyProfile: () => ({
-    profile: { technicians: [{ id: 'tech-1', name: 'Anil' }] },
+    profile: mockProfile,
     isLoading: false,
     error: null,
   }),
+  loadMyProfile: jest.fn(),
 }));
 jest.mock('../src/features/customers', () => ({
   useCustomers: () => ({
@@ -43,6 +50,7 @@ jest.mock('../src/features/customers', () => ({
 import JobsScreen from '../src/features/jobs/JobsScreen';
 import { JobCard } from '../src/features/jobs/components/JobCard';
 import { clearJobs, loadJobs } from '../src/features/jobs/useJobs';
+import { loadMyProfile } from '../src/features/profile';
 import { Button, Card, InlineError, SegmentedControl } from '../src/components/ui';
 import { StatusFilterBar } from '../src/features/jobs/components/StatusFilterBar';
 import { jobService } from '../src/services';
@@ -159,6 +167,10 @@ afterEach(async () => {
   });
   clearJobs();
   jest.clearAllMocks();
+  mockProfile = {
+    technicians: [{ id: 'tech-1', name: 'Anil' }],
+    jobCounts: { today: 0, upcoming: 0, overdue: 0, completed: 0, cancelled: 0 },
+  };
 });
 
 it('shows the spinner while the first load is in flight, then rows', async () => {
@@ -222,6 +234,10 @@ it('keeps rows behind a dismissible banner when a refresh fails with data presen
   await ReactTestRenderer.act(async () => {
     renderer.root.findByType(RefreshControl).props.onRefresh();
   });
+
+  // Pull-to-refresh also force-refreshes the profile — the Overdue badge and
+  // dispatch tip read `jobCounts` and must not go stale next to a fresh list.
+  expect(loadMyProfile).toHaveBeenCalledWith({ force: true });
 
   expect(renderedText(renderer)).toContain('Still offline');
   expect(renderer.root.findAllByType(InlineError).length).toBe(1);
@@ -301,7 +317,8 @@ it('renders the four timeline scopes, in order, on the segmented control', async
   // Pins SCOPES content: a dropped or mislabelled scope fails here even
   // though it would compile fine.
   const control = renderer.root.findByType(SegmentedControl);
-  expect(control.props.options).toEqual([
+  const options = control.props.options as Array<{ value: string; label: string; badge?: number }>;
+  expect(options.map(o => ({ value: o.value, label: o.label }))).toEqual([
     { value: 'today', label: 'Today' },
     { value: 'upcoming', label: 'Upcoming' },
     { value: 'overdue', label: 'Overdue' },
@@ -322,6 +339,14 @@ it('pressing a scope segment loads that scope and shows its empty state', async 
   const text = renderedText(renderer);
   expect(text).toContain('No upcoming jobs');
   expect(text).toContain('Jobs booked for tomorrow or later will show up here.');
+  // With zero overdue jobs the segment badge and the dispatch tip both stay
+  // hidden — copy can never disagree with a count that isn't there.
+  const options = renderer.root.findByType(SegmentedControl).props.options as Array<{
+    value: string;
+    badge?: number;
+  }>;
+  expect(options.find(o => o.value === 'overdue')?.badge).toBeUndefined();
+  expect(text.join(' ')).not.toContain('Dispatch tip');
   // Upcoming hides the chip row entirely — the server pre-narrows status there.
   expect(renderer.root.findAllByType(StatusFilterBar).length).toBe(0);
 });
@@ -339,6 +364,38 @@ it('shows the overdue empty state on the overdue scope', async () => {
   expect(text).toContain('Nothing overdue');
   expect(text).toContain('Jobs past their date that were never finished will show up here.');
   expect(renderer.root.findAllByType(StatusFilterBar).length).toBe(0);
+});
+
+it('with overdue work, the Upcoming empty state shows the badge, the tip and the CTA', async () => {
+  mockProfile = {
+    technicians: [{ id: 'tech-1', name: 'Anil' }],
+    jobCounts: { today: 0, upcoming: 0, overdue: 3, completed: 0, cancelled: 0 },
+  };
+  list.mockResolvedValue(page([], null));
+  const renderer = await mountScreen();
+
+  await ReactTestRenderer.act(async () => {
+    renderer.root.findByType(SegmentedControl).props.onChange('upcoming');
+  });
+
+  // The badge carries the profile's server-computed count (the same figure
+  // Home's Overdue strip shows)...
+  const options = renderer.root.findByType(SegmentedControl).props.options as Array<{
+    value: string;
+    badge?: number;
+  }>;
+  expect(options.find(o => o.value === 'overdue')?.badge).toBe(3);
+  // ...and the tip repeats that same live count, never a hardcoded number.
+  expect(renderedText(renderer).join(' ')).toContain(
+    'Tap Overdue (3) to clear or reassign delayed assignments.',
+  );
+
+  // The CTA is the empty state's own entry point into the same flow the
+  // header button uses.
+  await ReactTestRenderer.act(async () => {
+    findButton(renderer, 'Schedule a job').props.onPress();
+  });
+  expect(navigation.navigate).toHaveBeenCalledWith('NewJob');
 });
 
 it('History narrows the chip row to its three chips', async () => {
