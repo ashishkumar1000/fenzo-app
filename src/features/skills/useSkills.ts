@@ -233,17 +233,23 @@ export function clearSkills() {
 // Join the global 401 reset flow (story 5.3) — see services/resetRegistry.ts.
 registerReset(clearSkills);
 
-export function useSkills() {
+export function useSkills(opts: { autoLoad?: boolean } = {}) {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot);
+  const autoLoad = opts.autoLoad ?? true;
 
   // First mount kicks off the load. Nothing to abort on unmount: the store
   // outlives the component, so a late response updates the store rather than
   // a dead component's state.
+  //
+  // `autoLoad: false` is for subscribers that stay mounted while hidden
+  // (AddTechnicianSheet): without it, merely rendering the TechniciansScreen
+  // fires a GET the user never asked for — the sheet loads on its own open
+  // effect instead.
   useEffect(() => {
-    if (!snapshot.hasLoaded && !inFlight) {
+    if (autoLoad && !snapshot.hasLoaded && !inFlight) {
       void loadSkills();
     }
-  }, [snapshot.hasLoaded]);
+  }, [autoLoad, snapshot.hasLoaded]);
 
   /** Re-fetch — for pull-to-refresh and retry after a failed load. Always
    *  intentional, so it forces past the focus-refresh throttle. */

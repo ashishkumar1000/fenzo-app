@@ -50,6 +50,10 @@ it('loads skills from the shared store when the sheet opens, not while closed', 
       <AddTechnicianSheet visible={false} onClose={() => {}} onSubmit={async () => {}} />,
     );
   });
+  // The sheet stays mounted while hidden — the hook's own first-mount load
+  // must be silenced (`autoLoad: false`) or merely rendering Technicians
+  // would fire the GET before any sheet is opened.
+  expect(useSkillsMock).toHaveBeenCalledWith({ autoLoad: false });
   expect(loadSkillsMock).not.toHaveBeenCalled();
 
   act(() => {

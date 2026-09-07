@@ -73,8 +73,10 @@ async function resolve(
   sessionToken: string,
   signal?: AbortSignal,
 ): Promise<ResolvedPlace> {
+  // placeId comes straight from a third-party suggestion row — percent-encode
+  // it so a `/` or `?` inside one can't change the path shape.
   const res = await apiClient.get<ResolvedPlace>(
-    `/places/resolve/${placeId}`,
+    `/places/resolve/${encodeURIComponent(placeId)}`,
     {
       params: { sessionToken },
       ...(signal ? { signal } : {}),

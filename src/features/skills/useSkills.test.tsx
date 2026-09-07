@@ -255,3 +255,40 @@ describe('clearSkills', () => {
     expect(probe.hasLoaded).toBe(false);
   });
 });
+
+describe('autoLoad opt', () => {
+  // Subscribers that stay mounted while hidden (AddTechnicianSheet) pass
+  // `autoLoad: false` and load on their own open effect instead — rendering
+  // them must not fire the first-mount GET.
+  function HiddenProbe() {
+    probe = useSkills({ autoLoad: false });
+    return null;
+  }
+
+  it('does not fire the first-mount GET when autoLoad is false', async () => {
+    let renderer!: ReactTestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = create(<HiddenProbe />);
+    });
+
+    expect(list).not.toHaveBeenCalled();
+    expect(probe.hasLoaded).toBe(false);
+
+    // The caller's own load still works — the opt only silences the mount
+    // effect, not the store.
+    list.mockResolvedValueOnce([skill('s1', 'Drilling')]);
+    await act(async () => {
+      await loadSkills();
+    });
+    expect(probe.skills.map(s => s.name)).toEqual(['Drilling']);
+    renderer.unmount();
+  });
+
+  it('still loads on mount by default (omitted opts)', async () => {
+    list.mockResolvedValueOnce([]);
+    const renderer = renderProbe();
+    await act(async () => {});
+    expect(list).toHaveBeenCalledTimes(1);
+    renderer.unmount();
+  });
+});

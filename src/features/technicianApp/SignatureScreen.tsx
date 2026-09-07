@@ -33,7 +33,7 @@ import SignatureView, {
 } from 'react-native-signature-canvas';
 import { Button, Card, IconButton } from '../../components/ui';
 import { ChevronLeft } from 'lucide-react-native';
-import { colors, spacing, typography } from '../../theme';
+import { colors, fontSize, leading, spacing, typography } from '../../theme';
 import { jobService, type ApiError } from '../../services';
 import { workflowCurrentStep } from '../../services/api/apiError';
 import type { TechnicianRootStackParamList } from '../../navigation/types';
@@ -193,7 +193,9 @@ export default function SignatureScreen() {
               ref={padRef}
               style={styles.pad}
               penColor={colors.textStrong}
-              backgroundColor="rgba(255,255,255,0)"
+              // Transparent fill so the Card's white surface shows through
+              // (the pad paints its own background otherwise).
+              backgroundColor="transparent"
               webStyle={HIDE_PAD_FOOTER}
               onBegin={() => setHasStroke(true)}
               onEmpty={() => setHasStroke(false)}
@@ -257,9 +259,12 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.borderSubtle,
   },
   title: {
+    // One step smaller than `title` — this centered header is a screen-level
+    // label, not a page title. Recompute the line height for the new size or
+    // the spread's 2xl line height would leave a big gap under the text.
     ...typography.title,
-    fontSize: 20,
-    lineHeight: 24,
+    fontSize: fontSize.xl,
+    lineHeight: Math.round(fontSize.xl * leading.tight),
     color: colors.textStrong,
     flex: 1,
     textAlign: 'center',

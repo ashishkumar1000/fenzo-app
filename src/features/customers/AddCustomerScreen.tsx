@@ -441,7 +441,9 @@ const styles = StyleSheet.create({
   dialRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    // Icon-to-text gap — the `spacing.s1` convention used by other
+    // icon + text rows (see `Input`'s leading icon, AttachmentGrid).
+    gap: spacing.s1,
   },
   dial: {
     ...typography.bodyStrong,

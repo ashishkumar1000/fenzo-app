@@ -84,4 +84,16 @@ describe('placesService.resolve', () => {
       signal: controller.signal,
     });
   });
+
+  it('percent-encodes the placeId so path-unsafe ids cannot change the route shape', async () => {
+    get.mockResolvedValueOnce({ data: RESOLVED });
+
+    await placesService.resolve('place/with?unsafe', 'session-token-1');
+
+    // A `/` or `?` inside a third-party placeId must not turn into a second
+    // path segment or the start of a query string.
+    expect(get).toHaveBeenCalledWith('/places/resolve/place%2Fwith%3Funsafe', {
+      params: { sessionToken: 'session-token-1' },
+    });
+  });
 });

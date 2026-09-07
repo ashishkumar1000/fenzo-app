@@ -60,11 +60,15 @@ export function AddTechnicianSheet({ visible, onClose, onSubmit }: Props) {
   const inFlightRef = useRef(false);
   const [submitError, setSubmitError] = useState('');
 
-  // Shared skill store — the same rows the Skills screen manages. Loaded on
-  // sheet open (force: false — the store dedupes in-flight requests and
-  // throttles repeats), so the multi-select offers skills that exist right
-  // now; it doesn't create new ones.
-  const { skills, isLoading: loadingSkills, error: skillsError } = useSkills();
+  // Shared skill store — the same rows the Skills screen manages. `autoLoad:
+  // false` because this sheet stays mounted while hidden — without it,
+  // rendering TechniciansScreen would fire the GET on the hook's first-mount
+  // effect. The open effect below loads on sheet open instead (force: false
+  // — the store dedupes in-flight requests and throttles repeats), so the
+  // multi-select offers skills that exist right now; it doesn't create new
+  // ones.
+  const { skills, isLoading: loadingSkills, error: skillsError } =
+    useSkills({ autoLoad: false });
 
   useEffect(() => {
     if (!visible) return;
