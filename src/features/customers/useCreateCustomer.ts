@@ -104,11 +104,7 @@ export function useCreateCustomer({ navigation, returnRouteName }: Props) {
         // (see its comment above).
         bypassBackGuardRef.current = true;
         if (returnRouteName === 'NewJob') {
-          navigation.navigate({
-            name: 'NewJob',
-            params: { createdCustomerId: created.id },
-            merge: true,
-          });
+          navigation.navigate('NewJob', { createdCustomerId: created.id }, { merge: true });
         } else {
           navigation.goBack();
         }
