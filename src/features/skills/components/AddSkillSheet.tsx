@@ -42,6 +42,10 @@ export function AddSkillSheet({ visible, onClose, onSubmit }: Props) {
   const inputRef = useRef<TextInput>(null);
   const [name, setName] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // Same-frame double-tap guard: `submitting` (and the Button's disabled)
+  // only take effect after the state commit, so two taps in the same frame
+  // would both pass `canSubmit` and fire two POSTs. A ref reads synchronously.
+  const inFlightRef = useRef(false);
   const [submitError, setSubmitError] = useState('');
 
   const canSubmit = name.trim().length > 0 && !submitting;
@@ -69,7 +73,8 @@ export function AddSkillSheet({ visible, onClose, onSubmit }: Props) {
   };
 
   const handleSubmit = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || inFlightRef.current) return;
+    inFlightRef.current = true;
     setSubmitting(true);
     setSubmitError('');
     try {
@@ -79,6 +84,7 @@ export function AddSkillSheet({ visible, onClose, onSubmit }: Props) {
     } catch (err) {
       setSubmitError(createErrorMessage(err as ApiError));
     } finally {
+      inFlightRef.current = false;
       setSubmitting(false);
     }
   };
@@ -87,6 +93,10 @@ export function AddSkillSheet({ visible, onClose, onSubmit }: Props) {
     <Sheet
       visible={visible}
       onClose={handleClose}
+      // While the POST is in flight, drag-down and Android back are blocked
+      // at the native level — `handleClose`'s veto alone fires too late (the
+      // native sheet has already dismissed, leaving the parent stuck).
+      dismissible={!submitting}
       title="Add a skill"
       onDidPresent={() => inputRef.current?.focus()}>
       <Input

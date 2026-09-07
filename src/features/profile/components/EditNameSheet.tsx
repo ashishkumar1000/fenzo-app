@@ -119,6 +119,10 @@ export function EditNameSheet({ visible, currentName, onClose }: Props) {
     <Sheet
       visible={visible}
       onClose={handleClose}
+      // While the PATCH is in flight, drag-down and Android back are blocked
+      // at the native level — `handleClose`'s veto alone fires too late (the
+      // native sheet has already dismissed, leaving the parent stuck).
+      dismissible={!submitting}
       title="Edit your name"
       onDidPresent={() => inputRef.current?.focus()}>
       <Input

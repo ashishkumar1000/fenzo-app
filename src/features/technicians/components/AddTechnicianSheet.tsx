@@ -13,7 +13,7 @@
  * reacts to whether that promise resolves or rejects (close + reset vs.
  * show the error and stay open).
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Phone, User } from 'lucide-react-native';
 import { Button, Input, MultiSelect, Sheet } from '../../../components/ui';
@@ -53,6 +53,11 @@ export function AddTechnicianSheet({ visible, onClose, onSubmit }: Props) {
   const [skillIds, setSkillIds] = useState<string[]>([]);
 
   const [submitting, setSubmitting] = useState(false);
+  // Same-frame double-tap guard: `submitting` (and the Button's disabled)
+  // only take effect after the state commit, so two taps in the same frame
+  // would both pass `canSubmit` and fire two invite POSTs. A ref reads
+  // synchronously (same pattern as EditNameSheet).
+  const inFlightRef = useRef(false);
   const [submitError, setSubmitError] = useState('');
 
   // Shared skill store — the same rows the Skills screen manages. Loaded on
@@ -97,7 +102,8 @@ export function AddTechnicianSheet({ visible, onClose, onSubmit }: Props) {
   };
 
   const handleSubmit = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || inFlightRef.current) return;
+    inFlightRef.current = true;
     setSubmitting(true);
     setSubmitError('');
     try {
@@ -107,6 +113,7 @@ export function AddTechnicianSheet({ visible, onClose, onSubmit }: Props) {
     } catch (err) {
       setSubmitError(inviteErrorMessage(err as ApiError));
     } finally {
+      inFlightRef.current = false;
       setSubmitting(false);
     }
   };
@@ -124,6 +131,12 @@ export function AddTechnicianSheet({ visible, onClose, onSubmit }: Props) {
     <Sheet
       visible={visible}
       onClose={handleClose}
+      // While the invite POST is in flight, drag-down and Android back are
+      // blocked at the native level — `handleClose`'s veto alone fires too
+      // late (the native sheet has already dismissed, leaving the parent
+      // stuck). A mid-flight dismissal would also skip the reset, so a
+      // reopen would show stale form values.
+      dismissible={!submitting}
       title="Add technician"
       subtitle="They'll get an SMS invite to download the Fenzit app and come online.">
       <View style={styles.form}>

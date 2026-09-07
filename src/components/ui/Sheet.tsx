@@ -14,8 +14,11 @@
  * - Drag-down and Android back dismiss natively BEFORE `onClose` runs, so a
  *   guarded parent cannot veto them by refusing inside `onClose` alone — the
  *   sheet closes even mid-submit. Pass `dismissible={false}` for the actual
- *   guard (blocks both paths at the native level); without it, the guard
- *   only blocks the `visible` sync, so if the parent refuses while the sheet
+ *   guard: it blocks drag-down at the native level and (via an internal
+ *   `onBackPress`) swallows Android hardware back — without it TrueSheet
+ *   propagates back to React Navigation, popping the hosting screen.
+ *   Without `dismissible={false}`, a guarded parent only blocks the
+ *   `visible` sync, so if the parent refuses while the sheet
  *   is already gone, the sheet can't be re-presented until the parent flips
  *   `visible` (the old Modal could veto via `onRequestClose`; the native
  *   sheet cannot without `dismissible={false}`).
@@ -98,6 +101,14 @@ export function Sheet({
       ref={sheet}
       detents={detents}
       dismissible={dismissible}
+      // While not dismissible, Android hardware back must be swallowed here.
+      // TrueSheet's own back handler propagates to React Navigation when
+      // `dismissible` is false (TrueSheet.tsx `handleBackPress`), which would
+      // pop the hosting screen — with the in-flight action still running —
+      // even though drag-down is blocked. `true` = consumed, back does
+      // nothing. When dismissible, the default applies (back dismisses the
+      // sheet natively and flows back through `onClose`).
+      onBackPress={dismissible ? undefined : () => true}
       scrollable={scrollable}
       scrollableOptions={scrollable ? { scrollingExpandsSheet: false } : undefined}
       cornerRadius={radius.xl}

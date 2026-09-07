@@ -202,6 +202,10 @@ export function EditJobSheet({ visible, job, technicians, onClose, onSaved }: Pr
     <Sheet
       visible={visible}
       onClose={handleClose}
+      // While the PATCH is in flight, drag-down and Android back are blocked
+      // at the native level — `handleClose`'s veto alone fires too late (the
+      // native sheet has already dismissed, leaving the parent stuck).
+      dismissible={!(submitting || isAutoClosing)}
       title="Edit job"
       subtitle="Only scheduled jobs can be edited."
       detents={[0.85]}
