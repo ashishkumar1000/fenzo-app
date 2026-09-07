@@ -21,6 +21,22 @@
 const resets = new Set<() => void>();
 
 /**
+ * Bumped at the start of every `runAllResets()`. A caller that awaits a
+ * *mutation* (invite POST, customer create, profile PATCH) captures
+ * `currentResetEpoch()` before the await and skips its post-response store
+ * write when the epoch has moved: a concurrent request's 401 tore the
+ * session down mid-flight, and committing the response would repopulate a
+ * just-cleared store — and, for MMKV-persisted ones, disk — with the
+ * previous session's data.
+ */
+let epoch = 0;
+
+/** The current reset epoch — see the counter's doc above. */
+export function currentResetEpoch(): number {
+  return epoch;
+}
+
+/**
  * Registers a reset function to run on forced logout. Returns an
  * unregister function — symmetric with `setOnUnauthorized`, and enough for
  * a test to clean up after itself (module-scope callers never unregister).
@@ -44,6 +60,10 @@ export function registerReset(fn: () => void): () => void {
  * the run can't skip or duplicate entries.
  */
 export function runAllResets(): void {
+  // Bumped BEFORE the resets run — a mutation response that settles during
+  // the iteration (or any time after the bump) must already see the new
+  // epoch and skip its write.
+  epoch += 1;
   [...resets].forEach(fn => {
     try {
       fn();

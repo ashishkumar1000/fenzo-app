@@ -15,7 +15,7 @@
 import { useCallback, useSyncExternalStore } from 'react';
 import { storage } from '../../services/storage';
 import { technicianService } from '../../services';
-import { registerReset } from '../../services/resetRegistry';
+import { currentResetEpoch, registerReset } from '../../services/resetRegistry';
 import { DIAL_CODE } from './constants';
 import type { NewTechnicianInput, Technician } from './types';
 
@@ -79,6 +79,12 @@ export function useTechnicians() {
     // with a real server-issued technician id if a future `GET /technicians`
     // (or similar) is used to hydrate this store via `refresh()` — that
     // hydration should replace these entries outright rather than merge.
+    // Capture the reset epoch before the await: a concurrent request's 401
+    // can tear the session down (runAllResets → clearTechnicians) while the
+    // invite is in flight. The response below then must not repopulate the
+    // just-cleared store — or its MMKV copy — with the previous session's
+    // technician (see services/resetRegistry.ts).
+    const epochAtStart = currentResetEpoch();
     const { inviteId } = await technicianService.invite({
       countryCode: DIAL_CODE,
       phoneNumber: input.phone.trim(),
@@ -93,7 +99,11 @@ export function useTechnicians() {
       invitedAt: new Date().toISOString(),
       skillIds: input.skillIds,
     };
-    setTechnicians([technician, ...technicians]);
+    // The invite itself did succeed server-side, so the return value is
+    // still valid for the caller — only the local write is skipped.
+    if (currentResetEpoch() === epochAtStart) {
+      setTechnicians([technician, ...technicians]);
+    }
     return technician;
   }, []);
 

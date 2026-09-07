@@ -25,6 +25,7 @@ jest.mock('../useMyProfile', () => ({
 }));
 
 import { usersApi } from '../../../services';
+import { runAllResets } from '../../../services/resetRegistry';
 import { setProfileFromServer } from '../useMyProfile';
 
 const updateMe = usersApi.updateMe as jest.Mock;
@@ -123,6 +124,31 @@ it('shows the 422 message inline and keeps the sheet open', async () => {
   expect(onClose).not.toHaveBeenCalled();
   const texts = root.findAllByType(Text).map(t => t.props.children);
   expect(texts).toContain('name must be longer than or equal to 1 characters');
+});
+
+it('does not store the PATCH response or close when the session resets mid-request', async () => {
+  let resolvePatch!: (profile: unknown) => void;
+  updateMe.mockReturnValueOnce(
+    new Promise(resolve => {
+      resolvePatch = resolve;
+    }),
+  );
+  const onClose = jest.fn();
+  const root = renderSheet({ visible: true, currentName: 'Kumar', onClose });
+
+  typeName(root, 'Kumar S');
+  submit(root);
+  // A concurrent request's 401 fires the global reset while the PATCH is
+  // still in flight — writing the previous session's response back would
+  // repopulate the just-cleared profile store (and stamp `lastLoadedAt`).
+  runAllResets();
+
+  await act(async () => {
+    resolvePatch({ id: 'u-1', name: 'Kumar S' });
+  });
+
+  expect(storeProfile).not.toHaveBeenCalled();
+  expect(onClose).not.toHaveBeenCalled();
 });
 
 it('shows network failures inline too, and clears the error on the next edit', async () => {

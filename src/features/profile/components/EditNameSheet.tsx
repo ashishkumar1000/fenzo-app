@@ -18,6 +18,7 @@ import { Button, Input, Sheet } from '../../../components/ui';
 import { colors, spacing, typography } from '../../../theme';
 import { usersApi } from '../../../services';
 import type { ApiError } from '../../../services';
+import { currentResetEpoch } from '../../../services/resetRegistry';
 import { setProfileFromServer } from '../useMyProfile';
 
 type Props = {
@@ -101,8 +102,15 @@ export function EditNameSheet({ visible, currentName, onClose }: Props) {
     inFlightRef.current = true;
     setSubmitting(true);
     setSubmitError('');
+    // Capture the reset epoch before the await: a concurrent request's 401
+    // can tear the session down while the PATCH is in flight. Writing the
+    // previous session's response back into the just-cleared profile store
+    // would repopulate it AND stamp `lastLoadedAt`, defeating the next
+    // session's focus refresh (see services/resetRegistry.ts).
+    const epochAtStart = currentResetEpoch();
     try {
       const profile = await usersApi.updateMe({ name: trimmed });
+      if (currentResetEpoch() !== epochAtStart) return;
       // The PATCH response IS the fresh profile — store it wholesale rather
       // than refetching, then close.
       setProfileFromServer(profile);

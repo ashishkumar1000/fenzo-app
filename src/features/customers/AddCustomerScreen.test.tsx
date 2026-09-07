@@ -31,6 +31,7 @@ import { Button } from '../../components/ui';
 import { customerService } from '../../services';
 import type { CreatedCustomer, ResolvedPlace } from '../../services';
 import { upsertCustomer, loadCustomers } from './useCustomers';
+import { runAllResets } from '../../services/resetRegistry';
 import AddCustomerScreen from './AddCustomerScreen';
 
 const createSpy = jest.spyOn(customerService, 'create');
@@ -412,6 +413,41 @@ it('blocks hardware/gesture back while the save is in flight, then frees it', as
     });
   });
   expect(navigation.goBack).toHaveBeenCalledTimes(1);
+});
+
+it('skips the store write and navigation when the session resets mid-POST', async () => {
+  let resolveCreate!: (customer: CreatedCustomer) => void;
+  createSpy.mockReturnValueOnce(
+    new Promise(resolve => {
+      resolveCreate = resolve;
+    }),
+  );
+  const { root, navigation } = renderScreen();
+  typeName(root, 'Ramesh Kumar');
+  typePhone(root, '9876543210');
+
+  act(() => {
+    void submit(root);
+  });
+  // A concurrent request's 401 fires the global reset while the POST is
+  // still in flight — the customer exists server-side, but committing it
+  // here would repopulate the just-cleared (previous session's) store.
+  runAllResets();
+
+  await act(async () => {
+    resolveCreate({
+      id: 'cust-8',
+      name: 'Ramesh Kumar',
+      countryCode: '+91',
+      phoneNumber: '9876543210',
+      address: null,
+      city: null,
+    });
+  });
+
+  expect(upsertCustomerMock).not.toHaveBeenCalled();
+  expect(loadCustomersMock).not.toHaveBeenCalled();
+  expect(navigation.goBack).not.toHaveBeenCalled();
 });
 
 it('sends the 5 resolved fields alongside existing fields on submit', async () => {

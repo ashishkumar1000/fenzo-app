@@ -39,6 +39,7 @@ import { Button, Input } from '../../components/ui';
 import { colors, radius, spacing, typography } from '../../theme';
 import { customerService } from '../../services';
 import type { ApiError, ResolvedPlace } from '../../services';
+import { currentResetEpoch } from '../../services/resetRegistry';
 import type { RootStackParamList } from '../../navigation/types';
 import { AddressPickerSheet, type ManualAddressEntry } from '../addressPicker';
 import { DIAL_CODE, PHONE_LENGTH } from './constants';
@@ -214,6 +215,11 @@ export default function AddCustomerScreen({ navigation, route }: Props) {
     if (!canSubmit) return;
     setSubmitting(true);
     setSubmitError('');
+    // Capture the reset epoch before the await: a concurrent request's 401
+    // can tear the session down while the POST is in flight. Everything
+    // after the response — store write, refresh, navigation — must then be
+    // skipped (see services/resetRegistry.ts).
+    const epochAtStart = currentResetEpoch();
     try {
       const created = await customerService.create(
         toCreateCustomerRequest({
@@ -237,6 +243,11 @@ export default function AddCustomerScreen({ navigation, route }: Props) {
             : {}),
         }),
       );
+
+      // The customer was created server-side even if the session died
+      // mid-flight — the next session's first load picks it up. But its
+      // post-response steps belong to a session that no longer exists.
+      if (currentResetEpoch() !== epochAtStart) return;
 
       // Pushed into the shared store directly rather than waiting on a
       // refetch: `Customers`'s list (and `NewJob`'s picker) both read this

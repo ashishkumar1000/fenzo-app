@@ -5,7 +5,7 @@
  * surface, so a broken store must degrade alone, not leave the whole app
  * holding the previous session's data.
  */
-import { registerReset, runAllResets } from './resetRegistry';
+import { currentResetEpoch, registerReset, runAllResets } from './resetRegistry';
 
 describe('resetRegistry', () => {
   it('runs every registered reset when runAllResets is called', () => {
@@ -56,5 +56,16 @@ describe('resetRegistry', () => {
 
     expect(() => runAllResets()).not.toThrow();
     expect(registrar).toHaveBeenCalledTimes(1);
+  });
+
+  it('bumps the epoch on every runAllResets and leaves it stable otherwise', () => {
+    const before = currentResetEpoch();
+    expect(currentResetEpoch()).toBe(before); // stable while idle
+
+    runAllResets();
+    expect(currentResetEpoch()).toBe(before + 1);
+
+    runAllResets();
+    expect(currentResetEpoch()).toBe(before + 2);
   });
 });
