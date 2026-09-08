@@ -21,8 +21,10 @@
  * TEMPORARY (2026-09-05): hardcoded to the dev machine's LAN IP so a physical
  * device on the same network reaches the localhost backend (the user asked to
  * keep it for now). Revert to the Platform split before shipping.
+ * Override per build without editing: `DEV_API_HOST=<ip> bun run android:standalone`
+ * (Metro inlines process.env at bundle time).
  */
-const DEV_API_HOST = '192.168.1.208';
+const DEV_API_HOST = process.env.DEV_API_HOST ?? '192.168.1.218';
 
 export const API_BASE_URL = __DEV__
   ? `http://${DEV_API_HOST}:3000/api/v1`

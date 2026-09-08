@@ -21,7 +21,10 @@ react {
     //   The list of variants to that are debuggable. For those we're going to
     //   skip the bundling of the JS bundle and the assets. Default is "debug", "debugOptimized".
     //   If you add flavors like lite, prod, etc. you'll have to list your debuggableVariants.
-    // debuggableVariants = ["liteDebug", "liteDebugOptimized", "prodDebug", "prodDebugOptimized"]
+    //   "metroDebug" is intentionally NOT listed: it bundles the JS so it runs
+    //   without Metro. That list only controls bundling — the dev menu and
+    //   devtools come from `initWith debug` plus the devEnabled override below.
+    debuggableVariants = ["debug", "debugOptimized"]
 
     /* Bundling */
     //   A list containing the node command and its flags. Default is just 'node'.
@@ -52,6 +55,30 @@ react {
 
     /* Autolinking */
     autolinkLibrariesWithApp()
+}
+
+/**
+ * The RN gradle plugin hardcodes devEnabled=false when bundling any variant
+ * not listed in debuggableVariants (see TaskConfiguration.kt) — so metroDebug
+ * bundles get __DEV__=false and the prod API URL. The plugin registers the
+ * task inside its own afterEvaluate (ReactPlugin.kt, added before this one),
+ * so the task exists by the time this block runs and the override can win.
+ * __DEV__=true keeps the dev API host + dev warnings.
+ * Scoped to metroDebug only — `release` keeps dev=false, `debug` skips bundling.
+ */
+afterEvaluate {
+    // Fail loudly if the plugin stops registering the bundle task (renamed
+    // registration, plugin upgrade): otherwise this override would silently
+    // no-op and metroDebug would bake __DEV__=false with the prod API URL.
+    // scripts/verify-metro-debug-bundle.js is the second line of defence.
+    def bundleTask = tasks.findByName('createBundleMetroDebugJsAndAssets')
+    if (bundleTask == null) {
+        throw new GradleException(
+            'createBundleMetroDebugJsAndAssets not found — the RN gradle plugin ' +
+            'changed its task registration, so the metroDebug devEnabled ' +
+            'override cannot apply. Update the override in app/build.gradle.')
+    }
+    bundleTask.devEnabled.set(true)
 }
 
 /**
@@ -95,11 +122,24 @@ android {
     }
     buildTypes {
         debug {
+            // dev servers are http:// — cleartext allowed in debug variants only
+            manifestPlaceholders.usesCleartextTraffic = true
             signingConfig signingConfigs.debug
+        }
+        metroDebug {
+            // Debug variant with the JS bundle baked in — runs without Metro.
+            // Same applicationId as `debug`, so installing one replaces the
+            // other on the device (accepted — dev convenience build).
+            // matchingFallbacks tells libraries (which only publish
+            // debug/release) which of their variants to use.
+            initWith debug
+            matchingFallbacks = ['debug', 'release']
+            manifestPlaceholders.usesCleartextTraffic = true
         }
         release {
             // Caution! In production, you need to generate your own keystore file.
             // see https://reactnative.dev/docs/signed-apk-android.
+            manifestPlaceholders.usesCleartextTraffic = false
             signingConfig signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"

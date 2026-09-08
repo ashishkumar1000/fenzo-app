@@ -1,5 +1,10 @@
 pluginManagement { includeBuild("../node_modules/@react-native/gradle-plugin") }
-plugins { id("com.facebook.react.settings") }
+plugins {
+    id("com.facebook.react.settings")
+    // Lets Gradle auto-download a matching JDK on machines that have none —
+    // needed for the daemon JVM criteria in gradle/gradle-daemon-jvm.properties.
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+}
 extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
 rootProject.name = 'FenzitApp'
 include ':app'

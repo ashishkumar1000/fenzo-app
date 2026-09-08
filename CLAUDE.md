@@ -6,6 +6,20 @@ writing any code.
 ## Package manager
 - **Always use `bun`** — never npm or yarn. (e.g. `bun install`, `bun run android`.)
 
+## Android builds
+- **JDK 17 required.** Gradle reads `android/gradle/gradle-daemon-jvm.properties`
+  and picks any installed JDK 17 automatically (ignore `JAVA_HOME`); if no JDK
+  17 is installed, the foojay resolver in `android/settings.gradle` downloads
+  one. JDK 26 breaks the build (AGP jlink transform failure).
+- `debug` build type uses Metro; `metroDebug` is debug-signed with the JS bundle
+  baked in — runs without a Metro server. Run it via `bun run android:standalone`
+  (builds + installs the `metroDebug` APK, then verifies the baked bundle), or
+  `./gradlew assembleMetroDebug`.
+- **metroDebug limitations:** no Metro means no Reload, Fast Refresh, or remote
+  debugging — rebuild to pick up JS changes. It has the same applicationId as
+  `debug`, so installing one replaces the other. Override the dev API host per
+  build with `DEV_API_HOST=<ip> bun run android:standalone`.
+
 ## Project layout (all RN code lives in `src/`)
 ```
 src/
