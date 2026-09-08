@@ -46,6 +46,7 @@ import { useWorkflowAdvance } from './useWorkflowAdvance';
 import { FailedView, NotFoundView, UnassignedView } from './components/DetailErrorViews';
 import { TechJobDetailContent } from './components/TechJobDetailContent';
 import { WorkflowActionBar } from './components/WorkflowActionBar';
+import { isAbort } from '../../utils';
 
 type Navigation = NativeStackNavigationProp<TechnicianRootStackParamList, 'TechJobDetail'>;
 
@@ -56,19 +57,6 @@ const STATUS_LABEL = {
   scheduled: 'Scheduled',
   cancelled: 'Cancelled',
 } as const;
-
-/**
- * True when a failure is the app's own abort (the screen unmounted mid-request),
- * not a real error — detected by shape (axios' `CANCELLED`), by name (a raw
- * fetch `AbortError`), or by the signal itself having been aborted.
- */
-function isAbort(error: ApiError, signal: AbortSignal): boolean {
-  return (
-    (error.status === 0 && error.code === 'CANCELLED') ||
-    (error as { name?: string }).name === 'AbortError' ||
-    signal.aborted
-  );
-}
 
 export default function TechJobDetailScreen() {
   const navigation = useNavigation<Navigation>();

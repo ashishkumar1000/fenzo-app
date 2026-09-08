@@ -40,7 +40,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Phone, User, UserPlus } from 'lucide-react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button, Input } from '../../components/ui';
-import { colors, spacing, typography } from '../../theme';
+import { colors, spacing, touch, typography } from '../../theme';
 import { toCreateCustomerRequest } from './requestMapping';
 import type { NewCustomerInput } from './types';
 import type { RootStackParamList } from '../../navigation/types';
@@ -243,6 +243,13 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.borderSubtle,
   },
   backButton: {
+    // Icon-only control — an explicit touch.min box with the icon centred;
+    // the 24px icon plus hitSlop alone came to ~40px, under the design
+    // system's ≥44px minimum.
+    minWidth: touch.min,
+    minHeight: touch.min,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginLeft: -spacing.s1,
   },
   title: {

@@ -17,7 +17,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDebounce } from '../../hooks';
 import { placesService } from '../../services';
 import type { ApiError, PlaceSuggestion, ResolvedPlace } from '../../services';
-import { generateIdempotencyKey } from '../../utils';
+import { generateIdempotencyKey, isAbort } from '../../utils';
 
 /** Trimmed input shorter than this never fires a network call. */
 const MIN_QUERY_LENGTH = 3;
@@ -33,20 +33,6 @@ export type AddressPickerPhase =
   | 'error'
   | 'resolving'
   | 'resolve-failed';
-
-/**
- * True when a failure is this hook's own abort (a superseded/cancelled
- * request), not a real error — same detection shape as `JobDetailScreen`'s
- * `isAbort` helper (status/code, `AbortError` name, or the signal itself).
- */
-function isAbort(error: unknown, signal: AbortSignal): boolean {
-  const apiError = error as (ApiError & { name?: string }) | undefined;
-  return (
-    (apiError?.status === 0 && apiError?.code === 'CANCELLED') ||
-    apiError?.name === 'AbortError' ||
-    signal.aborted
-  );
-}
 
 export function useAddressAutosuggest() {
   // Minted once per mount, never regenerated — shared by every autosuggest
@@ -152,6 +138,31 @@ export function useAddressAutosuggest() {
     }
     void fetchSuggestions(trimmed);
   }, [debouncedQuery, fetchSuggestions]);
+
+  // Clear any error banner the moment the input changes, not ~300ms later
+  // when the debounced fetch gets around to it — a stale banner lingering
+  // through the whole debounce window reads as briefly unresponsive. State
+  // setters only: no network side effects, and on mount there's nothing to
+  // clear, so it runs harmlessly.
+  //
+  // When an autosuggest error was up, its empty-list leftovers
+  // (`hasLoadedOnce` + `suggestions`) would instantly re-classify the
+  // banner-free state as a bogus 'no-results' for the NEW query — so blank
+  // them too (a ≤300ms blank body beats a wrong "no matches" message).
+  // Guarded on the error actually being set, so ordinary typing with results
+  // on screen never blanks the still-visible list mid-debounce; a
+  // resolve-failed banner clears with its list intact, as before.
+  useEffect(() => {
+    if (autosuggestError) {
+      setSuggestions([]);
+      setHasLoadedOnce(false);
+      setAutosuggestError(null);
+    }
+    setResolveError(null);
+    // Keyed on `query` alone on purpose: also keying on the error state
+    // would re-run when an error is set and wipe it before it renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
   // Abort whatever's in flight — autosuggest AND resolve — when the screen
   // unmounts.

@@ -57,6 +57,7 @@ import { SectionCard } from './components/SectionCard';
 import { STEP_LABELS, STEP_ORDER, stepNumber } from './eventLabels';
 import { formatTimeLabel, serviceTypeLabel, statusToBadge } from '../jobs/format';
 import { formatPhone } from '../profile';
+import { isAbort } from '../../utils';
 
 type Navigation = NativeStackNavigationProp<RootStackParamList, 'JobDetail'>;
 
@@ -77,19 +78,6 @@ function dateLine(iso: string): string {
     month: 'short',
     year: 'numeric',
   });
-}
-
-/**
- * True when a failure is the app's own abort (the screen unmounted mid-request),
- * not a real error — detected by shape (axios' `CANCELLED`), by name (a raw
- * fetch `AbortError`), or by the signal itself having been aborted.
- */
-function isAbort(error: ApiError, signal: AbortSignal): boolean {
-  return (
-    (error.status === 0 && error.code === 'CANCELLED') ||
-    (error as { name?: string }).name === 'AbortError' ||
-    signal.aborted
-  );
 }
 
 export default function JobDetailScreen() {

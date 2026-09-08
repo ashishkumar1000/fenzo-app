@@ -47,6 +47,7 @@ import type { ApiError, CustomerDetail, JobHistoryItem } from '../../services';
 import type { RootStackParamList } from '../../navigation/types';
 import { customerLocation, customerPhone } from '../customers/format';
 import { openTel } from '../../utils/linking';
+import { isAbort } from '../../utils';
 import { HistoryRow } from './components/HistoryRow';
 
 type Navigation = NativeStackNavigationProp<RootStackParamList, 'CustomerDetail'>;
@@ -60,19 +61,6 @@ function dateLine(iso: string): string {
     month: 'short',
     year: 'numeric',
   });
-}
-
-/**
- * True when a failure is the app's own abort (the screen unmounted mid-request),
- * not a real error — detected by shape (axios' `CANCELLED`), by name (a raw
- * fetch `AbortError`), or by the signal itself having been aborted.
- */
-function isAbort(error: ApiError, signal: AbortSignal): boolean {
-  return (
-    (error.status === 0 && error.code === 'CANCELLED') ||
-    (error as { name?: string }).name === 'AbortError' ||
-    signal.aborted
-  );
 }
 
 export default function CustomerDetailScreen() {

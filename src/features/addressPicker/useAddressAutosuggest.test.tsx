@@ -251,6 +251,55 @@ describe('autosuggest failure', () => {
     expect(autosuggest.mock.calls[1][0]).toBe('and');
     expect(probe.phase).toBe('results');
   });
+
+  it('drops the error banner as soon as the input changes, without waiting for the debounce', async () => {
+    autosuggest.mockRejectedValueOnce(
+      apiError(502, 'PLACES_UPSTREAM_ERROR', 'Places is unavailable right now'),
+    );
+    renderProbe();
+    await typeAndSettle('and');
+    expect(probe.phase).toBe('error');
+
+    // The very next keystroke clears the banner — no 300ms wait.
+    act(() => {
+      probe.setQuery('andh');
+    });
+    expect(probe.phase).not.toBe('error');
+    expect(probe.errorMessage).toBeNull();
+    // Clearing the error blanks suggestions/hasLoadedOnce by design, so with
+    // the ≥3-char query not yet refetching, the phase lands on 'results'
+    // with an (intentionally) empty body — the ≤300ms blank beats a wrong
+    // 'no-results' message.
+    expect(probe.phase).toBe('results');
+    expect(probe.suggestions).toEqual([]);
+  });
+
+  it('keeps the on-screen results visible mid-debounce when typing with no error up', async () => {
+    autosuggest.mockResolvedValueOnce([suggestion('p1', 'Andheri West')]);
+    renderProbe();
+    await typeAndSettle('and');
+    expect(probe.phase).toBe('results');
+
+    // One more keystroke inside the debounce window: the query-keyed effect
+    // is guarded on the error actually being set, so ordinary typing with
+    // results on screen must not blank the still-visible list.
+    act(() => {
+      probe.setQuery('andh');
+    });
+    expect(probe.suggestions).toEqual([suggestion('p1', 'Andheri West')]);
+    expect(probe.phase).toBe('results');
+
+    // The debounced refetch then replaces the list normally.
+    autosuggest.mockResolvedValueOnce([suggestion('p2', 'Andheri East')]);
+    act(() => {
+      jest.advanceTimersByTime(300);
+    });
+    await act(async () => {
+      await flushMicrotasks();
+    });
+    expect(probe.suggestions).toEqual([suggestion('p2', 'Andheri East')]);
+    expect(probe.phase).toBe('results');
+  });
 });
 
 describe('resolve', () => {
