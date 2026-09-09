@@ -1,5 +1,6 @@
 /**
- * NotificationsScreen — the owner's notification history (Story 3.4).
+ * NotificationsScreen — the owner's notification history (Story 3.4,
+ * redesigned 2026-09).
  *
  * A full-screen root-stack route (sibling of JobDetail — covers the tab
  * bar), opened from either bell (Jobs header, Home header). Newest-first
@@ -7,11 +8,17 @@
  * focus (TTL-throttled in the store), pages in on scroll-end, pulls to
  * refresh, and carries the "Mark all read" action in its header.
  *
- * Tapping a row is NAVIGATE-FIRST: the deep link to that job's JobDetail is
- * the user's intent; the optimistic mark-read is cosmetic and happens
- * alongside it (read rows still navigate — no POST, no rollback ceremony).
+ * The redesign renders one CARD per job (grouped client-side from the flat
+ * list by `notificationCardModel.ts` — the card's stage timeline comes from
+ * that job's own notifications, no extra API calls) behind an All / Active /
+ * Completed filter chip row.
+ *
+ * Tapping a card is NAVIGATE-FIRST: the deep link to that job's JobDetail is
+ * the user's intent; the optimistic mark-read of the card's unread events is
+ * cosmetic and happens alongside it (read cards still navigate — no POST,
+ * no rollback ceremony).
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -21,9 +28,8 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Bell } from 'lucide-react-native';
+import { Bell, Check, ChevronLeft } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronLeft } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -38,8 +44,10 @@ import {
   markNotificationRead,
   useNotifications,
 } from './useNotifications';
-import { NotificationRow } from './components/NotificationRow';
-import type { ApiNotification } from '../../services';
+import { NotificationCard } from './components/NotificationCard';
+import { NotificationFilterBar } from './components/NotificationFilterBar';
+import { filterCards, groupNotificationsByJob } from './notificationCardModel';
+import type { NotificationCardData, NotificationFilter } from './notificationCardModel';
 
 /**
  * Mostly a plain root-stack screen, but the empty state's "Go to jobs" CTA
@@ -90,22 +98,42 @@ export default function NotificationsScreen({ navigation }: Props) {
     // below) and reconciles via the store's server re-ask.
   }, []);
 
-  const handleRowPress = useCallback(
-    (notification: ApiNotification) => {
+  const handleCardPress = useCallback(
+    (card: NotificationCardData) => {
       // Navigate first — the deep link is the user's intent and must not
       // wait on the mark-read POST. Read-state is cosmetic (handled
-      // optimistically inside the store, with its own rollback).
-      void markNotificationRead(notification.id);
-      navigation.navigate('JobDetail', { jobId: notification.jobId });
+      // optimistically inside the store, with its own rollback). Opening a
+      // job's card settles ALL of its unread events (the POSTs are
+      // idempotent; a card usually carries at most a couple).
+      for (const id of card.unreadIds) void markNotificationRead(id);
+      navigation.navigate('JobDetail', { jobId: card.jobId });
     },
     [navigation, markNotificationRead],
   );
 
-  const renderRow = useCallback(
-    ({ item }: { item: ApiNotification }) => (
-      <NotificationRow notification={item} onPress={handleRowPress} />
+  // The flat newest-first list becomes one card per job; the stage timeline
+  // on each card is derived from that job's own notifications (no extra
+  // API calls). Filtering happens client-side over the loaded cards.
+  const cards = useMemo(() => groupNotificationsByJob(items), [items]);
+  const [filter, setFilter] = useState<NotificationFilter>('all');
+  const visibleCards = useMemo(() => filterCards(cards, filter), [cards, filter]);
+  // Derived through the SAME `filterCards` the list filters with — a drifted
+  // card counts as active in both places, and the chips can never disagree
+  // with what a filter actually shows.
+  const counts = useMemo(
+    () => ({
+      all: cards.length,
+      active: filterCards(cards, 'active').length,
+      completed: filterCards(cards, 'completed').length,
+    }),
+    [cards],
+  );
+
+  const renderCard = useCallback(
+    ({ item }: { item: NotificationCardData }) => (
+      <NotificationCard card={item} onPress={handleCardPress} />
     ),
-    [handleRowPress],
+    [handleCardPress],
   );
 
   const hasData = items.length > 0;
@@ -152,7 +180,8 @@ export default function NotificationsScreen({ navigation }: Props) {
           variant="secondary"
           size="sm"
           onPress={handleMarkAllRead}
-          disabled={!hasData}>
+          disabled={!hasData}
+          leadingIcon={<Check size={16} color={colors.textStrong} strokeWidth={2.5} />}>
           Mark all read
         </Button>
       </View>
@@ -173,6 +202,7 @@ export default function NotificationsScreen({ navigation }: Props) {
         </View>
       ) : (
         <>
+          <NotificationFilterBar value={filter} onChange={setFilter} counts={counts} />
           {showBanner ? (
             <View style={styles.bannerWrap}>
               <InlineError message={error ?? ''} onDismiss={() => setErrorDismissed(true)} />
@@ -187,9 +217,9 @@ export default function NotificationsScreen({ navigation }: Props) {
             </View>
           ) : null}
           <FlatList
-            data={items}
-            keyExtractor={item => item.id}
-            renderItem={renderRow}
+            data={visibleCards}
+            keyExtractor={item => item.jobId}
+            renderItem={renderCard}
             onEndReached={() => void loadMoreNotifications()}
             onEndReachedThreshold={0.4}
             ListFooterComponent={
@@ -199,9 +229,12 @@ export default function NotificationsScreen({ navigation }: Props) {
                 </View>
               ) : null
             }
-            // When empty: flexGrow gives EmptyState's `flex: 1` a height to
-            // centre itself in.
-            contentContainerStyle={[styles.listContent, !hasData && styles.listContentEmpty]}
+            // When empty: flexGrow gives the empty state's `flex: 1` a height
+            // to centre itself in.
+            contentContainerStyle={[
+              styles.listContent,
+              visibleCards.length === 0 && styles.listContentEmpty,
+            ]}
             ItemSeparatorComponent={() => <View style={styles.separator} />}
             refreshControl={
               <RefreshControl
@@ -212,16 +245,27 @@ export default function NotificationsScreen({ navigation }: Props) {
               />
             }
             ListEmptyComponent={
-              <EmptyState
-                icon={<Bell size={36} color={colors.primary} strokeWidth={1.5} />}
-                title="No notifications yet"
-                description="Updates from your technicians — job arrivals, progress and completions — will show up here."
-                ctaLabel="Go to jobs"
-                // The spec's "CTA back to jobs": navigate to the Jobs TAB,
-                // never `goBack` — from the Home bell that would land on
-                // Home (the CTA would lie about where it goes).
-                onPressCta={() => navigation.navigate('Jobs', { scope: 'today' })}
-              />
+              hasData ? (
+                // Rows exist but this filter matches none of them — a quiet
+                // line, not the "no notifications yet" empty state (which
+                // would lie).
+                <Text style={styles.filterEmpty}>
+                  {filter === 'active'
+                    ? 'No active jobs right now.'
+                    : 'No completed jobs yet.'}
+                </Text>
+              ) : (
+                <EmptyState
+                  icon={<Bell size={36} color={colors.primary} strokeWidth={1.5} />}
+                  title="No notifications yet"
+                  description="Updates from your technicians — job arrivals, progress and completions — will show up here."
+                  ctaLabel="Go to jobs"
+                  // The spec's "CTA back to jobs": navigate to the Jobs TAB,
+                  // never `goBack` — from the Home bell that would land on
+                  // Home (the CTA would lie about where it goes).
+                  onPressCta={() => navigation.navigate('Jobs', { scope: 'today' })}
+                />
+              )
             }
             showsVerticalScrollIndicator={false}
           />
@@ -273,5 +317,11 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: spacing.s3,
+  },
+  filterEmpty: {
+    ...typography.body,
+    color: colors.textMuted,
+    textAlign: 'center',
+    padding: spacing.s4,
   },
 });

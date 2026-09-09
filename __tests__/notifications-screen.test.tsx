@@ -1,13 +1,15 @@
 /**
- * NotificationsScreen + NotificationRow — what the SCREEN decides (the store
- * behind it has its own tests): the row-tap deep-link contract (navigate to
- * JobDetail + optimistic mark-read), the "Mark all read" disabled state, the
- * error/Retry view, the with-data error banners (load + mutation), and the
- * empty state's "Go to jobs" CTA. The store module is mocked with plain
- * fixtures, so nothing here touches the network.
+ * NotificationsScreen + NotificationCard — what the SCREEN decides (the
+ * store behind it has its own tests): the card-tap deep-link contract
+ * (navigate to JobDetail + optimistic mark-read of the card's unread
+ * events), the All/Active/Completed filter chips, the "Mark all read"
+ * disabled state, the error/Retry view, the with-data error banners
+ * (load + mutation), and the empty state's "Go to jobs" CTA. The store
+ * module is mocked with plain fixtures, so nothing here touches the network.
  */
 import React from 'react';
 import ReactTestRenderer, { act } from 'react-test-renderer';
+import { Text } from 'react-native';
 
 const mockNavigation = { navigate: jest.fn(), goBack: jest.fn() };
 
@@ -53,9 +55,11 @@ jest.mock('../src/features/notifications/useNotifications', () => ({
 }));
 
 import NotificationsScreen from '../src/features/notifications/NotificationsScreen';
-import { NotificationRow, rowTitle } from '../src/features/notifications/components/NotificationRow';
-import { Button, InlineError } from '../src/components/ui';
+import { NotificationCard } from '../src/features/notifications/components/NotificationCard';
+import { NotificationFilterBar } from '../src/features/notifications/components/NotificationFilterBar';
+import { Avatar, Button, InlineError } from '../src/components/ui';
 import type { ApiNotification } from '../src/services';
+import type { NotificationCardData } from '../src/features/notifications/notificationCardModel';
 
 const Screen = NotificationsScreen as unknown as React.FC<{
   navigation: typeof mockNavigation;
@@ -115,14 +119,54 @@ afterEach(() => {
 
 // --- Deep-link contract (the story's core AC) ---------------------------------
 
-it('tapping a row navigates to that job\'s JobDetail AND marks it read', async () => {
+it('tapping a card navigates to that job\'s JobDetail AND marks it read', async () => {
   mockStore = emptyStore({ items: [makeNotification('n1')] });
   const renderer = await mountScreen();
 
   await act(async () => {
-    renderer.root.findByType(NotificationRow).props.onPress(
-      mockStore.items[0],
+    renderer.root.findByType(NotificationCard).props.onPress(
+      renderer.root.findByType(NotificationCard).props.card,
     );
+  });
+
+  expect(mockNavigation.navigate).toHaveBeenCalledWith('JobDetail', { jobId: 'job-n1' });
+  expect(mockMarkNotificationRead).toHaveBeenCalledWith('n1');
+});
+
+it('tapping a card marks ALL of that job\'s unread events read', async () => {
+  mockStore = emptyStore({
+    items: [
+      makeNotification('n1', {
+        jobId: 'job-shared',
+        payload: { job_number: 'JB-2026-0042', step: 'in_progress', technician_name: 'Priya' },
+      }),
+      makeNotification('n2', {
+        jobId: 'job-shared',
+        payload: { job_number: 'JB-2026-0042', step: 'on_my_way', technician_name: 'Priya' },
+      }),
+    ],
+  });
+  const renderer = await mountScreen();
+
+  await act(async () => {
+    const card = renderer.root.findByType(NotificationCard);
+    card.props.onPress(card.props.card);
+  });
+
+  expect(mockMarkNotificationRead).toHaveBeenCalledWith('n1');
+  expect(mockMarkNotificationRead).toHaveBeenCalledWith('n2');
+});
+
+it('the card\'s "View Job" footer button runs the same navigate-first contract', async () => {
+  mockStore = emptyStore({ items: [makeNotification('n1')] });
+  const renderer = await mountScreen();
+
+  const viewJob = renderer.root
+    .findAllByType(Button)
+    .find(b => b.props.children === 'View Job');
+  expect(viewJob).toBeDefined();
+  await act(async () => {
+    viewJob?.props.onPress();
   });
 
   expect(mockNavigation.navigate).toHaveBeenCalledWith('JobDetail', { jobId: 'job-n1' });
@@ -174,13 +218,13 @@ it('a failed refresh with rows on screen keeps the rows behind a dismissible ban
   const renderer = await mountScreen();
 
   expect(renderer.root.findAllByType(InlineError)).toHaveLength(1);
-  expect(renderer.root.findByType(NotificationRow)).toBeDefined(); // rows kept
+  expect(renderer.root.findByType(NotificationCard)).toBeDefined(); // rows kept
 
   await act(async () => {
     renderer.root.findByType(InlineError).props.onDismiss();
   });
   expect(renderer.root.findAllByType(InlineError)).toHaveLength(0);
-  expect(renderer.root.findByType(NotificationRow)).toBeDefined(); // still kept
+  expect(renderer.root.findByType(NotificationCard)).toBeDefined(); // still kept
 });
 
 it('a failed mutation surfaces its own banner (the list itself looks normal)', async () => {
@@ -223,64 +267,141 @@ it('refetches the list and the badge on focus, unforced (the store throttles)', 
   expect(mockLoadUnreadCount).toHaveBeenCalledWith();
 });
 
-// --- NotificationRow ------------------------------------------------------------
+// --- NotificationCard ------------------------------------------------------------
 
-describe('NotificationRow', () => {
-  it('renders "Technician · JobNumber" from the payload with the step label', () => {
+describe('NotificationCard', () => {
+  it('announces "Technician · JobNumber" with the step label and unread prefix', () => {
+    mockStore = emptyStore({ items: [makeNotification('n1')] });
     let renderer!: ReactTestRenderer.ReactTestRenderer;
     act(() => {
       renderer = ReactTestRenderer.create(
-        React.createElement(NotificationRow, {
-          notification: makeNotification('n1'),
-          onPress: jest.fn(),
-        }),
+        React.createElement(Screen, { navigation: mockNavigation }),
       );
     });
-    const label = renderer.root.findByProps({ accessibilityRole: 'button' }).props
+    const label = renderer.root.findByType(NotificationCard).props.card;
+    // The card derives its copy through the model — asserted via the grouped
+    // data the screen hands it (title/step rendering is the model's tests).
+    expect(label.jobNumber).toBe('JB-2026-0042');
+    expect(label.technicianName).toBe('Priya');
+    expect(label.currentStep).toBe('on_my_way');
+    expect(label.isUnread).toBe(true);
+  });
+
+  it('a read event produces a read card (no unread announcement data)', async () => {
+    mockStore = emptyStore({
+      items: [makeNotification('n1', { readAt: '2026-09-09T11:00:00Z' })],
+    });
+    const renderer = await mountScreen();
+    const card = renderer.root.findByType(NotificationCard).props
+      .card as NotificationCardData;
+    expect(card.isUnread).toBe(false);
+    expect(card.unreadIds).toEqual([]);
+  });
+
+  // The old NotificationRow tests pinned the RENDERED label; these keep that
+  // pin — model-data assertions above would pass even if the component
+  // rendered a raw step key or dropped the unread prefix.
+  it('the rendered label carries the unread prefix, title and step label', async () => {
+    mockStore = emptyStore({ items: [makeNotification('n1')] });
+    const renderer = await mountScreen();
+    const label = renderer.root
+      .findByType(NotificationCard)
+      .findByProps({ accessibilityRole: 'button' }).props
       .accessibilityLabel as string;
+    expect(label).toContain('Unread. ');
     expect(label).toContain('Priya · JB-2026-0042');
-    expect(label).toContain('On my way');
+    expect(label).toContain('ON MY WAY'); // uppercased in JS, not textTransform
   });
 
-  it('a partial payload collapses the whole title to the generic copy', () => {
-    expect(rowTitle({ job_number: 'JB-1' })).toBe('Job status updated');
-    expect(rowTitle({})).toBe('Job status updated');
+  it('a drifted payload renders the generic copy and no avatar', async () => {
+    mockStore = emptyStore({ items: [makeNotification('n1', { payload: {} })] });
+    const renderer = await mountScreen();
+    const card = renderer.root.findByType(NotificationCard);
+    const label = card.findByProps({ accessibilityRole: 'button' }).props
+      .accessibilityLabel as string;
+    expect(label).toContain('Job status updated');
+    // No name, no avatar — a blank initials circle would read as a bug.
+    expect(card.findAllByType(Avatar)).toHaveLength(0);
+  });
+});
+
+// --- Filter chips -----------------------------------------------------------------
+
+describe('filter chips', () => {
+  async function mountWithActiveAndCompleted() {
+    mockStore = emptyStore({
+      items: [
+        makeNotification('n1', {
+          jobId: 'job-done',
+          payload: { job_number: 'JB-2026-0005', step: 'completed', technician_name: 'Ashish' },
+          readAt: '2026-09-09T11:00:00Z',
+        }),
+        makeNotification('n2', {
+          jobId: 'job-active',
+          payload: { job_number: 'JB-2026-0007', step: 'in_progress', technician_name: 'Dinesh' },
+        }),
+      ],
+    });
+    return mountScreen();
+  }
+
+  it('shows all cards under "all" and narrows by the selected chip', async () => {
+    const renderer = await mountWithActiveAndCompleted();
+    expect(renderer.root.findAllByType(NotificationCard)).toHaveLength(2);
+
+    await act(async () => {
+      renderer.root.findByType(NotificationFilterBar).props.onChange('completed');
+    });
+    const completedCards = renderer.root.findAllByType(NotificationCard);
+    expect(completedCards).toHaveLength(1);
+    expect(completedCards[0].props.card.jobId).toBe('job-done');
+
+    await act(async () => {
+      renderer.root.findByType(NotificationFilterBar).props.onChange('active');
+    });
+    const activeCards = renderer.root.findAllByType(NotificationCard);
+    expect(activeCards).toHaveLength(1);
+    expect(activeCards[0].props.card.jobId).toBe('job-active');
   });
 
-  it('only unread rows carry the "Unread." announcement prefix', () => {
-    const unread = makeNotification('n1');
-    const read = makeNotification('n2', { readAt: '2026-09-09T11:00:00Z' });
-    const onPress = jest.fn();
+  it('an empty filter result shows the quiet line, not the "no notifications yet" state', async () => {
+    mockStore = emptyStore({ items: [makeNotification('n1')] }); // an active job
+    const renderer = await mountScreen();
 
-    let a!: ReactTestRenderer.ReactTestRenderer;
-    let b!: ReactTestRenderer.ReactTestRenderer;
-    act(() => {
-      a = ReactTestRenderer.create(
-        React.createElement(NotificationRow, { notification: unread, onPress }),
-      );
-      b = ReactTestRenderer.create(
-        React.createElement(NotificationRow, { notification: read, onPress }),
-      );
+    await act(async () => {
+      renderer.root.findByType(NotificationFilterBar).props.onChange('completed');
     });
-    const labelOf = (r: ReactTestRenderer.ReactTestRenderer) =>
-      r.root.findByProps({ accessibilityRole: 'button' }).props
-        .accessibilityLabel as string;
-    expect(labelOf(a).startsWith('Unread.')).toBe(true);
-    expect(labelOf(b).startsWith('Unread.')).toBe(false);
+    expect(renderer.root.findAllByType(NotificationCard)).toHaveLength(0);
+    const text = renderer.root.findAllByType(Text).map(t => t.props.children);
+    expect(text).toContain('No completed jobs yet.');
+    // The real empty state (with its CTA) is NOT shown — rows exist.
+    expect(
+      renderer.root.findAllByType(Button).find(b => b.props.children === 'Go to jobs'),
+    ).toBeUndefined();
   });
 
-  it('pressing the row hands the notification back to the caller', () => {
-    const onPress = jest.fn();
-    const notification = makeNotification('n1');
-    let renderer!: ReactTestRenderer.ReactTestRenderer;
-    act(() => {
-      renderer = ReactTestRenderer.create(
-        React.createElement(NotificationRow, { notification, onPress }),
-      );
+  it('chip labels carry the loaded counts', async () => {
+    const renderer = await mountWithActiveAndCompleted();
+    const bar = renderer.root.findByType(NotificationFilterBar);
+    expect(bar.props.counts).toEqual({ all: 2, active: 1, completed: 1 });
+  });
+
+  it('a drifted card counts as active — and the chips agree with the filter', async () => {
+    mockStore = emptyStore({ items: [makeNotification('n1', { payload: {} })] });
+    const renderer = await mountScreen();
+
+    expect(renderer.root.findByType(NotificationFilterBar).props.counts).toEqual({
+      all: 1,
+      active: 1,
+      completed: 0,
     });
-    act(() => {
-      renderer.root.findByProps({ accessibilityRole: 'button' }).props.onPress();
+    await act(async () => {
+      renderer.root.findByType(NotificationFilterBar).props.onChange('active');
     });
-    expect(onPress).toHaveBeenCalledWith(notification);
+    expect(renderer.root.findAllByType(NotificationCard)).toHaveLength(1);
+    await act(async () => {
+      renderer.root.findByType(NotificationFilterBar).props.onChange('completed');
+    });
+    expect(renderer.root.findAllByType(NotificationCard)).toHaveLength(0);
   });
 });
