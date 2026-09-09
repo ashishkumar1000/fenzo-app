@@ -14,6 +14,8 @@
  * duplicated, not shared (see stepperModel.ts's comment).
  */
 
+import type { StatusKey } from '../../theme';
+
 /** How long a banner stays visible before the hook dismisses it. */
 export const BANNER_VISIBLE_MS = 4000;
 
@@ -30,16 +32,22 @@ export interface JobStatusEventPayload {
   technician_name?: unknown;
 }
 
-const STEP_LABELS: Record<string, string> = {
-  on_my_way: 'On my way',
-  arrived: 'Arrived',
-  in_progress: 'In progress',
-  photos_uploaded: 'Photos uploaded',
-  signature_captured: 'Signature captured',
-  completed: 'Completed',
+/**
+ * The step vocabulary, one keyed record — label AND Badge status together,
+ * so a new step can never be added to one map and silently drift from the
+ * other (the label would render while the chip falls back to neutral).
+ */
+const STEPS: Record<string, { label: string; status: StatusKey }> = {
+  on_my_way: { label: 'On my way', status: 'progress' },
+  arrived: { label: 'Arrived', status: 'done' },
+  in_progress: { label: 'In progress', status: 'progress' },
+  photos_uploaded: { label: 'Photos uploaded', status: 'progress' },
+  signature_captured: { label: 'Signature captured', status: 'progress' },
+  completed: { label: 'Completed', status: 'done' },
 };
 
-const isText = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
+const isText = (v: unknown): v is string =>
+  typeof v === 'string' && v.trim().length > 0;
 
 /**
  * Human label for one raw workflow-step value (`on_my_way`, `arrived`, …).
@@ -49,9 +57,9 @@ const isText = (v: unknown): v is string => typeof v === 'string' && v.length > 
  */
 export function notificationStepLabel(step: unknown): string {
   if (!isText(step)) return BANNER_FALLBACK_TEXT;
-  // Object.hasOwn — `STEP_LABELS[step] ?? step` alone would resolve
-  // inherited prototype keys ('toString', 'constructor') to functions.
-  return Object.hasOwn(STEP_LABELS, step) ? STEP_LABELS[step] : step;
+  // Object.hasOwn — `STEPS[step]` alone would resolve inherited prototype
+  // keys ('toString', 'constructor') to functions.
+  return Object.hasOwn(STEPS, step) ? STEPS[step].label : step;
 }
 
 /**
@@ -95,22 +103,66 @@ export function eventRowPayload(message: unknown): JobStatusEventPayload | null 
 }
 
 /**
- * Builds the banner line for one broadcast event: "{technician_name} ·
- * {job_number} · {step label}". Any missing/empty/drifted field falls back
- * to `BANNER_FALLBACK_TEXT` — a partial payload is not worth a partial
- * sentence. Always returns a non-empty string (never `null`): the refetch
- * the hook runs alongside this happens regardless of payload quality.
+ * The banner's structured fields, extracted per-field: whatever the payload
+ * carries is rendered, whatever is missing is dropped (the redesigned toast
+ * shows avatar/name, job chip, and step chip independently). `step` is the
+ * raw workflow value; `stepLabel` its human label.
  */
-export function bannerTextFromEvent(
+export interface NotificationBannerParts {
+  technicianName: string | null;
+  jobNumber: string | null;
+  step: string | null;
+  stepLabel: string | null;
+}
+
+/**
+ * Extracts the banner fields from one broadcast payload, each independently:
+ * a partial payload keeps its good fields instead of collapsing to the
+ * generic line. Never returns non-string values (the `isText` gate above).
+ */
+export function bannerPartsFromEvent(
   payload: JobStatusEventPayload | null | undefined,
-): string {
-  if (!payload || typeof payload !== 'object') return BANNER_FALLBACK_TEXT;
+): NotificationBannerParts {
+  const empty: NotificationBannerParts = {
+    technicianName: null,
+    jobNumber: null,
+    step: null,
+    stepLabel: null,
+  };
+  if (!payload || typeof payload !== 'object') return empty;
 
   const { job_number: jobNumber, step, technician_name: technicianName } = payload;
+  const hasStep = isText(step);
 
-  if (!isText(jobNumber) || !isText(step) || !isText(technicianName)) {
-    return BANNER_FALLBACK_TEXT;
-  }
+  return {
+    technicianName: isText(technicianName) ? technicianName : null,
+    jobNumber: isText(jobNumber) ? jobNumber : null,
+    step: hasStep ? step : null,
+    stepLabel: hasStep ? notificationStepLabel(step) : null,
+  };
+}
 
-  return `${technicianName} · ${jobNumber} · ${notificationStepLabel(step)}`;
+/**
+ * Badge status color for the step chip — Done-green for terminal-ish steps,
+ * In-progress blue for the rest, neutral for unknown/drifted values (same
+ * fixed vocabulary as `<Badge>`; no synonyms). Reads the same keyed record
+ * as `notificationStepLabel`, so label and color can never drift apart.
+ */
+export function notificationStepStatus(step: string | null): StatusKey {
+  if (step === null) return 'neutral';
+  return Object.hasOwn(STEPS, step) ? STEPS[step].status : 'neutral';
+}
+
+/**
+ * Composes the one-line banner text ("A · B · C") from the parts — the
+ * accessibility label and the all-fields-missing degraded render. With no
+ * parts at all, falls back to `BANNER_FALLBACK_TEXT`. Always non-empty.
+ * The length guard also drops empty-string parts (an exported API must not
+ * emit stray separators).
+ */
+export function bannerTextFromParts(parts: NotificationBannerParts): string {
+  const line = [parts.technicianName, parts.jobNumber, parts.stepLabel]
+    .filter((v): v is string => v !== null && v.length > 0)
+    .join(' · ');
+  return line.length > 0 ? line : BANNER_FALLBACK_TEXT;
 }

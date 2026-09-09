@@ -41,14 +41,22 @@ import {
 } from '../../services';
 import {
   BANNER_VISIBLE_MS,
-  bannerTextFromEvent,
+  bannerPartsFromEvent,
+  bannerTextFromParts,
   eventRowPayload,
+  notificationStepStatus,
   type JobStatusEventPayload,
 } from './notificationBannerModel';
+import type { StatusKey } from '../../theme';
 
 export interface OwnerNotificationBanner {
-  /** Render-ready line, e.g. "Priya · JOB-1042 · On my way". */
+  /** Render-ready line (all fields joined), e.g. "Priya · JOB-1042 · On my way" — also the accessibility label. */
   text: string;
+  /** Per-field parts — the toast renders each independently, dropping whatever the payload lacked. */
+  technicianName: string | null;
+  jobNumber: string | null;
+  stepLabel: string | null;
+  stepStatus: StatusKey;
 }
 
 /**
@@ -90,9 +98,16 @@ export function useOwnerNotifications(
    * the timer — the first event's timer must never dismiss the second
    * event's banner.
    */
-  const showBanner = (text: string) => {
+  const showBanner = (payload: JobStatusEventPayload | null) => {
     dismissTimer();
-    setBanner({ text });
+    const parts = bannerPartsFromEvent(payload);
+    setBanner({
+      text: bannerTextFromParts(parts),
+      technicianName: parts.technicianName,
+      jobNumber: parts.jobNumber,
+      stepLabel: parts.stepLabel,
+      stepStatus: notificationStepStatus(parts.step),
+    });
     bannerTimerRef.current = setTimeout(() => {
       bannerTimerRef.current = null;
       setBanner(null);
@@ -114,8 +129,7 @@ export function useOwnerNotifications(
     // is async, so its handler can still fire while the app is backgrounded;
     // the foreground rule forbids any banner/refetch work in that state.
     if (!shouldSubscribe(AppState.currentState)) return;
-    const row = eventRowPayload(message) ?? {};
-    showBanner(bannerTextFromEvent(row as JobStatusEventPayload));
+    showBanner(eventRowPayload(message));
     void loadJobs(undefined, undefined, { force: true });
     // Story 3.4: the bell badge tracks the same stream of events — force
     // past the count TTL so a burst of events can't be throttled away.

@@ -4,17 +4,21 @@
  * Ported from the Fenzit Design System (web) to React Native.
  *
  * size: sm | md | lg | xl
+ * variant: 'tint' (default, name-derived tint) | 'onColor' (white disc with
+ * primary initials — for sitting on a brand-colored surface).
  */
 import { Image, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { palette, radius, weight } from '../../theme';
+import { colors, palette, radius, weight } from '../../theme';
 
 type Size = 'sm' | 'md' | 'lg' | 'xl';
+type Variant = 'tint' | 'onColor';
 
 export type AvatarProps = {
   name?: string;
   /** Image URI. When omitted, initials are shown on a name-derived tint. */
   uri?: string | null;
   size?: Size;
+  variant?: Variant;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -47,9 +51,12 @@ function initialsOf(name: string): string {
     .toUpperCase();
 }
 
-export function Avatar({ name = '', uri = null, size = 'md', style }: AvatarProps) {
+export function Avatar({ name = '', uri = null, size = 'md', variant = 'tint', style }: AvatarProps) {
   const dim = dims[size];
   const [bg, fg] = tints[hashName(name) % tints.length];
+  const onColor = variant === 'onColor';
+  const backgroundColor = onColor ? colors.onPrimary : uri ? palette.gray100 : bg;
+  const initialsColor = onColor ? colors.primary : fg;
   const initials = initialsOf(name);
 
   return (
@@ -60,7 +67,7 @@ export function Avatar({ name = '', uri = null, size = 'md', style }: AvatarProp
           width: dim,
           height: dim,
           borderRadius: radius.pill,
-          backgroundColor: uri ? palette.gray100 : bg,
+          backgroundColor,
         },
         style,
       ]}>
@@ -73,7 +80,7 @@ export function Avatar({ name = '', uri = null, size = 'md', style }: AvatarProp
       ) : (
         <Text
           style={{
-            color: fg,
+            color: initialsColor,
             fontSize: Math.round(dim * 0.38),
             fontWeight: weight.semibold,
           }}>

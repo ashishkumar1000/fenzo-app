@@ -3,8 +3,11 @@
  */
 import {
   BANNER_FALLBACK_TEXT,
-  bannerTextFromEvent,
+  bannerPartsFromEvent,
+  bannerTextFromParts,
   eventRowPayload,
+  notificationStepLabel,
+  notificationStepStatus,
 } from './notificationBannerModel';
 
 describe('eventRowPayload', () => {
@@ -70,50 +73,153 @@ describe('eventRowPayload', () => {
   });
 });
 
-describe('bannerTextFromEvent', () => {
-  it('formats "{technician_name} · {job_number} · {step label}" from a full payload', () => {
-    expect(
-      bannerTextFromEvent({
-        job_number: 'JOB-1042',
-        step: 'on_my_way',
-        technician_name: 'Priya',
-      }),
-    ).toBe('Priya · JOB-1042 · On my way');
-  });
-
+describe('notificationStepLabel', () => {
   it('humanizes every known step value', () => {
-    expect(bannerTextFromEvent({ job_number: 'J', step: 'completed', technician_name: 'R' }))
-      .toBe('R · J · Completed');
-    expect(bannerTextFromEvent({ job_number: 'J', step: 'signature_captured', technician_name: 'R' }))
-      .toBe('R · J · Signature captured');
+    expect(notificationStepLabel('completed')).toBe('Completed');
+    expect(notificationStepLabel('signature_captured')).toBe('Signature captured');
   });
 
   it('renders an unknown step value raw — never undefined, never a crash', () => {
-    expect(bannerTextFromEvent({ job_number: 'J', step: 'brand_new_step', technician_name: 'R' }))
-      .toBe('R · J · brand_new_step');
+    expect(notificationStepLabel('brand_new_step')).toBe('brand_new_step');
   });
 
   it('does not resolve inherited prototype keys as step labels', () => {
-    // `STEP_LABELS[step] ?? step` alone would pick Object.prototype members
-    // up and interpolate a function's source into the banner.
-    expect(bannerTextFromEvent({ job_number: 'J', step: 'toString', technician_name: 'R' }))
-      .toBe('R · J · toString');
-    expect(bannerTextFromEvent({ job_number: 'J', step: 'constructor', technician_name: 'R' }))
-      .toBe('R · J · constructor');
+    // `STEPS[step]` alone would pick Object.prototype members up and
+    // interpolate a function's source into the banner.
+    expect(notificationStepLabel('toString')).toBe('toString');
+    expect(notificationStepLabel('constructor')).toBe('constructor');
   });
 
-  it('falls back to generic copy when a field is missing, empty, or non-string', () => {
-    expect(bannerTextFromEvent({ step: 'on_my_way', technician_name: 'Priya' }))
-      .toBe(BANNER_FALLBACK_TEXT);
-    expect(bannerTextFromEvent({ job_number: '', step: 'on_my_way', technician_name: 'Priya' }))
-      .toBe(BANNER_FALLBACK_TEXT);
-    expect(bannerTextFromEvent({ job_number: 'J', step: 7, technician_name: 'Priya' }))
-      .toBe(BANNER_FALLBACK_TEXT);
-    expect(bannerTextFromEvent({})).toBe(BANNER_FALLBACK_TEXT);
+  it('returns the fallback copy for missing/empty/whitespace steps', () => {
+    expect(notificationStepLabel(null)).toBe(BANNER_FALLBACK_TEXT);
+    expect(notificationStepLabel('')).toBe(BANNER_FALLBACK_TEXT);
+    expect(notificationStepLabel('   ')).toBe(BANNER_FALLBACK_TEXT);
+  });
+});
+
+describe('bannerPartsFromEvent', () => {
+  it('extracts every field from a full payload', () => {
+    expect(
+      bannerPartsFromEvent({ job_number: 'JOB-1042', step: 'arrived', technician_name: 'Priya' }),
+    ).toEqual({
+      technicianName: 'Priya',
+      jobNumber: 'JOB-1042',
+      step: 'arrived',
+      stepLabel: 'Arrived',
+    });
   });
 
-  it('falls back on a null/undefined payload (shape drift never blocks the banner)', () => {
-    expect(bannerTextFromEvent(null)).toBe(BANNER_FALLBACK_TEXT);
-    expect(bannerTextFromEvent(undefined)).toBe(BANNER_FALLBACK_TEXT);
+  it('drops missing, empty, and non-string fields independently', () => {
+    expect(bannerPartsFromEvent({ step: 'on_my_way', technician_name: 'Priya' })).toEqual({
+      technicianName: 'Priya',
+      jobNumber: null,
+      step: 'on_my_way',
+      stepLabel: 'On my way',
+    });
+    expect(bannerPartsFromEvent({ job_number: 'J', step: 7 })).toEqual({
+      technicianName: null,
+      jobNumber: 'J',
+      step: null,
+      stepLabel: null,
+    });
+    expect(bannerPartsFromEvent({})).toEqual({
+      technicianName: null,
+      jobNumber: null,
+      step: null,
+      stepLabel: null,
+    });
+  });
+
+  it('drops whitespace-only fields — a blank chip is worse than no chip', () => {
+    expect(
+      bannerPartsFromEvent({ job_number: '   ', step: '  ', technician_name: '\t\n' }),
+    ).toEqual({
+      technicianName: null,
+      jobNumber: null,
+      step: null,
+      stepLabel: null,
+    });
+  });
+
+  it('returns all-null parts on a null/undefined payload', () => {
+    expect(bannerPartsFromEvent(null)).toEqual({
+      technicianName: null,
+      jobNumber: null,
+      step: null,
+      stepLabel: null,
+    });
+  });
+});
+
+describe('bannerTextFromParts', () => {
+  it('joins the non-null parts with the dot separator', () => {
+    expect(
+      bannerTextFromParts({
+        technicianName: 'Priya',
+        jobNumber: 'JOB-1042',
+        step: 'arrived',
+        stepLabel: 'Arrived',
+      }),
+    ).toBe('Priya · JOB-1042 · Arrived');
+  });
+
+  it('keeps the good fields of a partial payload (missing/empty/non-string fields dropped)', () => {
+    // Redesigned toast (2026-09-09): the line composes whatever the payload
+    // carried — only an all-fields-missing payload collapses to the fallback.
+    expect(
+      bannerTextFromParts({
+        technicianName: 'Priya',
+        jobNumber: null,
+        step: 'on_my_way',
+        stepLabel: 'On my way',
+      }),
+    ).toBe('Priya · On my way');
+    expect(
+      bannerTextFromParts({
+        technicianName: null,
+        jobNumber: 'J',
+        step: null,
+        stepLabel: null,
+      }),
+    ).toBe('J');
+  });
+
+  it('drops empty-string parts — an exported API never emits stray separators', () => {
+    expect(
+      bannerTextFromParts({
+        technicianName: '',
+        jobNumber: 'J',
+        step: null,
+        stepLabel: null,
+      }),
+    ).toBe('J');
+  });
+
+  it('falls back to generic copy when every part is null', () => {
+    expect(
+      bannerTextFromParts({
+        technicianName: null,
+        jobNumber: null,
+        step: null,
+        stepLabel: null,
+      }),
+    ).toBe(BANNER_FALLBACK_TEXT);
+  });
+});
+
+describe('notificationStepStatus', () => {
+  it('maps terminal-ish steps to done and the rest to progress', () => {
+    expect(notificationStepStatus('arrived')).toBe('done');
+    expect(notificationStepStatus('completed')).toBe('done');
+    expect(notificationStepStatus('on_my_way')).toBe('progress');
+    expect(notificationStepStatus('in_progress')).toBe('progress');
+    expect(notificationStepStatus('photos_uploaded')).toBe('progress');
+    expect(notificationStepStatus('signature_captured')).toBe('progress');
+  });
+
+  it('maps unknown and missing steps to neutral — never a crash', () => {
+    expect(notificationStepStatus('brand_new_step')).toBe('neutral');
+    expect(notificationStepStatus('toString')).toBe('neutral');
+    expect(notificationStepStatus(null)).toBe('neutral');
   });
 });

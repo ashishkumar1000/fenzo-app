@@ -20,13 +20,20 @@ jest.mock('./useOwnerNotifications', () => ({
 }));
 
 jest.mock('../../components/StatusBanner', () => ({
-  StatusBanner: ({ banner }: { banner: { text: string } | null }) =>
+  StatusBanner: ({ banner }: { banner: OwnerNotificationBanner | null }) =>
     banner ? `banner:${banner.text}` : null,
 }));
 
 import { OwnerRealtimeBridge } from './OwnerRealtimeBridge';
+import type { OwnerNotificationBanner } from './useOwnerNotifications';
 
-const BANNER = { text: 'Priya · JOB-1042 · On my way' };
+const BANNER: OwnerNotificationBanner = {
+  text: 'Priya · JOB-1042 · On my way',
+  technicianName: 'Priya',
+  jobNumber: 'JOB-1042',
+  stepLabel: 'On my way',
+  stepStatus: 'progress',
+};
 
 function mount(): ReactTestRenderer.ReactTestRenderer {
   let renderer!: ReactTestRenderer.ReactTestRenderer;

@@ -345,6 +345,14 @@ describe('event handling', () => {
     // Deleting the handler's loadUnreadCount line fails this assertion.
     expect(unreadCountMock).toHaveBeenCalled();
     expect(probe?.banner?.text).toBe('Priya · JOB-1042 · On my way');
+    // The per-field wiring (which part lands in which field, and which
+    // status the raw step maps to) is what the toast's identity card
+    // renders — a wrong-field or wrong-status bug here paints every chip
+    // gray while the joined line still looks right.
+    expect(probe?.banner?.technicianName).toBe('Priya');
+    expect(probe?.banner?.jobNumber).toBe('JOB-1042');
+    expect(probe?.banner?.stepLabel).toBe('On my way');
+    expect(probe?.banner?.stepStatus).toBe('progress');
   });
 
   it('shows the drift-fallback copy on a malformed payload — refetch still happens', async () => {
@@ -355,6 +363,11 @@ describe('event handling', () => {
 
     expect(loadJobsMock).toHaveBeenCalledWith(undefined, undefined, { force: true });
     expect(probe?.banner?.text).toBe('Job status updated');
+    // A malformed payload degrades to the generic line with all parts null.
+    expect(probe?.banner?.technicianName).toBeNull();
+    expect(probe?.banner?.jobNumber).toBeNull();
+    expect(probe?.banner?.stepLabel).toBeNull();
+    expect(probe?.banner?.stepStatus).toBe('neutral');
   });
 
   it('drops an in-flight event that lands after the background teardown', async () => {
@@ -412,6 +425,7 @@ describe('event handling', () => {
       await Promise.resolve();
     });
     expect(probe?.banner?.text).toBe('Sana · J2 · Completed');
+    expect(probe?.banner?.stepStatus).toBe('done'); // completed → Done-green
 
     await ReactTestRenderer.act(async () => {
       jest.advanceTimersByTime(4000);
