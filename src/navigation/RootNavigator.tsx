@@ -3,6 +3,7 @@ import MainTabs from './MainTabs';
 import { TechniciansScreen } from '../features/technicians';
 import { NewJobScreen } from '../features/newJob';
 import { JobDetailScreen } from '../features/jobDetail';
+import { NotificationsScreen } from '../features/notifications';
 import { CustomerDetailScreen } from '../features/customerDetail';
 import { SkillsScreen } from '../features/skills';
 import { AddCustomerScreen } from '../features/customers';
@@ -37,6 +38,11 @@ export default function RootNavigator() {
       <Stack.Screen
         name="JobDetail"
         component={JobDetailScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="Notifications"
+        component={NotificationsScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen

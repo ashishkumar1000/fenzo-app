@@ -22,6 +22,9 @@ jest.mock('../../services', () => ({
   teardownOwnerChannel: jest.fn(),
   ownerNotificationsTopic: (userId: string) => `user:${userId}:notifications`,
   registerReset: jest.fn(() => jest.fn()),
+  // Story 3.4: every broadcast also force-refreshes the bell's unread count
+  // — a resolved stub so the event handler's call is a harmless no-op here.
+  notificationService: { unreadCount: jest.fn().mockResolvedValue({ unreadCount: 0 }) },
 }));
 
 import { loadJobs } from '../jobs/useJobs';
@@ -29,6 +32,7 @@ import { loadMyProfile } from '../profile/useMyProfile';
 import {
   getOwnerChannel,
   getRealtimeToken,
+  notificationService,
   ownerNotificationsTopic,
   registerReset,
   teardownOwnerChannel,
@@ -45,6 +49,7 @@ const teardownOwnerChannelMock = teardownOwnerChannel as jest.Mock;
 const registerResetMock = registerReset as jest.Mock;
 const loadJobsMock = loadJobs as jest.Mock;
 const loadMyProfileMock = loadMyProfile as jest.Mock;
+const unreadCountMock = notificationService.unreadCount as jest.Mock;
 
 /** Chainable channel stub: `.on(...)` and `.subscribe()` both return it —
  * real supabase-js's `subscribe()` returns the channel, and the hook stores
@@ -335,6 +340,10 @@ describe('event handling', () => {
     // Post-spec extension: Home renders from the profile store, so the event
     // force-refreshes it too (user-approved, 2026-09-09 device spike).
     expect(loadMyProfileMock).toHaveBeenCalledWith({ force: true });
+    // Story 3.4: the bell badge rides the same event — the store's loader is
+    // real, so the wiring is pinned on the (mocked) wire call it triggers.
+    // Deleting the handler's loadUnreadCount line fails this assertion.
+    expect(unreadCountMock).toHaveBeenCalled();
     expect(probe?.banner?.text).toBe('Priya · JOB-1042 · On my way');
   });
 
@@ -367,6 +376,7 @@ describe('event handling', () => {
 
     expect(loadJobsMock).not.toHaveBeenCalledWith(undefined, undefined, { force: true });
     expect(loadMyProfileMock).not.toHaveBeenCalledWith({ force: true });
+    expect(unreadCountMock).not.toHaveBeenCalled(); // no badge work either
     expect(probe?.banner).toBeNull();
   });
 

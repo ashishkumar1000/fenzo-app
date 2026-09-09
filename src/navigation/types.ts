@@ -46,6 +46,8 @@ export type RootStackParamList = {
   NewJob: { createdCustomerId?: string } | undefined;
   /** Owner/technician job detail — opened with the job's uuid. */
   JobDetail: { jobId: string };
+  /** Owner-only notification history (bell tap) — no params. */
+  Notifications: undefined;
   /** Owner-only customer profile + job history — opened with the customer's uuid. */
   CustomerDetail: { customerId: string };
   /** Tenant skill list management (More tab → Skills row). */

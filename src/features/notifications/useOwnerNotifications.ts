@@ -29,6 +29,9 @@ import { AppState } from 'react-native';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { loadMyProfile, useMyProfile } from '../profile/useMyProfile';
 import { loadJobs } from '../jobs/useJobs';
+// Story 3.4: a broadcast is the cheapest unread-count signal there is —
+// refresh the bell's badge alongside the stores it already force-refetches.
+import { loadUnreadCount } from './useNotifications';
 import {
   getRealtimeToken,
   getOwnerChannel,
@@ -114,6 +117,9 @@ export function useOwnerNotifications(
     const row = eventRowPayload(message) ?? {};
     showBanner(bannerTextFromEvent(row as JobStatusEventPayload));
     void loadJobs(undefined, undefined, { force: true });
+    // Story 3.4: the bell badge tracks the same stream of events — force
+    // past the count TTL so a burst of events can't be throttled away.
+    void loadUnreadCount({ force: true });
     // Post-spec extension (user-approved, 2026-09-09 device spike): Home is
     // the screen the owner actually sits on, and it renders from the profile
     // store (`GET /users/me` — job counts + the Today's-jobs section), a

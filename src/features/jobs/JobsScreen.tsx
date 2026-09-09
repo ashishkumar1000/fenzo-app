@@ -22,6 +22,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import {
+  Bell,
   CalendarClock,
   CircleAlert,
   CircleCheck,
@@ -36,17 +37,25 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button, EmptyState, InlineError, SegmentedControl } from '../../components/ui';
+import { Button, EmptyState, IconButton, InlineError, SegmentedControl } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import type { MainTabParamList, RootStackParamList } from '../../navigation/types';
 import { loadMyProfile, useMyProfile } from '../profile';
 import { useCustomers } from '../customers';
+import { useNotifications } from '../notifications';
 import { JobCard } from './components/JobCard';
 import { StatusFilterBar } from './components/StatusFilterBar';
 import { DispatchTip } from './components/DispatchTip';
 import { useJobs } from './useJobs';
 import { filterForScope, HISTORY_FILTERS } from './scopeFilters';
 import type { ApiJob, JobFilter, JobScope } from './types';
+
+/**
+ * Bell badge text, capped at 99+ so a runaway count can't blow the pill out.
+ * Shared vocabulary with Home's bell badge (Story 3.4).
+ */
+const BELL_BADGE_CAP = 99;
+const bellBadgeLabel = (count: number) => (count > BELL_BADGE_CAP ? '99+' : String(count));
 
 /** Scope selector labels — the four timeline buckets. */
 const SCOPES: { value: JobScope; label: string; badge?: number }[] = [
@@ -143,6 +152,9 @@ export default function JobsScreen({ navigation, route }: Props) {
   } = useJobs();
   const { customers } = useCustomers();
   const { profile } = useMyProfile();
+  // The bell's badge (Story 3.4) — refreshed on focus below, TTL-throttled
+  // in the store, and driven live by the 3.3 socket's own refetch.
+  const { unreadCount, loadUnreadCount } = useNotifications();
 
   // Server-computed overdue count for the segment badge — the same figure
   // Home's Overdue strip shows, so the two screens can never disagree.
@@ -169,7 +181,8 @@ export default function JobsScreen({ navigation, route }: Props) {
       }
       void loadJobs();
       void loadMyProfile();
-    }, [route.params?.scope, scope, filter, loadJobs, navigation]),
+      void loadUnreadCount();
+    }, [route.params?.scope, scope, filter, loadJobs, navigation, loadUnreadCount]),
   );
 
   /** Scope selector handler — one `loadJobs` with the reset/kept filter. */
@@ -227,6 +240,10 @@ export default function JobsScreen({ navigation, route }: Props) {
     navigation.navigate('NewJob');
   };
 
+  const handleOpenNotifications = () => {
+    navigation.navigate('Notifications');
+  };
+
   const handleOpenJob = (job: ApiJob) => {
     navigation.navigate('JobDetail', { jobId: job.id });
   };
@@ -248,14 +265,28 @@ export default function JobsScreen({ navigation, route }: Props) {
     <SafeAreaView style={styles.root} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>Jobs</Text>
-        <Button
-          variant="primary"
-          size="md"
-          shape="pill"
-          onPress={handleNewJob}
-          leadingIcon={<Plus size={18} color={colors.onPrimary} strokeWidth={2.5} />}>
-          New job
-        </Button>
+        <View style={styles.headerActions}>
+          <IconButton
+            variant="ghost"
+            size="md"
+            label="Notifications"
+            onPress={handleOpenNotifications}>
+            <Bell size={22} color={colors.textStrong} strokeWidth={2} />
+            {unreadCount !== null && unreadCount > 0 ? (
+              <View style={styles.bellBadge}>
+                <Text style={styles.bellBadgeText}>{bellBadgeLabel(unreadCount)}</Text>
+              </View>
+            ) : null}
+          </IconButton>
+          <Button
+            variant="primary"
+            size="md"
+            shape="pill"
+            onPress={handleNewJob}
+            leadingIcon={<Plus size={18} color={colors.onPrimary} strokeWidth={2.5} />}>
+            New job
+          </Button>
+        </View>
       </View>
 
       <View style={styles.filterWrap}>
@@ -389,6 +420,29 @@ const styles = StyleSheet.create({
   title: {
     ...typography.title,
     color: colors.textStrong,
+  },
+  // Bell + "New job" grouped on the trailing edge of the header row.
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s2,
+  },
+  // Unread count pill, overlaid on the bell's top-right corner.
+  bellBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 0,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    backgroundColor: colors.danger,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bellBadgeText: {
+    ...typography.captionStrong,
+    color: colors.onPrimary,
   },
   filterWrap: {
     paddingLeft: spacing.s4,

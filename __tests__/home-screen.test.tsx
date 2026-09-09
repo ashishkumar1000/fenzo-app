@@ -8,7 +8,7 @@
  */
 import React from 'react';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
-import { ScrollView } from 'react-native';
+import { RefreshControl, ScrollView } from 'react-native';
 
 const mockNavigation = { navigate: jest.fn(), goBack: jest.fn(), canGoBack: jest.fn(() => false) };
 
@@ -39,6 +39,18 @@ jest.mock('../src/features/home', () => ({
   // Real implementation — Story 1.7's filtering/strip/empty-state behaviour
   // is exactly what these tests pin.
   TodaysJobsSection: jest.requireActual('../src/features/home').TodaysJobsSection,
+}));
+
+// Story 3.4: Home mounts the notifications store for its bell — mocked here
+// so the mounted screen never fires a real unreadCount request through the
+// apiClient module graph, and so the bell tests can drive the count.
+let mockUnreadCount: number | null = null;
+const mockLoadUnreadCount = jest.fn();
+jest.mock('../src/features/notifications', () => ({
+  useNotifications: () => ({
+    unreadCount: mockUnreadCount,
+    loadUnreadCount: mockLoadUnreadCount,
+  }),
 }));
 
 import HomeScreen from '../src/screens/HomeScreen';
@@ -149,6 +161,7 @@ async function mountScreen(): Promise<ReactTestRenderer> {
 afterEach(() => {
   jest.clearAllMocks();
   focusEffect = null;
+  mockUnreadCount = null;
 });
 
 it('renders the greeting and header stats from the jobCounts buckets', async () => {
@@ -220,6 +233,9 @@ it('refreshes the profile on focus (unforced — the store throttle decides)', a
   focusEffect?.();
   expect(loadMyProfileMock).toHaveBeenCalledTimes(1);
   expect(loadMyProfileMock).toHaveBeenCalledWith(); // no { force: true }
+  // Story 3.4: the bell's badge rides the same focus refresh (unforced —
+  // the store's TTL decides).
+  expect(mockLoadUnreadCount).toHaveBeenCalledWith();
 
   await act(async () => {
     renderer.unmount();
@@ -486,4 +502,45 @@ it('pressing "Create a job" in the empty state navigates to NewJob', async () =>
     cta?.props.onPress();
   });
   expect(mockNavigation.navigate).toHaveBeenCalledWith('NewJob');
+});
+
+// --- Bell (Story 3.4) -----------------------------------------------------------
+
+/** The header bell, found by the start of its accessibility label. */
+function bellFor(renderer: ReactTestRenderer): ReactTestInstance {
+  const match = renderer.root
+    .findAllByProps({ accessibilityRole: 'button' })
+    .find(p => typeof p.props.accessibilityLabel === 'string' &&
+      (p.props.accessibilityLabel as string).startsWith('Notifications'));
+  if (!match) throw new Error('bell not rendered');
+  return match;
+}
+
+it('the bell navigates to the Notifications screen on press', async () => {
+  const renderer = await mountWithProfile();
+
+  await act(async () => {
+    bellFor(renderer).props.onPress();
+  });
+  expect(mockNavigation.navigate).toHaveBeenCalledWith('Notifications');
+});
+
+it("the bell's accessibility label carries the unread count (the dot is visual only)", async () => {
+  mockUnreadCount = 3;
+  const withCount = await mountWithProfile();
+  expect(bellFor(withCount).props.accessibilityLabel).toBe('Notifications, 3 unread');
+
+  mockUnreadCount = null; // no count yet — plain label, never "0 unread"
+  const withoutCount = await mountWithProfile();
+  expect(bellFor(withoutCount).props.accessibilityLabel).toBe('Notifications');
+});
+
+it('pull-to-refresh force-refreshes the unread count alongside the profile', async () => {
+  const renderer = await mountWithProfile();
+  mockLoadUnreadCount.mockClear();
+
+  await act(async () => {
+    renderer.root.findByType(RefreshControl).props.onRefresh();
+  });
+  expect(mockLoadUnreadCount).toHaveBeenCalledWith({ force: true });
 });

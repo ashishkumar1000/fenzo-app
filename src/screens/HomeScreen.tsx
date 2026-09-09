@@ -20,6 +20,7 @@ import { Card, EmptyState, InlineError } from '../components/ui';
 import { colors, radius, spacing, typography } from '../theme';
 import { firstName, loadMyProfile, useMyProfile } from '../features/profile';
 import { QuickActions, TodaysJobsSection, hasAnyJobCount } from '../features/home';
+import { useNotifications } from '../features/notifications';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Home'>,
@@ -33,6 +34,9 @@ export default function HomeScreen({ navigation }: Props) {
   // failed load gets its own error branch rather than a placeholder.
   const { profile, isLoading, error, refresh, dismissError } = useMyProfile();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  // The Home bell's badge (Story 3.4) — refreshed on focus below, TTL-throttled
+  // in the store, and driven live by the 3.3 socket's own refetch.
+  const { unreadCount, loadUnreadCount } = useNotifications();
 
   // Every tab focus asks for fresh counts so the tiles are never a snapshot
   // from login. The store's 15s throttle makes rapid tab switching cheap:
@@ -41,17 +45,23 @@ export default function HomeScreen({ navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       void loadMyProfile();
-    }, []),
+      void loadUnreadCount();
+    }, [loadUnreadCount]),
   );
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
       await refresh();
+      // Same discipline as Jobs and the Notifications screen: a pull must
+      // not leave the bell's badge a snapshot from login. Forced past the
+      // 15s focus throttle — a stale badge next to a fresh dashboard would
+      // contradict itself.
+      await loadUnreadCount({ force: true });
     } finally {
       setIsRefreshing(false);
     }
-  }, [refresh]);
+  }, [refresh, loadUnreadCount]);
 
   const handleNewJob = useCallback(() => {
     navigation.navigate('NewJob');
@@ -63,6 +73,10 @@ export default function HomeScreen({ navigation }: Props) {
     },
     [navigation],
   );
+
+  const handleOpenNotifications = useCallback(() => {
+    navigation.navigate('Notifications');
+  }, [navigation]);
 
   const quickActions = (
     <QuickActions
@@ -186,6 +200,8 @@ export default function HomeScreen({ navigation }: Props) {
         technicianCount={technicianCount}
         jobCounts={jobCounts}
         onTilePress={handleTilePress}
+        unreadCount={unreadCount}
+        onBellPress={handleOpenNotifications}
       />
       <ScrollView
         style={styles.screen}

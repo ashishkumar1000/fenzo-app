@@ -24,6 +24,17 @@ jest.mock('@react-navigation/native', () => {
 jest.mock('../src/services', () => ({
   jobService: { list: jest.fn(), create: jest.fn() },
 }));
+// Story 3.4: the bell is part of this screen's contract — the notifications
+// feature barrel is mocked so tests can drive the unread count directly
+// (a reverted bell or badge fails here instead of passing silently).
+let mockUnreadCount: number | null = null;
+const mockLoadUnreadCount = jest.fn();
+jest.mock('../src/features/notifications', () => ({
+  useNotifications: () => ({
+    unreadCount: mockUnreadCount,
+    loadUnreadCount: mockLoadUnreadCount,
+  }),
+}));
 // Swappable profile fixture — the screen reads `jobCounts.overdue` (the
 // segment badge and the dispatch tip) plus `technicians` (row names).
 let mockProfile = {
@@ -167,6 +178,7 @@ afterEach(async () => {
   });
   clearJobs();
   jest.clearAllMocks();
+  mockUnreadCount = null;
   mockProfile = {
     technicians: [{ id: 'tech-1', name: 'Anil' }],
     jobCounts: { today: 0, upcoming: 0, overdue: 0, completed: 0, cancelled: 0 },
@@ -431,4 +443,31 @@ it('keeps the Done chip across a Today → History switch, on screen and on the 
   expect(bar.props.filters).toEqual(['all', 'completed', 'cancelled']);
   expect(bar.props.value).toBe('completed');
   expect(renderedText(renderer)).toContain('No history yet');
+});
+
+// --- Bell (Story 3.4) ---------------------------------------------------------
+
+it('the bell navigates to Notifications, and focus refreshes its badge', async () => {
+  list.mockResolvedValue(page([], null));
+  const renderer = await mountScreen();
+
+  // Focus loads the badge unforced — the store's TTL decides.
+  expect(mockLoadUnreadCount).toHaveBeenCalledWith();
+
+  await ReactTestRenderer.act(async () => {
+    renderer.root.findAllByProps({ label: 'Notifications' })[0].props.onPress();
+  });
+  expect(navigation.navigate).toHaveBeenCalledWith('Notifications');
+});
+
+it("the bell's count pill shows the unread count, capped at 99+", async () => {
+  list.mockResolvedValue(page([], null));
+
+  mockUnreadCount = 3;
+  const few = await mountScreen();
+  expect(renderedText(few)).toContain('3');
+
+  mockUnreadCount = 120;
+  const many = await mountScreen();
+  expect(renderedText(many)).toContain('99+');
 });

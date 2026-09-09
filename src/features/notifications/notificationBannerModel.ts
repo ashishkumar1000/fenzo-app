@@ -42,6 +42,19 @@ const STEP_LABELS: Record<string, string> = {
 const isText = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
 
 /**
+ * Human label for one raw workflow-step value (`on_my_way`, `arrived`, …).
+ * Unknown values render RAW rather than crashing (the unknown-value rule
+ * above) — the row and the banner must never disagree about a step's name,
+ * so this is the feature's single copy of the vocabulary.
+ */
+export function notificationStepLabel(step: unknown): string {
+  if (!isText(step)) return BANNER_FALLBACK_TEXT;
+  // Object.hasOwn — `STEP_LABELS[step] ?? step` alone would resolve
+  // inherited prototype keys ('toString', 'constructor') to functions.
+  return Object.hasOwn(STEP_LABELS, step) ? STEP_LABELS[step] : step;
+}
+
+/**
  * Unwraps the banner fields out of the `on('broadcast')` callback message.
  * Verified live on device (2026-09-09, Task 0 spike Metro log) — THREE
  * nesting levels: supabase-js's broadcast callback delivers
@@ -99,8 +112,5 @@ export function bannerTextFromEvent(
     return BANNER_FALLBACK_TEXT;
   }
 
-  // Object.hasOwn — `STEP_LABELS[step] ?? step` alone would resolve
-  // inherited prototype keys ('toString', 'constructor') to functions.
-  const stepLabel = Object.hasOwn(STEP_LABELS, step) ? STEP_LABELS[step] : step;
-  return `${technicianName} · ${jobNumber} · ${stepLabel}`;
+  return `${technicianName} · ${jobNumber} · ${notificationStepLabel(step)}`;
 }

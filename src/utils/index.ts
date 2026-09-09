@@ -11,6 +11,8 @@ export {
   isSameIstDay,
   istDayStartMs,
 } from './istDate';
+// Coarse "5m ago" feed labels (falls back to a calendar date past 4 weeks)
+export { relativeTime } from './relativeTime';
 export { openMaps, openTel } from './linking';
 export { generateIdempotencyKey } from './idempotency';
 export { putToPresignedUrl } from './r2Upload';

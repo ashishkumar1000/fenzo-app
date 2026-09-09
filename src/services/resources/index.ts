@@ -47,6 +47,8 @@ export type {
 } from './jobs';
 export { skillService } from './skills';
 export type { Skill, NewSkillInput } from './skills';
+export { notificationService } from './notifications';
+export type { ApiNotification, ListNotificationsQuery } from './notifications';
 export { authApi } from './authApi';
 export { usersApi } from './users';
 export type {

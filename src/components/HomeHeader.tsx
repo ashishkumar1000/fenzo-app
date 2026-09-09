@@ -64,6 +64,13 @@ export interface HomeHeaderProps {
   jobCounts: JobCounts;
   /** Pressing a job tile navigates to the Jobs tab pre-set to that scope. */
   onTilePress: (scope: JobScope) => void;
+  /**
+   * Live unread-notification count (Story 3.4) — drives the bell dot.
+   * `null` until the first count lands: no dot yet, never a fake "read".
+   */
+  unreadCount: number | null;
+  /** Bell tap → the Notifications screen. */
+  onBellPress: () => void;
 }
 
 export default function HomeHeader({
@@ -72,6 +79,8 @@ export default function HomeHeader({
   technicianCount,
   jobCounts,
   onTilePress,
+  unreadCount,
+  onBellPress,
 }: HomeHeaderProps) {
   // Card side = (screen width - horizontal gutters - inter-card gap) / 2
   // Recalculated on every render so it stays correct on rotation / split-screen.
@@ -99,10 +108,27 @@ export default function HomeHeader({
               <Text style={styles.serviceText}>{businessName}</Text>
             </View>
 
-            <Pressable style={styles.notificationButton} onPress={() => {}}>
+            {/* Story 3.4 wired this previously-dead bell (empty onPress,
+                hardcoded dot) to the Notifications screen, and the dot to
+                the real unread count from `GET /notifications/unread-count`
+                — a tappable control that does nothing beside a live one is
+                worse than no bell at all. */}
+            <Pressable
+              style={styles.notificationButton}
+              accessibilityRole="button"
+              // The label carries the unread state (the dot is visual only) —
+              // the same discipline as the Jobs bell's count pill.
+              accessibilityLabel={
+                unreadCount !== null && unreadCount > 0
+                  ? `Notifications, ${unreadCount} unread`
+                  : 'Notifications'
+              }
+              onPress={onBellPress}>
               <View style={styles.notificationBadge}>
                 <Bell color={colors.surfaceCard} size={24} strokeWidth={1.5} />
-                <View style={styles.notificationDot} />
+                {unreadCount !== null && unreadCount > 0 ? (
+                  <View style={styles.notificationDot} />
+                ) : null}
               </View>
             </Pressable>
           </View>
