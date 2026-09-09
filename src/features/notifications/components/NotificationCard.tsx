@@ -86,7 +86,11 @@ export function NotificationCard({ card, onPress }: NotificationCardProps) {
         <Text style={[styles.bannerTime, { color: statusColors.fg }]}>{time}</Text>
       </View>
 
-      <StageStepper stages={card.stages} currentColor={statusColors.fg} />
+      <StageStepper
+        stages={card.stages}
+        currentColor={statusColors.fg}
+        isCompleted={card.isCompleted}
+      />
 
       <Button variant="secondary" size="md" fullWidth onPress={() => onPress(card)}>
         View Job

@@ -20,18 +20,27 @@ import type { CardStage } from '../notificationCardModel';
 export function StageStepper({
   stages,
   currentColor,
+  isCompleted,
 }: {
   stages: CardStage[];
   /** The card banner's status fg color — the current stage renders in it. */
   currentColor: string;
+  /**
+   * Whether the job reached a TERMINAL step (`card.isCompleted`) — the
+   * Completed stage is NOT done just because it is current: photos/signature
+   * fold into it mid-completion-flow, and only a terminal step finishes the
+   * job (see `notificationCardModel.ts` TERMINAL_STEPS).
+   */
+  isCompleted: boolean;
 }) {
   return (
     <View style={styles.grid}>
       {stages.map((stage, index) => {
-        // A job sitting ON its final stage is visually "done", not "in
-        // flight" — the Completed stage renders in the green done family
-        // even while it is the current stage.
-        const isFinalCurrent = stage.state === 'current' && stage.key === 'completed';
+        // A job that actually finished renders its final stage in the green
+        // done family even while it is the current stage. Mid-completion-flow
+        // (photos/signature — current but not terminal) keeps the ring.
+        const isFinalCurrent =
+          stage.state === 'current' && stage.key === 'completed' && isCompleted;
         return (
           <View key={stage.key} style={styles.column}>
             <Glyph

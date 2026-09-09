@@ -80,6 +80,7 @@ describe('groupNotificationsByJob', () => {
     expect(card.technicianName).toBeNull();
     expect(card.currentStep).toBeNull();
     expect(card.currentStage).toBeNull();
+    expect(card.isCompleted).toBe(false);
     expect(cardTitle(card)).toBe('Job status updated');
   });
 
@@ -124,6 +125,7 @@ describe('stage derivation', () => {
     ]);
     const card = cards[0];
     expect(card.currentStage).toBe('completed');
+    expect(card.isCompleted).toBe(true);
     expect(card.stages.map(s => s.state)).toEqual([
       'done',
       'done',
@@ -148,8 +150,10 @@ describe('stage derivation', () => {
       }),
     ]);
     const card = cards[0];
-    // Signature is the latest event, so the current stage is Completed.
+    // Signature is the latest event, so the current stage is Completed —
+    // but the job is NOT finished (no terminal step yet): mid-completion-flow.
     expect(card.currentStage).toBe('completed');
+    expect(card.isCompleted).toBe(false);
     const completedStage = card.stages.find(s => s.key === 'completed');
     expect(completedStage?.state).toBe('current');
     // In progress is behind it — done, not current.
@@ -205,6 +209,7 @@ describe('stage derivation', () => {
     const card = cards[0];
     expect(card.currentStep).toBe('completed');
     expect(card.currentStage).toBe('completed');
+    expect(card.isCompleted).toBe(true);
     expect(card.latestCreatedAt).toBe('2026-09-09T12:40:00Z');
     // Only on_my_way and completed have events — the middle stages are
     // pending (never reached in this fixture), not done.
@@ -235,6 +240,42 @@ describe('stage derivation', () => {
     expect(completed?.reachedAt).not.toBeNull(); // an event reached it…
     expect(completed?.state).toBe('pending'); // …but it is not "done"
     expect(card.stages.find(s => s.key === 'arrived')?.state).toBe('current');
+    // The job DID complete once — completion coalesces across events, so it
+    // stays `isCompleted` (Completed chip) even though the timeline renders
+    // arrived as current (out-of-order events never claim further than the
+    // current step).
+    expect(card.isCompleted).toBe(true);
+  });
+
+  it('a finished job stays finished when its latest event drifts or is a future step', () => {
+    // Completion coalesces across ALL events — a drifted/unknown LATEST
+    // payload must not un-finish a job whose history carries the terminal
+    // step (the coalesce rule the display fields already follow).
+    const finished = [
+      makeNotification('n1', {
+        payload: { job_number: 'JB-1', step: 'completed', technician_name: 'Priya' },
+        createdAt: '2026-09-09T12:10:00Z',
+      }),
+    ];
+    const driftLatest = groupNotificationsByJob([
+      ...finished,
+      makeNotification('n2', { payload: {}, createdAt: '2026-09-09T12:40:00Z' }),
+    ])[0];
+    expect(driftLatest.currentStep).toBeNull();
+    expect(driftLatest.isCompleted).toBe(true);
+
+    const unknownLatest = groupNotificationsByJob([
+      ...finished,
+      makeNotification('n3', {
+        payload: { job_number: 'JB-1', step: 'some_new_step', technician_name: 'Priya' },
+        createdAt: '2026-09-09T12:40:00Z',
+      }),
+    ])[0];
+    expect(unknownLatest.currentStep).toBe('some_new_step');
+    expect(unknownLatest.isCompleted).toBe(true);
+    // The unknown-step fallback still pins "current" on the latest stage
+    // reached — the Completed stage — so the card renders coherently.
+    expect(unknownLatest.stages.find(s => s.key === 'completed')?.state).toBe('current');
   });
 
   it('an unknown current step pins "current" on the latest stage reached', () => {
@@ -284,17 +325,64 @@ describe('filterCards', () => {
   });
   const active = makeNotification('n2', { jobId: 'job-b' });
 
-  it('partitions cards by their current display stage', () => {
+  it('partitions by terminal step, not by display stage', () => {
     const cards = groupNotificationsByJob([completed, active]);
     expect(filterCards(cards, 'all').map(c => c.jobId)).toEqual(['job-1', 'job-b']);
     expect(filterCards(cards, 'completed').map(c => c.jobId)).toEqual(['job-1']);
     expect(filterCards(cards, 'active').map(c => c.jobId)).toEqual(['job-b']);
   });
 
+  it('signature_captured and photos_uploaded fold into the Completed display stage but stay ACTIVE', () => {
+    // Photos/signature belong to the completion flow — only the terminal
+    // `completed` step puts a job in the Completed chip.
+    for (const step of ['photos_uploaded', 'signature_captured']) {
+      const signing = makeNotification('n3', {
+        jobId: 'job-c',
+        payload: { job_number: 'JB-2', step, technician_name: 'P' },
+      });
+      const cards = groupNotificationsByJob([signing]);
+      expect(cards[0].currentStage).toBe('completed');
+      expect(cards[0].isCompleted).toBe(false);
+      expect(filterCards(cards, 'active').map(c => c.jobId)).toEqual(['job-c']);
+      expect(filterCards(cards, 'completed')).toEqual([]);
+    }
+  });
+
   it('a drifted card (unknown stage) counts as active', () => {
     const drifted = makeNotification('n3', { payload: {} });
     const cards = groupNotificationsByJob([drifted]);
     expect(filterCards(cards, 'active').map(c => c.jobId)).toEqual(['job-1']);
+    expect(filterCards(cards, 'completed')).toEqual([]);
+  });
+
+  it('a finished job with a drifted latest event stays in the Completed chip', () => {
+    const cards = groupNotificationsByJob([
+      makeNotification('n1', {
+        payload: { job_number: 'JB-1', step: 'completed', technician_name: 'P' },
+        createdAt: '2026-09-09T12:10:00Z',
+      }),
+      makeNotification('n2', { payload: {}, createdAt: '2026-09-09T12:40:00Z' }),
+    ]);
+    expect(filterCards(cards, 'completed').map(c => c.jobId)).toEqual(['job-1']);
+    expect(filterCards(cards, 'active')).toEqual([]);
+  });
+
+  it('a future unknown step also counts as active (fails safe)', () => {
+    const future = makeNotification('n4', {
+      jobId: 'job-d',
+      payload: { job_number: 'JB-3', step: 'some_new_step', technician_name: 'P' },
+    });
+    const cards = groupNotificationsByJob([future]);
+    expect(cards[0].isCompleted).toBe(false);
+    // No stage was ever reached, so the fallback pins nothing — every stage
+    // renders pending (the banner goes neutral, nothing looks "done").
+    expect(cards[0].stages.map(s => s.state)).toEqual([
+      'pending',
+      'pending',
+      'pending',
+      'pending',
+    ]);
+    expect(filterCards(cards, 'active').map(c => c.jobId)).toEqual(['job-d']);
     expect(filterCards(cards, 'completed')).toEqual([]);
   });
 });

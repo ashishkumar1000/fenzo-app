@@ -21,6 +21,11 @@
  * fold into "Completed". This feature owns its own vocabulary copy for the
  * same reason the banner model does: cross-feature vocabulary stays
  * duplicated, not shared.
+ *
+ * Completion is its own ground truth, separate from the display stages:
+ * `TERMINAL_STEPS` (only the real `completed` step) drives the Completed
+ * filter chip and the stepper's done-glyph — reaching the Completed display
+ * stage via photos/signature is still mid-completion-flow, i.e. Active.
  */
 import type { ApiNotification } from '../../services';
 import type { StatusKey } from '../../theme';
@@ -65,6 +70,14 @@ export interface NotificationCardData {
   currentStep: string | null;
   /** Display stage containing `currentStep`; null when the step is unknown. */
   currentStage: DisplayStageKey | null;
+  /**
+   * True only when the job reached a TERMINAL step (`completed`) — drives the
+   * Completed filter and the stepper's done-glyph, NOT `currentStage` (photos/
+   * signature fold into the Completed display stage while still mid-flow).
+   * Coalesced across ALL events: a drifted/unknown latest payload cannot
+   * un-finish a job whose history carries the terminal step.
+   */
+  isCompleted: boolean;
   stages: CardStage[];
   isUnread: boolean;
   unreadIds: string[];
@@ -74,14 +87,38 @@ export interface NotificationCardData {
 const isText = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
 
 /** Raw workflow step → Fenzit status family for the card's banner. */
-const STEP_STATUS: Record<string, StatusKey> = {
+const STEP_STATUS = {
   on_my_way: 'scheduled',
   arrived: 'scheduled',
   in_progress: 'progress',
   photos_uploaded: 'progress',
   signature_captured: 'progress',
   completed: 'done',
-};
+} as const satisfies Record<string, StatusKey>;
+
+type KnownStep = keyof typeof STEP_STATUS;
+
+/**
+ * The workflow steps at which a job is actually FINISHED — the ground truth
+ * for the Completed filter chip and the stepper's done-glyph. Deliberately
+ * separate from `DISPLAY_STAGES`: photos/signature fold into the "Completed"
+ * display stage, but a job sitting there is still mid-completion-flow.
+ *
+ * Future-proofing: a step the server adds later is never terminal, so a new
+ * status always fails safe to Active (banner neutral, filter Active). Do NOT
+ * add a non-completed final step (e.g. a future `cancelled`) here — it would
+ * land those jobs in the Completed chip with a green done-check; such a step
+ * needs its own filter treatment first. The `KnownStep` tie makes a typo a
+ * compile error, not a silent behaviour change.
+ */
+const TERMINAL_STEPS: readonly KnownStep[] = ['completed'];
+
+/** A job is finished only when its current step is a terminal one. */
+function isTerminalStep(step: string | null): boolean {
+  // Widened for the lookup: wire values are unknown strings — the
+  // `KnownStep` element type guards the DECLARATION, not the search.
+  return step !== null && (TERMINAL_STEPS as readonly string[]).includes(step);
+}
 
 /**
  * Status family for the banner of a card whose current step is `step`.
@@ -89,8 +126,12 @@ const STEP_STATUS: Record<string, StatusKey> = {
  */
 export function stepStatusKey(step: string | null): StatusKey {
   if (step === null || !Object.hasOwn(STEP_STATUS, step)) return 'neutral';
-  return STEP_STATUS[step];
+  return STEP_STATUS[step as KnownStep];
 }
+
+/** A notification's raw workflow step; null when missing/unknown shape. */
+const stepOfEvent = (n: ApiNotification): string | null =>
+  isText(n.payload.step) ? n.payload.step : null;
 
 /** The display stage a raw step folds into; null when the step is unknown. */
 function stageOfStep(step: string | null): DisplayStageKey | null {
@@ -123,7 +164,12 @@ function buildCard(jobId: string, events: ApiNotification[]): NotificationCardDa
   const latest = events.reduce((a, b) =>
     Date.parse(b.createdAt) > Date.parse(a.createdAt) ? b : a,
   );
-  const currentStep = isText(latest.payload.step) ? latest.payload.step : null;
+  const currentStep = stepOfEvent(latest);
+  // Completion coalesces across ALL events (same rule as the display
+  // fields): a drifted/unknown LATEST payload must not un-finish a job
+  // whose history carries the terminal step.
+  const isCompleted =
+    isTerminalStep(currentStep) || events.some(e => isTerminalStep(stepOfEvent(e)));
   const currentStage = stageOfStep(currentStep);
   const currentStageIndex = DISPLAY_STAGES.findIndex(s => s.key === currentStage);
   const earliest = (a: string, b: string) => (Date.parse(a) <= Date.parse(b) ? a : b);
@@ -132,7 +178,7 @@ function buildCard(jobId: string, events: ApiNotification[]): NotificationCardDa
     // Earliest `createdAt` among the events folding into this stage.
     let reachedAt: string | null = null;
     for (const event of events) {
-      const step = isText(event.payload.step) ? event.payload.step : null;
+      const step = stepOfEvent(event);
       if (step !== null && (stage.steps as readonly string[]).includes(step)) {
         reachedAt = reachedAt === null ? event.createdAt : earliest(reachedAt, event.createdAt);
       }
@@ -188,6 +234,7 @@ function buildCard(jobId: string, events: ApiNotification[]): NotificationCardDa
     events,
     currentStep,
     currentStage,
+    isCompleted,
     stages,
     isUnread: unreadIds.length > 0,
     unreadIds,
@@ -201,12 +248,15 @@ export function cardTitle(card: Pick<NotificationCardData, 'jobNumber' | 'techni
   return `${card.technicianName} · ${card.jobNumber}`;
 }
 
-/** Narrow the card list by the chip row's selection. */
+/**
+ * Narrow the card list by the chip row's selection. Completed = the job
+ * reached a terminal step (`isCompleted`) — never the display stage, which
+ * photos/signature reach mid-completion-flow.
+ */
 export function filterCards(
   cards: NotificationCardData[],
   filter: NotificationFilter,
 ): NotificationCardData[] {
   if (filter === 'all') return cards;
-  const completed = (card: NotificationCardData) => card.currentStage === 'completed';
-  return cards.filter(card => (filter === 'completed' ? completed(card) : !completed(card)));
+  return cards.filter(card => (filter === 'completed' ? card.isCompleted : !card.isCompleted));
 }
