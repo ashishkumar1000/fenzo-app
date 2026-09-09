@@ -21,6 +21,13 @@ export { ApiService, createCancelSignal } from './api/ApiService';
 export type { ListParams } from './api/ApiService';
 export type { Paginated } from './api/pagination';
 export { getAuthToken, setAuthToken, clearAuthToken } from './authToken';
+export { getRealtimeToken, clearRealtimeToken } from './realtimeToken';
+export {
+  supabaseRealtime,
+  getOwnerChannel,
+  teardownOwnerChannel,
+  ownerNotificationsTopic,
+} from './supabaseRealtime';
 export { storage } from './storage';
 export { currentResetEpoch, registerReset, runAllResets } from './resetRegistry';
 export * from './resources';

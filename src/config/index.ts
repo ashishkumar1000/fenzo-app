@@ -34,3 +34,16 @@ export const API_BASE_URL = __DEV__
 /** Default request timeout, in milliseconds. */
 export const API_TIMEOUT = 15000;
 
+/**
+ * Supabase project coordinates (Story 3.3 — Realtime as a refetch hint).
+ *
+ * The publishable key is public by design (same class as API_BASE_URL) —
+ * it scopes the client to the project; authorization happens server-side
+ * via RLS. The service_role key never leaves fenzit-be — do not add it here.
+ * Used only by `src/services/supabaseRealtime.ts` for the Realtime socket;
+ * all REST traffic keeps going through `API_BASE_URL` / apiClient.
+ */
+export const SUPABASE_URL = 'https://pnlvreaijzslfymlnoti.supabase.co';
+
+export const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_PysMKIKlQIul6KyAh8-58w_ArsfVh3L';
+

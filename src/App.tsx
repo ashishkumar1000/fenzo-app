@@ -15,6 +15,7 @@ import TechnicianRootNavigator from './navigation/TechnicianRootNavigator';
 import { navigationRef } from './navigation/navigationRef';
 import { OnboardingScreen, useOnboarding } from './features/onboarding';
 import { AuthFlow, useAuth, expireSession } from './features/auth';
+import { OwnerRealtimeBridge } from './features/notifications/OwnerRealtimeBridge';
 import { runAllResets, setOnUnauthorized } from './services';
 
 function App() {
@@ -63,9 +64,14 @@ function App() {
       </NavigationContainer>
     );
   } else {
+    // Owner session. OwnerRealtimeBridge mounts the Realtime hook + banner
+    // here (Story 3.3) — NEVER at App() top level: the role gate is a
+    // conditional render chain, so a top-level hook would open a socket for
+    // technicians too. The bridge re-checks the role internally as well.
     content = (
       <NavigationContainer ref={navigationRef}>
         <RootNavigator />
+        <OwnerRealtimeBridge />
       </NavigationContainer>
     );
   }

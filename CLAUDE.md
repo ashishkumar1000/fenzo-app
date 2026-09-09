@@ -65,6 +65,13 @@ src/
 building or changing any screen or component.
 
 ### Absolute imports — use them everywhere
+
+> **Reality note (2026-09-09 code review):** no source file uses a project alias
+> today (jest has no `moduleNameMapper` either) — the whole codebase, including
+> all recent stories, imports relatively. Keep matching the surrounding code
+> (relative imports) until the aliases are adopted wholesale, which would also
+> mean adding the jest mapper. The mapping below stays for when that happens.
+
 Enable with tsconfig.json `paths` (already set up). Import from aliases:
 ```ts
 // ✅ DO THIS — clean, easy to refactor
