@@ -15,6 +15,7 @@
  */
 
 import type { StatusKey } from '../../theme';
+import type { WorkflowTemplateStep } from '../../services/resources/jobs';
 
 /** How long a banner stays visible before the hook dismisses it. */
 export const BANNER_VISIBLE_MS = 4000;
@@ -32,34 +33,35 @@ export interface JobStatusEventPayload {
   technician_name?: unknown;
 }
 
-/**
- * The step vocabulary, one keyed record — label AND Badge status together,
- * so a new step can never be added to one map and silently drift from the
- * other (the label would render while the chip falls back to neutral).
- */
-const STEPS: Record<string, { label: string; status: StatusKey }> = {
-  on_my_way: { label: 'On my way', status: 'progress' },
-  arrived: { label: 'Arrived', status: 'done' },
-  in_progress: { label: 'In progress', status: 'progress' },
-  photos_uploaded: { label: 'Photos uploaded', status: 'progress' },
-  signature_captured: { label: 'Signature captured', status: 'progress' },
-  completed: { label: 'Completed', status: 'done' },
-};
-
 const isText = (v: unknown): v is string =>
   typeof v === 'string' && v.trim().length > 0;
 
 /**
- * Human label for one raw workflow-step value (`on_my_way`, `arrived`, …).
- * Unknown values render RAW rather than crashing (the unknown-value rule
- * above) — the row and the banner must never disagree about a step's name,
- * so this is the feature's single copy of the vocabulary.
+ * Human label for one raw workflow-step value. When template steps are
+ * provided (Story 4.5 dynamic), reads from the template; otherwise falls back
+ * to the generic mapping. Unknown values render RAW — the row and banner must
+ * never disagree about a step's name.
  */
-export function notificationStepLabel(step: unknown): string {
+export function notificationStepLabel(step: unknown, templateSteps?: WorkflowTemplateStep[] | null): string {
   if (!isText(step)) return BANNER_FALLBACK_TEXT;
-  // Object.hasOwn — `STEPS[step]` alone would resolve inherited prototype
-  // keys ('toString', 'constructor') to functions.
-  return Object.hasOwn(STEPS, step) ? STEPS[step].label : step;
+
+  // If template steps provided, look up the label there (Story 4.5).
+  if (templateSteps && Array.isArray(templateSteps)) {
+    const found = templateSteps.find(s => s.key === step);
+    if (found) return found.label;
+  }
+
+  // Fallback mapping for generic step keys (when no template available).
+  const FALLBACK_STEPS: Record<string, string> = {
+    on_my_way: 'On my way',
+    arrived: 'Arrived',
+    in_progress: 'In progress',
+    photos_uploaded: 'Photos uploaded',
+    signature_captured: 'Signature captured',
+    completed: 'Completed',
+  };
+
+  return Object.hasOwn(FALLBACK_STEPS, step) ? FALLBACK_STEPS[step] : step;
 }
 
 /**
@@ -143,14 +145,42 @@ export function bannerPartsFromEvent(
 }
 
 /**
- * Badge status color for the step chip — Done-green for terminal-ish steps,
- * In-progress blue for the rest, neutral for unknown/drifted values (same
- * fixed vocabulary as `<Badge>`; no synonyms). Reads the same keyed record
- * as `notificationStepLabel`, so label and color can never drift apart.
+ * Badge status color for the step chip. When template steps provided (Story
+ * 4.5 dynamic), derives from the step's `setsStatus` field; otherwise uses
+ * the fallback mapping. Unknown values → neutral (same `<Badge>` vocabulary).
  */
-export function notificationStepStatus(step: string | null): StatusKey {
+export function notificationStepStatus(
+  step: string | null,
+  templateSteps?: WorkflowTemplateStep[] | null,
+): StatusKey {
   if (step === null) return 'neutral';
-  return Object.hasOwn(STEPS, step) ? STEPS[step].status : 'neutral';
+
+  // If template steps provided, look up the status from setsStatus (Story 4.5).
+  if (templateSteps && Array.isArray(templateSteps)) {
+    const found = templateSteps.find(s => s.key === step);
+    if (found) {
+      switch (found.setsStatus) {
+        case 'completed':
+          return 'done';
+        case 'in_progress':
+          return 'progress';
+        default:
+          return 'scheduled';
+      }
+    }
+  }
+
+  // Fallback mapping for generic step keys.
+  const FALLBACK_STATUS: Record<string, StatusKey> = {
+    on_my_way: 'progress',
+    arrived: 'done',
+    in_progress: 'progress',
+    photos_uploaded: 'progress',
+    signature_captured: 'progress',
+    completed: 'done',
+  };
+
+  return Object.hasOwn(FALLBACK_STATUS, step) ? FALLBACK_STATUS[step] : 'neutral';
 }
 
 /**

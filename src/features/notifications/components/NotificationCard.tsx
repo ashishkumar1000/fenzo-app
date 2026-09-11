@@ -28,12 +28,9 @@ interface NotificationCardProps {
 
 export function NotificationCard({ card, onPress }: NotificationCardProps) {
   const title = cardTitle(card);
-  const status = stepStatusKey(card.currentStep);
+  const status = stepStatusKey(card.currentStep, card.templateSteps);
   const statusColors = colors.status[status];
-  // Uppercased in JS, not CSS `textTransform`: RN measures the text BEFORE
-  // applying a textTransform, so the wider uppercase render truncates inside
-  // a width measured for the mixed-case string (space left over, "COMPLE…").
-  const stepLabel = notificationStepLabel(card.currentStep).toUpperCase();
+  const stepLabel = notificationStepLabel(card.currentStep, card.templateSteps).toUpperCase();
   const time = relativeTime(card.latestCreatedAt);
 
   return (

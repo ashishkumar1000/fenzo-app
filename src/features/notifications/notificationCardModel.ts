@@ -15,34 +15,24 @@
  * degrades to the generic copy / neutral status, never a crash, never
  * `undefined` on screen.
  *
- * The six workflow steps (api-contracts §1, `jobDetail/eventLabels.ts`
- * STEP_ORDER) are condensed into FOUR display stages matching the redesign
- * reference — photos and signature belong to the completion flow, so they
- * fold into "Completed". This feature owns its own vocabulary copy for the
- * same reason the banner model does: cross-feature vocabulary stays
- * duplicated, not shared.
- *
- * Completion is its own ground truth, separate from the display stages:
- * `TERMINAL_STEPS` (only the real `completed` step) drives the Completed
- * filter chip and the stepper's done-glyph — reaching the Completed display
- * stage via photos/signature is still mid-completion-flow, i.e. Active.
+ * Display stages are NOW DYNAMIC: built from the job's stamped workflow
+ * template steps (Story 4.5). Each skill's template determines the stage
+ * chain and labels. Completion is its own ground truth: `TERMINAL_STEPS`
+ * (the `completed` step) drives the Completed filter chip and the stepper's
+ * done-glyph — reaching the final stage via intermediate steps is still
+ * mid-completion-flow, i.e. Active.
  */
 import type { ApiNotification } from '../../services';
 import type { StatusKey } from '../../theme';
+import type { WorkflowTemplateStep } from '../../services/resources/jobs';
 
-/** The four display stages of a card's timeline, in workflow order. */
-export const DISPLAY_STAGES = [
-  { key: 'on_my_way', label: 'On my way', steps: ['on_my_way'] },
-  { key: 'arrived', label: 'Arrived', steps: ['arrived'] },
-  { key: 'in_progress', label: 'In progress', steps: ['in_progress'] },
-  {
-    key: 'completed',
-    label: 'Completed',
-    steps: ['photos_uploaded', 'signature_captured', 'completed'],
-  },
-] as const;
+export type DisplayStageKey = string;
 
-export type DisplayStageKey = (typeof DISPLAY_STAGES)[number]['key'];
+export interface DisplayStage {
+  key: string;
+  label: string;
+  steps: string[];
+}
 
 /** Generic copy when the payload doesn't carry name + job number. */
 export const CARD_FALLBACK_TITLE = 'Job status updated';
@@ -72,8 +62,7 @@ export interface NotificationCardData {
   currentStage: DisplayStageKey | null;
   /**
    * True only when the job reached a TERMINAL step (`completed`) — drives the
-   * Completed filter and the stepper's done-glyph, NOT `currentStage` (photos/
-   * signature fold into the Completed display stage while still mid-flow).
+   * Completed filter and the stepper's done-glyph, NOT `currentStage`.
    * Coalesced across ALL events: a drifted/unknown latest payload cannot
    * un-finish a job whose history carries the terminal step.
    */
@@ -82,100 +71,102 @@ export interface NotificationCardData {
   isUnread: boolean;
   unreadIds: string[];
   latestCreatedAt: string;
+  /** Workflow template steps (for status derivation) — null if not available. */
+  templateSteps: WorkflowTemplateStep[] | null;
 }
 
 const isText = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
 
-/** Raw workflow step → Fenzit status family for the card's banner. */
-const STEP_STATUS = {
-  on_my_way: 'scheduled',
-  arrived: 'scheduled',
-  in_progress: 'progress',
-  photos_uploaded: 'progress',
-  signature_captured: 'progress',
-  completed: 'done',
-} as const satisfies Record<string, StatusKey>;
-
-type KnownStep = keyof typeof STEP_STATUS;
-
 /**
- * The workflow steps at which a job is actually FINISHED — the ground truth
- * for the Completed filter chip and the stepper's done-glyph. Deliberately
- * separate from `DISPLAY_STAGES`: photos/signature fold into the "Completed"
- * display stage, but a job sitting there is still mid-completion-flow.
- *
- * Future-proofing: a step the server adds later is never terminal, so a new
- * status always fails safe to Active (banner neutral, filter Active). Do NOT
- * add a non-completed final step (e.g. a future `cancelled`) here — it would
- * land those jobs in the Completed chip with a green done-check; such a step
- * needs its own filter treatment first. The `KnownStep` tie makes a typo a
- * compile error, not a silent behaviour change.
+ * Build display stages from workflow template steps (Story 4.5 dynamic).
+ * Each step in the template becomes a display stage with the step's label.
  */
-const TERMINAL_STEPS: readonly KnownStep[] = ['completed'];
+function buildDisplayStages(templateSteps: WorkflowTemplateStep[]): DisplayStage[] {
+  return templateSteps.map(step => ({
+    key: step.key,
+    label: step.label,
+    steps: [step.key],
+  }));
+}
 
-/** A job is finished only when its current step is a terminal one. */
-function isTerminalStep(step: string | null): boolean {
-  // Widened for the lookup: wire values are unknown strings — the
-  // `KnownStep` element type guards the DECLARATION, not the search.
-  return step !== null && (TERMINAL_STEPS as readonly string[]).includes(step);
+/** A job is finished only when its current step has sets_status = 'completed'. */
+function isTerminalStep(step: string | null, templateSteps: WorkflowTemplateStep[]): boolean {
+  if (step === null) return false;
+  return templateSteps.some(s => s.key === step && s.setsStatus === 'completed');
 }
 
 /**
  * Status family for the banner of a card whose current step is `step`.
- * Unknown values → neutral (the unknown-value rule above).
+ * Derived from the step's `setsStatus` field: 'completed' → done,
+ * 'in_progress' → progress, null → scheduled/neutral.
  */
-export function stepStatusKey(step: string | null): StatusKey {
-  if (step === null || !Object.hasOwn(STEP_STATUS, step)) return 'neutral';
-  return STEP_STATUS[step as KnownStep];
+export function stepStatusKey(
+  step: string | null,
+  templateSteps: WorkflowTemplateStep[] | null,
+): StatusKey {
+  if (step === null || !templateSteps) return 'neutral';
+  const templateStep = templateSteps.find(s => s.key === step);
+  if (!templateStep) return 'neutral';
+
+  switch (templateStep.setsStatus) {
+    case 'completed':
+      return 'done';
+    case 'in_progress':
+      return 'progress';
+    default:
+      return 'scheduled';
+  }
 }
 
 /** A notification's raw workflow step; null when missing/unknown shape. */
 const stepOfEvent = (n: ApiNotification): string | null =>
   isText(n.payload.step) ? n.payload.step : null;
 
-/** The display stage a raw step folds into; null when the step is unknown. */
-function stageOfStep(step: string | null): DisplayStageKey | null {
-  if (step === null) return null;
-  for (const stage of DISPLAY_STAGES) {
-    if ((stage.steps as readonly string[]).includes(step)) return stage.key;
-  }
-  return null;
-}
-
 /**
  * Groups the flat newest-first list into one card per job. Card order is
  * first appearance — the store's newest-first sort, untouched.
+ *
+ * Requires a template lookup function: `getTemplate(jobId)` returns the
+ * workflow template steps for that job, or null if not available.
  */
-export function groupNotificationsByJob(items: ApiNotification[]): NotificationCardData[] {
+export function groupNotificationsByJob(
+  items: ApiNotification[],
+  getTemplate: (jobId: string) => WorkflowTemplateStep[] | null,
+): NotificationCardData[] {
   const byJob = new Map<string, ApiNotification[]>();
   for (const n of items) {
     const group = byJob.get(n.jobId);
     if (group) group.push(n);
     else byJob.set(n.jobId, [n]);
   }
-  return [...byJob.entries()].map(([jobId, events]) => buildCard(jobId, events));
+  return [...byJob.entries()].map(([jobId, events]) => buildCard(jobId, events, getTemplate));
 }
 
-function buildCard(jobId: string, events: ApiNotification[]): NotificationCardData {
-  // The store's list is newest-first (the server's sort, never re-sorted
-  // client-side) — but a single ordering slip would silently render a stale
-  // banner, filter bucket and timeline, so the latest event is re-derived by
-  // `createdAt` instead of trusting `events[0]`.
+function buildCard(
+  jobId: string,
+  events: ApiNotification[],
+  getTemplate: (jobId: string) => WorkflowTemplateStep[] | null,
+): NotificationCardData {
   const latest = events.reduce((a, b) =>
     Date.parse(b.createdAt) > Date.parse(a.createdAt) ? b : a,
   );
   const currentStep = stepOfEvent(latest);
-  // Completion coalesces across ALL events (same rule as the display
-  // fields): a drifted/unknown LATEST payload must not un-finish a job
-  // whose history carries the terminal step.
+
+  // Fetch the job's workflow template to build dynamic stages.
+  const templateSteps = getTemplate(jobId);
+  const displayStages = templateSteps ? buildDisplayStages(templateSteps) : [];
+
+  // Completion: terminal step ('completed' setsStatus).
   const isCompleted =
-    isTerminalStep(currentStep) || events.some(e => isTerminalStep(stepOfEvent(e)));
-  const currentStage = stageOfStep(currentStep);
-  const currentStageIndex = DISPLAY_STAGES.findIndex(s => s.key === currentStage);
+    (templateSteps && isTerminalStep(currentStep, templateSteps)) ||
+    (templateSteps && events.some(e => isTerminalStep(stepOfEvent(e), templateSteps))) ||
+    false;
+
+  const currentStageIndex = displayStages.findIndex(s => s.key === currentStep);
   const earliest = (a: string, b: string) => (Date.parse(a) <= Date.parse(b) ? a : b);
 
-  const stages: CardStage[] = DISPLAY_STAGES.map(stage => {
-    // Earliest `createdAt` among the events folding into this stage.
+  const stages: CardStage[] = displayStages.map((stage, index) => {
+    // Earliest `createdAt` for this step.
     let reachedAt: string | null = null;
     for (const event of events) {
       const step = stepOfEvent(event);
@@ -183,10 +174,8 @@ function buildCard(jobId: string, events: ApiNotification[]): NotificationCardDa
         reachedAt = reachedAt === null ? event.createdAt : earliest(reachedAt, event.createdAt);
       }
     }
-    const index = DISPLAY_STAGES.findIndex(s => s.key === stage.key);
-    // A stage reached BEYOND the current one (out-of-order events, a job
-    // stepped back) renders pending, not done — the timeline must never
-    // claim the job got further than its current step.
+
+    // State: pending if not reached or beyond current; done if behind; current if at.
     const state: CardStage['state'] =
       reachedAt === null || (currentStageIndex >= 0 && index > currentStageIndex)
         ? 'pending'
@@ -196,10 +185,34 @@ function buildCard(jobId: string, events: ApiNotification[]): NotificationCardDa
     return { key: stage.key, label: stage.label, reachedAt, state };
   });
 
-  // Unknown current step (drifted payload, or a brand-new server step): no
-  // display stage maps to it, so the timeline above would show no `current`
-  // marker at all. Fall back to the latest stage actually reached — the
-  // banner goes neutral, but the timeline still shows where the job is.
+  // Fallback: if no template, show generic "Job status updated".
+  if (displayStages.length === 0) {
+    const unreadIds = events.filter(n => n.readAt === null).map(n => n.id);
+    const payloadField = (key: string): string | null => {
+      for (const event of events) {
+        const value = event.payload[key];
+        if (isText(value)) return value;
+      }
+      return null;
+    };
+
+    return {
+      jobId,
+      jobNumber: payloadField('job_number'),
+      technicianName: payloadField('technician_name'),
+      events,
+      currentStep,
+      currentStage: null,
+      isCompleted,
+      stages: [],
+      isUnread: unreadIds.length > 0,
+      unreadIds,
+      latestCreatedAt: latest.createdAt,
+      templateSteps: null,
+    };
+  }
+
+  // Unknown current step: fall back to latest reached stage.
   if (currentStageIndex < 0) {
     let latestReached = -1;
     for (let i = 0; i < stages.length; i++) {
@@ -215,10 +228,6 @@ function buildCard(jobId: string, events: ApiNotification[]): NotificationCardDa
   }
 
   const unreadIds = events.filter(n => n.readAt === null).map(n => n.id);
-
-  // Display fields coalesce across ALL events newest-first: a drifted latest
-  // payload must not hide a name/job number that the job's older events
-  // still carry.
   const payloadField = (key: string): string | null => {
     for (const event of events) {
       const value = event.payload[key];
@@ -233,12 +242,13 @@ function buildCard(jobId: string, events: ApiNotification[]): NotificationCardDa
     technicianName: payloadField('technician_name'),
     events,
     currentStep,
-    currentStage,
+    currentStage: displayStages[currentStageIndex]?.key ?? null,
     isCompleted,
     stages,
     isUnread: unreadIds.length > 0,
     unreadIds,
     latestCreatedAt: latest.createdAt,
+    templateSteps: templateSteps ?? null,
   };
 }
 

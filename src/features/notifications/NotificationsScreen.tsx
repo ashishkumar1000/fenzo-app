@@ -47,6 +47,7 @@ import {
 import { NotificationCard } from './components/NotificationCard';
 import { NotificationFilterBar } from './components/NotificationFilterBar';
 import { filterCards, groupNotificationsByJob } from './notificationCardModel';
+import { useJobTemplateCache } from './useJobTemplateCache';
 import type { NotificationCardData, NotificationFilter } from './notificationCardModel';
 
 /**
@@ -111,10 +112,19 @@ export default function NotificationsScreen({ navigation }: Props) {
     [navigation, markNotificationRead],
   );
 
+  // Memoize job IDs to avoid refetch on every render.
+  const jobIds = useMemo(() => items.map(n => n.jobId), [items]);
+  // Fetch workflow templates for all notification jobs to display dynamic stages.
+  // Also returns an update trigger that fires when templates load.
+  const { getTemplate, updateTrigger } = useJobTemplateCache(jobIds);
+
   // The flat newest-first list becomes one card per job; the stage timeline
-  // on each card is derived from that job's own notifications (no extra
-  // API calls). Filtering happens client-side over the loaded cards.
-  const cards = useMemo(() => groupNotificationsByJob(items), [items]);
+  // on each card is derived from that job's own notifications AND the job's
+  // stamped workflow template (Story 4.5 dynamic). Rebuild when templates load.
+  const cards = useMemo(
+    () => groupNotificationsByJob(items, getTemplate),
+    [items, getTemplate, updateTrigger],
+  );
   const [filter, setFilter] = useState<NotificationFilter>('all');
   const visibleCards = useMemo(() => filterCards(cards, filter), [cards, filter]);
   // Derived through the SAME `filterCards` the list filters with — a drifted
