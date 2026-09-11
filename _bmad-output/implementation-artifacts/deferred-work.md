@@ -1,5 +1,9 @@
 # Deferred Work
 
+> ⚠️ RETIRED 2026-09-11 — DO NOT UPDATE. The single deferred-work log is
+> fenzo-meta/artifacts/implementation-artifacts/deferred-work.md (all entries
+> from this file were migrated there verbatim). This file is historical only.
+
 ## Deferred from: code review of 1-1-wire-jobs-list-to-get-jobs (2026-09-03)
 
 - ~~**App.test.tsx fails to boot**~~ — **Fixed 2026-09-03.** Three stacked fixes, each unblocking the next: (1) worklets mock + css/native/proxy `setCSSEventHandler` noop in `jest.setup.js` (reanimated 4.6's own mock imports the real source, whose native initializer crashes in jest); (2) `__mocks__/react-native-bootsplash.ts` (TurboModule can't exist in jest); (3) `__mocks__/react-native-mmkv.ts` (Map-backed) + `@react-native-community/datetimepicker` added to the `transformIgnorePatterns` ESM allowlist. Baseline is now green: 5/5 suites, 43/43 tests.

@@ -1,6 +1,6 @@
 # Story 5.4: Error Envelope Consistency
 
-Status: ready-for-dev
+Status: ready-for-dev → MOVED 2026-09-11 to the meta sprint as **6-1-fe-error-envelope-consistency** (spec: `fenzo-meta/artifacts/implementation-artifacts/spec-6-1-fe-error-envelope-consistency.md`). Do not develop from this file.
 
 ## Story
 

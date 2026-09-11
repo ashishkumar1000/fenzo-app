@@ -1,3 +1,9 @@
+# ⚠️ RETIRED 2026-09-11 — DO NOT UPDATE. The single active sprint is tracked in
+# the meta repo: fenzo-meta/artifacts/implementation-artifacts/sprint-status.yaml
+# (project: Fenzo). Pending work was migrated there (this file's 5-4 moved to
+# meta epic-6 as 6-1; the deferred offline-first epic-4 stays "not doing").
+# This file is historical only.
+
 # generated: 2026-09-01
 # last_updated: 2026-09-11  # 1-7 done + epic-1 closed; epic-4 (Offline-First Sync) deferred — not doing
 # project: fenzo-app
