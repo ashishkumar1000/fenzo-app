@@ -8,7 +8,7 @@
  * call site.
  */
 
-import type { JobScope } from '../services';
+import type { JobScope, WorkflowTemplateStep } from '../services';
 
 export type MainTabParamList = {
   Home: undefined;
@@ -74,7 +74,7 @@ export type TechnicianRootStackParamList = {
   TechnicianTabs: undefined;
   TechJobDetail: { jobId: string };
   /** Registered in Story 3.5 — the type is declared now so nav params are stable. */
-  Signature: { jobId: string };
+  Signature: { jobId: string; stepKey: string; steps: WorkflowTemplateStep[] };
 };
 
 declare global {

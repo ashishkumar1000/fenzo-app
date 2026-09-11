@@ -48,7 +48,7 @@ type Params = {
    * screen's own Save runs upload → advance (the direct POST remains the
    * 422-reconcile fallback there and for Epic 4's replay).
    */
-  onCaptureSignature: () => void;
+  onCaptureSignature: (stepKey: string) => void;
 };
 
 export function useWorkflowAdvance({
@@ -79,7 +79,7 @@ export function useWorkflowAdvance({
       // the Signature screen owns capture → upload → advance (see onCaptureSignature).
       const targetStep = detail?.workflowTemplate?.steps?.find(s => s.key === step);
       if (targetStep?.requiresSignature) {
-        onCaptureSignature();
+        onCaptureSignature(targetStep.key);
         return;
       }
       pendingRef.current = true;

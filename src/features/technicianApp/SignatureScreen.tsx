@@ -36,12 +36,21 @@ type Navigation = NativeStackScreenProps<
   'Signature'
 >['navigation'];
 
+/** SignatureScreen props — all required for proper template-driven capture. */
+interface ScreenParams {
+  jobId: string;
+  stepKey: string;
+  steps: WorkflowTemplateStep[];
+}
+
 export default function SignatureScreen() {
   const navigation = useNavigation<Navigation>();
-  // Route-params guard: no jobId → nothing to sign; leave immediately.
-  const jobId =
-    useRoute<RouteProp<TechnicianRootStackParamList, 'Signature'>>().params
-      ?.jobId;
+  // Route-params guard: no params → nothing to sign; leave immediately.
+  const params =
+    useRoute<RouteProp<TechnicianRootStackParamList, 'Signature'>>().params as ScreenParams | undefined;
+  const jobId = params?.jobId;
+  const stepKey = params?.stepKey;
+  const steps = params?.steps;
 
   const padRef = useRef<SignatureViewRef | null>(null);
   const [hasStroke, setHasStroke] = useState(false);
@@ -59,7 +68,7 @@ export default function SignatureScreen() {
   }, [jobId, goBackSafely]);
 
   const { busy, error, submitSignature, resetForNewDrawing, reportPadFailure } =
-    useSignatureSave({ jobId, pop: () => navigation.goBack() });
+    useSignatureSave({ jobId, stepKey, steps, pop: () => navigation.goBack() });
 
   const onSave = useCallback(() => {
     padRef.current?.readSignature(); // → onOK

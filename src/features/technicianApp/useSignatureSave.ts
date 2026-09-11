@@ -5,6 +5,11 @@
  * the stroke state and the chrome; everything that talks to the network or
  * the route lives here.
  *
+ * Story 5.2 deferred: the advance call now uses the job's actual signature
+ * step key (from `stepKey` prop) instead of the hardcoded 'signature_captured'.
+ * The 422 reconcile checks against the job's template steps array instead of
+ * the global STEP_ORDER.
+ *
  * The sequence is deliberately resumable: `confirmedThisSession` latches
  * after a successful upload so a hard advance failure (offline) retries ONLY
  * the advance on the next Save — the bytes are already stored and
@@ -13,7 +18,7 @@
  * (the server's last-write-wins replaces the old signature). A 422 on the
  * advance (step already recorded — an offline race) reconciles silently and
  * still pops, mirroring 3.3 AC 5; a 422 whose server currentStep is BEFORE
- * signature_captured is a real rejection and surfaces as an error.
+ * the signature step is a real rejection and surfaces as an error.
  *
  * A failed upload keeps the screen (and the drawing) up — the caller never
  * clears the pad on failure. A network-class failure (status 0) gets the
@@ -28,7 +33,7 @@ import { generateIdempotencyKey } from '../../utils/idempotency';
 import { useAttachmentUpload } from './useAttachmentUpload';
 import { errorMessage } from './attachmentUploadModel';
 import { SIGNATURE_MIME_TYPE, signatureFilename } from '../../utils/signatureExport';
-import { STEP_ORDER, type WorkflowStep } from './stepperModel';
+import type { WorkflowTemplateStep } from '../../services/resources/jobs';
 
 /** AC 7's offline copy — shown for a network-class failure until Epic 4's
  * pre-flight reachability check lands (// EPIC4: NetInfo gate). */
@@ -36,13 +41,17 @@ const OFFLINE_COPY = 'Signature upload needs internet.';
 
 type Props = {
   jobId: string | undefined;
+  /** The signature step's key in the job's template. */
+  stepKey: string | undefined;
+  /** The job's workflow template steps — used for reconcile checks. */
+  steps: WorkflowTemplateStep[] | undefined;
   /** The pop used on success — plain `goBack` (the Signature screen is
    *  always a pushed route; the missing-jobId entry path leaves via the
    *  screen's `goBackSafely` instead). */
   pop: () => void;
 };
 
-export function useSignatureSave({ jobId, pop }: Props) {
+export function useSignatureSave({ jobId, stepKey, steps, pop }: Props) {
   const { uploadOne } = useAttachmentUpload({
     jobId,
     attachmentType: 'signature',
@@ -68,7 +77,7 @@ export function useSignatureSave({ jobId, pop }: Props) {
 
   const submitSignature = useCallback(
     async (dataUri: string) => {
-      if (!jobId || busyRef.current) return;
+      if (!jobId || !stepKey || busyRef.current) return;
       busyRef.current = true;
       setBusy(true);
       setError(null);
@@ -84,22 +93,23 @@ export function useSignatureSave({ jobId, pop }: Props) {
         try {
           await jobService.advanceWorkflow(
             jobId,
-            'signature_captured',
+            stepKey,
             generateIdempotencyKey(),
           );
         } catch (caught) {
-          // A 422 whose body names signature_captured (or a later step) means
+          // A 422 whose body names this stepKey (or a later step) means
           // the step is already recorded (an offline race) — that IS success.
           // An earlier currentStep is a real rejection — the step never
           // happened — and must surface as the inline error.
           const currentStep = workflowCurrentStep(caught as ApiError);
           // An unknown step string also reconciles to "not recorded" — the
           // server's vocabulary is the source of truth here.
-          const recorded =
-            currentStep != null &&
-            STEP_ORDER.includes(currentStep as WorkflowStep) &&
-            STEP_ORDER.indexOf(currentStep as WorkflowStep) >=
-              STEP_ORDER.indexOf('signature_captured');
+          let recorded = false;
+          if (currentStep != null && steps && steps.length > 0 && stepKey) {
+            const currentStepIndex = steps.findIndex(s => s?.key === currentStep);
+            const signatureStepIndex = steps.findIndex(s => s?.key === stepKey);
+            recorded = currentStepIndex >= 0 && signatureStepIndex >= 0 && currentStepIndex >= signatureStepIndex;
+          }
           if (!recorded) throw caught;
         }
         if (mountedRef.current) pop();
@@ -116,7 +126,7 @@ export function useSignatureSave({ jobId, pop }: Props) {
         if (mountedRef.current) setBusy(false);
       }
     },
-    [jobId, pop, uploadOne],
+    [jobId, stepKey, steps, pop, uploadOne],
   );
 
   const resetForNewDrawing = useCallback(() => {

@@ -224,8 +224,9 @@ export default function TechJobDetailScreen() {
     load,
     onUnassigned: showUnassigned,
     // 3.5 — the signature step captures on the dedicated screen.
-    onCaptureSignature: () => {
-      if (jobId) navigation.navigate('Signature', { jobId });
+    onCaptureSignature: (stepKey: string) => {
+      if (!jobId || !stepKey || !detail?.workflowTemplate?.steps) return;
+      navigation.navigate('Signature', { jobId, stepKey, steps: detail.workflowTemplate.steps });
     },
   });
   clearActionErrorRef.current = clearActionError;
@@ -311,7 +312,10 @@ export default function TechJobDetailScreen() {
               // 3.5 — the captured tile's Re-capture affordance reopens the
               // pad (AC 6; the refetch on the focus effect above refreshes it).
               onRecaptureSignature={() => {
-                if (jobId) navigation.navigate('Signature', { jobId });
+                if (!jobId || !detail?.workflowTemplate?.steps || detail.workflowTemplate.steps.length === 0) return;
+                const signatureStep = detail.workflowTemplate.steps.find(s => s?.requiresSignature);
+                if (!signatureStep?.key) return;
+                navigation.navigate('Signature', { jobId, stepKey: signatureStep.key, steps: detail.workflowTemplate.steps });
               }}
             />
           </ScrollView>

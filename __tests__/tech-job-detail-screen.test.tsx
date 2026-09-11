@@ -506,7 +506,16 @@ it('advancing the signature step navigates to Signature — it never POSTs (3.5)
   });
 
   // The capture screen owns upload → advance; the hook must only navigate.
-  expect(mockNavigate).toHaveBeenCalledWith('Signature', { jobId: 'j-1' });
+  // Story 5.2 deferred: now passes stepKey and steps for template-driven signature capture.
+  const navigateCall = mockNavigate.mock.calls[0];
+  expect(navigateCall[0]).toBe('Signature');
+  expect(navigateCall[1].jobId).toBe('j-1');
+  expect(navigateCall[1].stepKey).toBe('signature_captured');
+  expect(navigateCall[1].steps).toBeDefined();
+  expect(Array.isArray(navigateCall[1].steps)).toBe(true);
+  expect(navigateCall[1].steps.length).toBeGreaterThan(0);
+  // Validate: stepKey must exist in the passed steps array
+  expect(navigateCall[1].steps.some((s: any) => s.key === 'signature_captured')).toBe(true);
   expect(advanceWorkflow).not.toHaveBeenCalled();
 });
 

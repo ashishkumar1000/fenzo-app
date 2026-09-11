@@ -28,7 +28,24 @@ jest.mock('react-native-signature-canvas', () => {
 });
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => mockNav,
-  useRoute: () => ({ params: { jobId: mockRouteJobId } }),
+  useRoute: () => {
+    // Ensure stepKey actually exists in steps array to validate template consistency
+    const steps = [
+      { key: 'step1', label: 'Step 1', requiresPhoto: false, requiresSignature: false, advancesOn: null },
+      { key: 'signature_captured', label: 'Signature', requiresPhoto: false, requiresSignature: true, advancesOn: null },
+      { key: 'completed', label: 'Completed', requiresPhoto: false, requiresSignature: false, advancesOn: null },
+    ];
+    const stepKey = 'signature_captured';
+    // Validate: stepKey must exist in steps array
+    if (!steps.some(s => s.key === stepKey)) throw new Error(`Mock error: stepKey '${stepKey}' not found in steps array`);
+    return {
+      params: {
+        jobId: mockRouteJobId,
+        stepKey,
+        steps,
+      },
+    };
+  },
 }));
 jest.mock('./useAttachmentUpload', () => ({
   useAttachmentUpload: () => ({ uploadOne: mockUploadOne }),
