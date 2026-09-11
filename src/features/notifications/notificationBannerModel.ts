@@ -37,10 +37,8 @@ const isText = (v: unknown): v is string =>
   typeof v === 'string' && v.trim().length > 0;
 
 /**
- * Human label for one raw workflow-step value. When template steps are
- * provided (Story 4.5 dynamic), reads from the template; otherwise falls back
- * to the generic mapping. Unknown values render RAW — the row and banner must
- * never disagree about a step's name.
+ * Human label for one raw workflow-step value. Reads from template steps only
+ * (Story 4.5 dynamic). If no template available, returns the raw step key.
  */
 export function notificationStepLabel(step: unknown, templateSteps?: WorkflowTemplateStep[] | null): string {
   if (!isText(step)) return BANNER_FALLBACK_TEXT;
@@ -51,17 +49,8 @@ export function notificationStepLabel(step: unknown, templateSteps?: WorkflowTem
     if (found) return found.label;
   }
 
-  // Fallback mapping for generic step keys (when no template available).
-  const FALLBACK_STEPS: Record<string, string> = {
-    on_my_way: 'On my way',
-    arrived: 'Arrived',
-    in_progress: 'In progress',
-    photos_uploaded: 'Photos uploaded',
-    signature_captured: 'Signature captured',
-    completed: 'Completed',
-  };
-
-  return Object.hasOwn(FALLBACK_STEPS, step) ? FALLBACK_STEPS[step] : step;
+  // No template: return raw step key.
+  return step;
 }
 
 /**
@@ -145,42 +134,26 @@ export function bannerPartsFromEvent(
 }
 
 /**
- * Badge status color for the step chip. When template steps provided (Story
- * 4.5 dynamic), derives from the step's `setsStatus` field; otherwise uses
- * the fallback mapping. Unknown values → neutral (same `<Badge>` vocabulary).
+ * Badge status color for the step chip. Derives from the step's `setsStatus`
+ * field in the workflow template (Story 4.5 dynamic). Unknown steps → neutral.
  */
 export function notificationStepStatus(
   step: string | null,
   templateSteps?: WorkflowTemplateStep[] | null,
 ): StatusKey {
-  if (step === null) return 'neutral';
+  if (step === null || !templateSteps || !Array.isArray(templateSteps)) return 'neutral';
 
-  // If template steps provided, look up the status from setsStatus (Story 4.5).
-  if (templateSteps && Array.isArray(templateSteps)) {
-    const found = templateSteps.find(s => s.key === step);
-    if (found) {
-      switch (found.setsStatus) {
-        case 'completed':
-          return 'done';
-        case 'in_progress':
-          return 'progress';
-        default:
-          return 'scheduled';
-      }
-    }
+  const found = templateSteps.find(s => s.key === step);
+  if (!found) return 'neutral';
+
+  switch (found.setsStatus) {
+    case 'completed':
+      return 'done';
+    case 'in_progress':
+      return 'progress';
+    default:
+      return 'scheduled';
   }
-
-  // Fallback mapping for generic step keys.
-  const FALLBACK_STATUS: Record<string, StatusKey> = {
-    on_my_way: 'progress',
-    arrived: 'done',
-    in_progress: 'progress',
-    photos_uploaded: 'progress',
-    signature_captured: 'progress',
-    completed: 'done',
-  };
-
-  return Object.hasOwn(FALLBACK_STATUS, step) ? FALLBACK_STATUS[step] : 'neutral';
 }
 
 /**
