@@ -25,11 +25,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  Calendar,
   ChevronLeft,
-  Clock,
   FileQuestion,
-  MapPin,
   Wrench
 } from 'lucide-react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
@@ -54,31 +51,15 @@ import { ActivityTimeline } from './components/ActivityTimeline';
 import { AttachmentGrid } from './components/AttachmentGrid';
 import { EditJobSheet } from './components/EditJobSheet';
 import { SectionCard } from './components/SectionCard';
+import { WorkflowStatusCard } from './components/WorkflowStatus';
+import { JobHeaderCard } from './components/JobHeaderCard';
+import { JobActionsSection } from './components/JobActionsSection';
 import { eventLabel } from './eventLabels';
 import { formatTimeLabel, statusToBadge } from '../jobs/format';
 import { formatPhone } from '../profile';
 import { isAbort } from '../../utils';
 
 type Navigation = NativeStackNavigationProp<RootStackParamList, 'JobDetail'>;
-
-/** Badge labels — the one title-case exception in the design system. */
-const STATUS_LABEL = {
-  done: 'Done',
-  progress: 'In Progress',
-  scheduled: 'Scheduled',
-  cancelled: 'Cancelled',
-} as const;
-
-/** "12 Aug 2026" — the date line's format (spec §0). Unparseable input → raw. */
-function dateLine(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleDateString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-}
 
 export default function JobDetailScreen() {
   const navigation = useNavigation<Navigation>();
@@ -296,92 +277,24 @@ export default function JobDetailScreen() {
           }>
           {/* 1. Header card: badges → service line → meta rows → progress →
               description / notes behind dividers. */}
-          <Card padding="md" style={styles.headerCard}>
-            <View style={styles.badgeRow}>
-              {urgent ? (
-                // Urgent borrows the cancelled palette — red communicates
-                // urgency without inventing a new status colour.
-                <Badge status="cancelled" tone="soft" size="sm">
-                  Urgent
-                </Badge>
-              ) : null}
-              {statusBadge ? (
-                <Badge status={statusBadge} dot>
-                  {STATUS_LABEL[statusBadge] ?? detail.status}
-                </Badge>
-              ) : null}
-            </View>
-            <Text style={styles.serviceLabel} numberOfLines={1}>
-              {detail.skill?.name || 'Service'}
-            </Text>
+          <JobHeaderCard detail={detail} urgent={urgent} statusBadge={statusBadge} />
 
-            <View style={styles.metaRow}>
-              <Calendar size={15} color={colors.textMuted} strokeWidth={2} />
-              <Text style={styles.metaText}>{dateLine(detail.scheduledStart)}</Text>
-            </View>
-            <View style={styles.metaRow}>
-              <Clock size={15} color={colors.textMuted} strokeWidth={2} />
-              <Text style={styles.metaText}>
-                {formatTimeLabel(detail.scheduledStart, detail.scheduledEnd)}
-              </Text>
-            </View>
-            <View style={styles.metaRow}>
-              <MapPin size={15} color={colors.textMuted} strokeWidth={2} />
-              <Text style={styles.metaText} numberOfLines={1}>
-                {detail.serviceLocation}
-              </Text>
-            </View>
+          {/* 1.5. Workflow status — show progress through workflow steps when
+              the job has a template. */}
+          {detail.workflowTemplate?.steps ? (
+            <WorkflowStatusCard
+              steps={detail.workflowTemplate.steps}
+              currentStepIndex={detail.currentStepIndex ?? null}
+              jobStatus={detail.status}
+            />
+          ) : null}
 
-            {detail.status === 'in_progress' &&
-            detail.currentStepIndex !== null &&
-            detail.workflowTemplate?.steps ? (
-              // "Step N of M — <label>" only while the work is actually
-              // under way; a fresh job has no current step to show.
-              <Text style={styles.progressLine}>
-                {`Step ${detail.currentStepIndex + 1} of ${detail.workflowTemplate.steps.length} — ${
-                  detail.workflowTemplate.steps[detail.currentStepIndex]?.label ??
-                  'Unknown step'
-                }`}
-              </Text>
-            ) : null}
-
-            {detail.description ? (
-              <>
-                <View style={styles.divider} />
-                <Text style={styles.bodyText}>{detail.description}</Text>
-              </>
-            ) : null}
-            {detail.notesForTechnician ? (
-              <>
-                <View style={styles.divider} />
-                <Text style={styles.notesLabel}>Notes for technician</Text>
-                <Text style={styles.bodyText}>{detail.notesForTechnician}</Text>
-              </>
-            ) : null}
-          </Card>
-
-          {/* 2. Actions slot — edit + cancel for scheduled jobs only; every
-              other status renders nothing here. */}
-          {detail.status === 'scheduled' ? (
-            <View testID="job-detail-actions" style={styles.actionsRow}>
-              <Button
-                variant="secondary"
-                size="md"
-                style={styles.editButton}
-                onPress={() => setIsEditOpen(true)}>
-                Edit job
-              </Button>
-              <Button
-                variant="ghost"
-                size="md"
-                labelColor={colors.danger}
-                onPress={confirmCancel}>
-                Cancel job
-              </Button>
-            </View>
-          ) : (
-            <View testID="job-detail-actions" />
-          )}
+          {/* 2. Actions slot — edit + cancel for scheduled jobs only. */}
+          <JobActionsSection
+            jobStatus={detail.status}
+            onEdit={() => setIsEditOpen(true)}
+            onCancel={confirmCancel}
+          />
 
           {/* 3. Customer */}
           <SectionCard title="Customer">
@@ -412,11 +325,15 @@ export default function JobDetailScreen() {
               subLine={formatPhone(detail.technician)}
             />
             {detail.technician.skills.length ? (
-              <View style={styles.sectionMetaRow}>
+              <View style={styles.skillsRow}>
                 <Wrench size={15} color={colors.textMuted} strokeWidth={2} />
-                <Text style={styles.metaText} numberOfLines={2}>
-                  {detail.technician.skills.join(', ')}
-                </Text>
+                <View style={styles.skillsChips}>
+                  {detail.technician.skills.map((skill) => (
+                    <Badge key={skill} status="scheduled" tone="soft" size="sm">
+                      {skill}
+                    </Badge>
+                  ))}
+                </View>
               </View>
             ) : null}
           </SectionCard>
@@ -484,56 +401,6 @@ const styles = StyleSheet.create({
     padding: spacing.s4,
     gap: spacing.s4,
   },
-  // Card §0: internal gap s2 (same as JobCard).
-  headerCard: {
-    gap: spacing.s2,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.s2,
-  },
-  // Actions slot (§5): Edit takes the width, Cancel sits beside it as
-  // destructive text.
-  actionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.s3,
-  },
-  editButton: {
-    flex: 1,
-  },
-  serviceLabel: {
-    ...typography.heading,
-    color: colors.textStrong,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.s2,
-  },
-  metaText: {
-    ...typography.bodySm,
-    color: colors.textMuted,
-    flex: 1,
-  },
-  progressLine: {
-    ...typography.labelStrong,
-    color: colors.status.progress.fg,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.borderSubtle,
-    marginTop: spacing.s1,
-  },
-  bodyText: {
-    ...typography.body,
-    color: colors.textBody,
-  },
-  notesLabel: {
-    ...typography.label,
-    color: colors.textMuted,
-  },
   // Extra air between a PersonRow and the meta rows below it in a section.
   sectionMetaRow: {
     flexDirection: 'row',
@@ -541,5 +408,18 @@ const styles = StyleSheet.create({
     gap: spacing.s2,
     minHeight: touch.min,
     marginTop: spacing.s2,
+  },
+  skillsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.s2,
+    marginTop: spacing.s2,
+  },
+  skillsChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.s2,
+    flex: 1,
+    maxHeight: spacing.s4 * 3,
   },
 });

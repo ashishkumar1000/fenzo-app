@@ -44,6 +44,8 @@ export type {
   UpdateJobEditFields,
   UpdateJobRequest,
   WorkflowStepApi,
+  WorkflowTemplate,
+  WorkflowTemplateStep,
 } from './jobs';
 export { skillService } from './skills';
 export type { Skill, NewSkillInput } from './skills';

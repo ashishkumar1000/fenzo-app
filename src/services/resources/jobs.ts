@@ -54,6 +54,11 @@ export interface WorkflowTemplateStep {
   advancesOn: string | null;
 }
 
+export interface WorkflowTemplate {
+  version: number;
+  steps: WorkflowTemplateStep[];
+}
+
 /**
  * Timeline buckets `GET /jobs` splits the tenant's jobs into (fenzit-be
  * Story 3-7). The four are mutually exclusive by construction: Upcoming starts
