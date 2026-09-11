@@ -31,7 +31,6 @@ const PROFILE: MyProfile = {
     gstin: null,
     address: null,
     stateCode: 'TN',
-    serviceCategories: [],
     upiVpa: null,
   },
   technicians: [],

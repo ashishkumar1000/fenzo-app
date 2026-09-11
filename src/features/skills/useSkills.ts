@@ -1,16 +1,16 @@
 /**
- * useSkills — shared store for the tenant's skill list, from `GET /skills`.
+ * useSkills — shared store for the global skills catalog, from `GET /skills`.
  *
  * Same `useSyncExternalStore` shared-store pattern as `useCustomers`: one
- * module-level state object, any number of subscribers. The Skills screen
- * and AddTechnicianSheet's skill picker both read the same fetch, so a skill
- * added on the Skills screen is immediately selectable on the invite sheet —
- * there is exactly one path to the endpoint and the two surfaces can never
- * disagree about the rows.
+ * module-level state object, any number of subscribers. The Skills screen,
+ * AddTechnicianSheet's skill picker and the New job screen's skill picker all
+ * read the same fetch, so there is exactly one path to the endpoint and the
+ * surfaces can never disagree about the rows.
  *
- * List order is alphabetical by name (case-insensitive) and every mutation
- * (`addSkill` insert, optimistic `removeSkill`) keeps it sorted — the screen
- * never re-sorts on render.
+ * The read path serves the rows exactly as the backend sends them — seed
+ * order (`sort_order` asc), active only — and never re-sorts. The write-path
+ * mutations (`addSkill`, optimistic `removeSkill`) keep their sorted-insert
+ * behavior untouched (both are Story 5.4 deletions).
  */
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { skillService } from '../../services';
@@ -77,7 +77,7 @@ function getSnapshot() {
   return state;
 }
 
-/** Case-insensitive name order, matching the screen's alphabetical contract. */
+/** Case-insensitive name order — used only by the write-path mutations. */
 function byName(a: Skill, b: Skill) {
   return (
     a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
@@ -97,11 +97,10 @@ async function fetchSkills(): Promise<void> {
     // settling response from the older request must not overwrite the newer
     // state or stamp an older success.
     if (seq !== requestSeq) return;
-    // The server order is unspecified — the alphabetical contract is the
-    // store's job, so every read sees sorted rows.
-    const sorted = [...skills].sort(byName);
+    // Seed order (the backend's `sort_order` asc) is the contract — stored
+    // verbatim, never re-sorted.
     setState({
-      skills: sorted,
+      skills,
       isLoading: false,
       error: null,
       hasLoaded: true,

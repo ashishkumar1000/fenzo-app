@@ -19,14 +19,10 @@ import { apiClient } from '../api/apiClient';
 import type { Paginated } from '../api/pagination';
 
 /**
- * The job service-type enum accepted by `POST /jobs`.
- *
- * ⚠️ This is NOT the same vocabulary as a tenant's `serviceCategories` on
- * `/users/me` (`ac_technician`, `plumber`, …). The two overlap on
- * `pest_control` only. See `JOB_SERVICE_TYPE_BY_CATEGORY` in
- * `features/newJob/serviceCategories.ts` for the translation, and note it is
- * lossy — four of the nine signup categories have no counterpart here and
- * collapse to `other`.
+ * The job service-type enum the API's job rows still spell out in
+ * `serviceType` (dead data — the backend stopped accepting/returning it in
+ * Story 4.3; the field's readers are removed by the Story 5.3 display sweep,
+ * so the type stays until then).
  */
 export type JobServiceType =
   | 'ac_service'
@@ -51,6 +47,22 @@ export type WorkflowStepApi =
   | 'completed';
 
 /**
+ * One step of a job's stamped workflow template, as the Story 4.5 response
+ * embed carries it. `key` stays snake_case — it is the step identifier the
+ * advance API takes; everything else is camelCase.
+ */
+export interface WorkflowTemplateStep {
+  key: string;
+  label: string;
+  requiresPhoto: boolean;
+  requiresSignature: boolean;
+  /** Status this step sets, or null for an intermediate step. */
+  setsStatus: string | null;
+  /** Step key an attachment confirm auto-advances to, or null. */
+  advancesOn: string | null;
+}
+
+/**
  * Timeline buckets `GET /jobs` splits the tenant's jobs into (fenzit-be
  * Story 3-7). The four are mutually exclusive by construction: Upcoming starts
  * at tomorrow's IST boundary (so a job booked for today is ONLY in Today) and
@@ -66,7 +78,11 @@ export interface CreateJobRequest {
   customerId: string;
   /** Where the work happens. Required by the API — never omitted. */
   serviceLocation: string;
-  serviceType: JobServiceType;
+  /**
+   * UUID from the global skills catalog (`GET /skills`). The create RPC
+   * stamps the skill's latest workflow template onto the job.
+   */
+  skillId: string;
   /** ISO 8601, UTC (`…Z`). */
   scheduledStart: string;
   /** UUID of the technician who will do the job. Required. */
@@ -76,10 +92,6 @@ export interface CreateJobRequest {
   description?: string;
   /** Defaults to `normal` server-side when omitted. */
   priority?: JobPriority;
-  /** Defaults to `false` server-side when omitted. */
-  requireCompletionPhoto?: boolean;
-  /** Defaults to `false` server-side when omitted. */
-  requireCompletionSignature?: boolean;
   notesForTechnician?: string;
 }
 
@@ -131,7 +143,26 @@ export interface ApiJob {
   /** uuid — resolve the display name from the roster, not here. */
   technicianId: string;
   serviceLocation: string;
+  /** Dead data — the backend stopped returning it in Story 4.3. See above. */
   serviceType: JobServiceType;
+  /**
+   * The job's tagged skills-catalog skill (Story 4.5 response shape), always
+   * present on the wire — `null` only for a skill that has since been
+   * archived or for pre-4.3 rows. Optional here only because existing
+   * fixtures predate the field; rendering it is Story 5.2/5.3 work.
+   */
+  skill?: { id: string; name: string } | null;
+  /**
+   * The stamped template the job advances through (Story 4.5 response
+   * shape): version plus the step list in template order. `null` on a
+   * degraded re-fetch; consumed fully in Stories 5.2/5.3.
+   */
+  workflowTemplate?: { version: number; steps: WorkflowTemplateStep[] } | null;
+  /**
+   * 0-based position of `currentStep` in `workflowTemplate.steps`; null
+   * while the job is fresh (or on an unknown step). Derived per read.
+   */
+  currentStepIndex?: number | null;
   /** ISO 8601, UTC. */
   scheduledStart: string;
   /** ISO 8601, UTC, or null when the form had no end time. */
@@ -371,43 +402,3 @@ export const jobService = {
   update,
   advanceWorkflow,
 };
-
-/**
- * Owner service-category code (`/users/me` → `tenant.serviceCategories`) → the
- * `serviceType` enum this endpoint accepts.
- *
- * Lives here, beside `JobServiceType`, because it encodes the API's contract
- * rather than anything about a screen: the two vocabularies are different and
- * overlap only on `pest_control`, so a selected category can't go on the wire
- * as-is — `plumber` would come back 422.
- *
- * ⚠️ LOSSY. Four categories have no counterpart in the job enum and collapse to
- * `other`: appliance repair, cleaning, carpentry and general maintenance. For a
- * business of that kind *every* job ends up typed `other`, making the field
- * worthless for them. That's the backend enum lagging behind the nine signup
- * categories, not something this map can fix — it needs raising with whoever
- * owns the API. Note also that `ac_installation` is unreachable: no category
- * maps to it.
- */
-const JOB_SERVICE_TYPE_BY_CATEGORY: Record<string, JobServiceType> = {
-  ac_technician: 'ac_service',
-  pest_control: 'pest_control',
-  plumber: 'plumbing',
-  electrician: 'electrical',
-  appliance_repair: 'other',
-  cleaning: 'other',
-  carpentry: 'other',
-  general_maintenance: 'other',
-  other: 'other',
-};
-
-/**
- * Translates a category code for `POST /jobs`, falling back to `other`.
- *
- * The fallback matters because the backend has never published its category
- * enum, so an unrecognised code is expected rather than exceptional — and a job
- * typed `other` beats a job the owner can't create at all.
- */
-export function toJobServiceType(categoryCode: string): JobServiceType {
-  return JOB_SERVICE_TYPE_BY_CATEGORY[categoryCode] ?? 'other';
-}

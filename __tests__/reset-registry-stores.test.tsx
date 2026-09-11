@@ -68,7 +68,6 @@ const makeProfile = (overrides: Partial<MyProfile> = {}): MyProfile => ({
     gstin: null,
     address: null,
     stateCode: 'TN',
-    serviceCategories: [],
     upiVpa: null,
   },
   technicians: [],
@@ -82,8 +81,6 @@ const makeProfile = (overrides: Partial<MyProfile> = {}): MyProfile => ({
 const makeSkill = (overrides: Partial<Skill> = {}): Skill => ({
   id: 'sk-1',
   name: 'Drilling',
-  tenantId: 't-1',
-  createdAt: '2026-01-01T00:00:00Z',
   ...overrides,
 });
 

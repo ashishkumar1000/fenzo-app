@@ -32,17 +32,6 @@ import { AddSkillSheet } from './components/AddSkillSheet';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Skills'>;
 
-/** "Added 12 Aug 2026" — Indian English date order per the design spec. */
-function formatAdded(iso: string) {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return null;
-  return `Added ${date.toLocaleDateString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })}`;
-}
-
 export default function SkillsScreen({ navigation }: Props) {
   const { skills, isLoading, error, hasLoaded, refresh } = useSkills();
   const [sheetVisible, setSheetVisible] = useState(false);
@@ -161,9 +150,6 @@ export default function SkillsScreen({ navigation }: Props) {
               <Card padding="md" style={styles.row}>
                 <View style={styles.rowInfo}>
                   <Text style={styles.rowName}>{item.name}</Text>
-                  {formatAdded(item.createdAt) ? (
-                    <Text style={styles.rowAdded}>{formatAdded(item.createdAt)}</Text>
-                  ) : null}
                 </View>
                 <IconButton
                   label={`Delete ${item.name}`}
@@ -273,10 +259,6 @@ const styles = StyleSheet.create({
   rowName: {
     ...typography.bodyStrong,
     color: colors.textStrong,
-  },
-  rowAdded: {
-    ...typography.caption,
-    color: colors.textMuted,
   },
   deleteButton: {
     width: 44,

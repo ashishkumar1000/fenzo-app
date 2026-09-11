@@ -93,12 +93,6 @@ export interface SetupCompanyRequest {
   /** Standard 15-char GSTIN, if provided. */
   gstin?: string;
   address?: string;
-  /**
-   * Seeds the company's initial skill list — only takes effect on the very
-   * first successful call (when the tenant is created). Ignored by the
-   * backend on subsequent calls; edit skills via the Skills API after that.
-   */
-  serviceCategories?: string[];
   /** UPI VPA for payments, e.g. `name@bank`. */
   upiVpa?: string;
 }
@@ -110,7 +104,6 @@ export interface Tenant {
   gstin: string | null;
   address: string | null;
   stateCode: string;
-  serviceCategories: string[];
   upiVpa: string | null;
   createdAt: string;
   updatedAt: string;

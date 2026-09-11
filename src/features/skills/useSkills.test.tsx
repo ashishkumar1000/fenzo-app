@@ -1,39 +1,45 @@
 /**
- * Tests for the useSkills shared store (story 5.1): alphabetical insert on
- * add, optimistic delete with rollback on failure, a 404 delete that stays
+ * Tests for the useSkills shared store: alphabetical insert on add,
+ * optimistic delete with rollback on failure, a 404 delete that stays
  * removed (the skill is already gone server-side), and the 409 duplicate
  * rejection surfacing to the caller so the sheet can keep itself open.
  * Mutations and `clearSkills` also invalidate in-flight/stale GETs, so a
  * late response can never overwrite or resurrect newer state.
  *
- * The skills service is mocked at the `services` barrel — the store only
- * ever talks to `skillService.list/create/remove`.
+ * Story 5.1 read-path contract: the GET is mocked at `apiClient` (not the
+ * service), so the REAL `SkillService.list()` runs — proving the
+ * `{ skills: [...] }` envelope is unwrapped and the backend's seed order is
+ * preserved verbatim (never re-sorted alphabetically). A malformed envelope
+ * surfaces as a store error, not a crash.
+ *
+ * Write paths (`addSkill`/`removeSkill`) keep their Story 5.1-untouched
+ * behavior — they are Story 5.4 deletions.
  */
-jest.mock('../../services', () => ({
-  skillService: {
-    list: jest.fn(),
-    create: jest.fn(),
-    remove: jest.fn(),
+jest.mock('../../services/api/apiClient', () => ({
+  apiClient: {
+    get: jest.fn(),
+    post: jest.fn(),
+    delete: jest.fn(),
   },
 }));
 
 import type ReactTestRenderer from 'react-test-renderer';
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { skillService } from '../../services';
+import { apiClient } from '../../services/api/apiClient';
 import { clearSkills, loadSkills, removeSkill, addSkill, useSkills } from './useSkills';
 import type { Skill } from '../../services';
 
-const list = skillService.list as jest.Mock;
-const createSkill = skillService.create as jest.Mock;
-const remove = skillService.remove as jest.Mock;
+const get = apiClient.get as jest.Mock;
+const post = apiClient.post as jest.Mock;
+const remove = apiClient.delete as jest.Mock;
 
 function apiError(status: number, code: string, message: string) {
   return { status, code, message, details: null };
 }
 
 function skill(id: string, name: string): Skill {
-  return { id, name, tenantId: 'tenant-1', createdAt: '2026-08-01T06:00:00.000Z' };
+  return { id, name };
 }
 
 // The hook is the only public reader of the store state, so tests probe it
@@ -54,37 +60,40 @@ function renderProbe() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  get.mockResolvedValue({ data: { skills: [] } });
   clearSkills();
 });
 
 describe('loadSkills', () => {
-  it('fetches the list and marks hasLoaded', async () => {
-    list.mockResolvedValueOnce([skill('s1', 'Drilling')]);
+  it('unwraps the { skills: [...] } envelope and preserves seed order', async () => {
+    // Deliberately NOT alphabetical — the store must keep the wire order.
+    get.mockResolvedValueOnce({
+      data: { skills: [skill('s1', 'Wiring'), skill('s2', 'AC repair'), skill('s3', 'Drilling')] },
+    });
     const renderer = renderProbe();
     await act(async () => {
       await loadSkills();
     });
-    expect(probe.skills.map(s => s.name)).toEqual(['Drilling']);
+    expect(get).toHaveBeenCalledWith('skills');
+    expect(probe.skills.map(s => s.id)).toEqual(['s1', 's2', 's3']);
     expect(probe.hasLoaded).toBe(true);
     expect(probe.error).toBeNull();
     expect(renderer).toBeTruthy();
   });
 
-  it('joins an in-flight request instead of firing a second GET', async () => {
-    let resolveList!: (v: Skill[]) => void;
-    list.mockImplementationOnce(() => new Promise<Skill[]>(res => (resolveList = res)));
+  it('surfaces a malformed envelope as a fetch error, not as store data', async () => {
+    get.mockResolvedValueOnce({ data: {} });
     renderProbe();
-    const first = loadSkills();
-    const second = loadSkills();
     await act(async () => {
-      resolveList([]);
-      await Promise.all([first, second]);
+      await loadSkills();
     });
-    expect(list).toHaveBeenCalledTimes(1);
+    expect(probe.error).toBeTruthy();
+    expect(probe.hasLoaded).toBe(true);
+    expect(probe.skills).toEqual([]);
   });
 
   it('surfaces a fetch failure as an error message', async () => {
-    list.mockRejectedValueOnce(apiError(500, 'REQUEST_ERROR', 'Something went wrong'));
+    get.mockRejectedValueOnce(apiError(500, 'REQUEST_ERROR', 'Something went wrong'));
     renderProbe();
     await act(async () => {
       await loadSkills();
@@ -92,29 +101,69 @@ describe('loadSkills', () => {
     expect(probe.error).toBe('Something went wrong');
     expect(probe.hasLoaded).toBe(true);
   });
+
+  it('retains loaded rows on a failed refresh and sets the error', async () => {
+    get.mockResolvedValueOnce({
+      data: { skills: [skill('s1', 'Drilling'), skill('s2', 'Wiring')] },
+    });
+    renderProbe();
+    await act(async () => {
+      await loadSkills();
+    });
+    expect(probe.skills.map(s => s.name)).toEqual(['Drilling', 'Wiring']);
+
+    // The refresh is forced past the TTL throttle, and the request fails.
+    get.mockRejectedValueOnce(apiError(500, 'REQUEST_ERROR', 'Network error'));
+    await act(async () => {
+      await loadSkills({ force: true });
+    });
+    // The stale-but-real rows stay on screen behind the error — the screen
+    // keeps its tiles (see NewJobScreen's failed-refresh branch) rather than
+    // blanking the grid.
+    expect(probe.skills.map(s => s.name)).toEqual(['Drilling', 'Wiring']);
+    expect(probe.error).toBe('Network error');
+    expect(probe.hasLoaded).toBe(true);
+  });
+
+  it('joins an in-flight request instead of firing a second GET', async () => {
+    let resolveList!: (v: { data: { skills: Skill[] } }) => void;
+    get.mockImplementationOnce(
+      () => new Promise<{ data: { skills: Skill[] } }>(res => (resolveList = res)),
+    );
+    renderProbe();
+    const first = loadSkills();
+    const second = loadSkills();
+    await act(async () => {
+      resolveList({ data: { skills: [] } });
+      await Promise.all([first, second]);
+    });
+    expect(get).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('addSkill', () => {
   it('inserts the created skill alphabetically (case-insensitive)', async () => {
-    list.mockResolvedValueOnce([skill('s2', 'drilling'), skill('s1', 'Wiring')]);
+    get.mockResolvedValueOnce({
+      data: { skills: [skill('s2', 'drilling'), skill('s1', 'Wiring')] },
+    });
     renderProbe();
     await act(async () => {
       await loadSkills();
     });
 
     const created = skill('s3', 'AC repair');
-    createSkill.mockResolvedValueOnce(created);
+    post.mockResolvedValueOnce({ data: created });
     await act(async () => {
       await addSkill('AC repair');
     });
 
-    expect(createSkill).toHaveBeenCalledWith({ name: 'AC repair' });
+    expect(post).toHaveBeenCalledWith('skills', { name: 'AC repair' }, undefined);
     expect(probe.skills.map(s => s.name)).toEqual(['AC repair', 'drilling', 'Wiring']);
   });
 
   it('rethrows the ApiError so the sheet can show the 409 copy and stay open', async () => {
     const dup = apiError(409, 'DUPLICATE_RESOURCE', 'A skill with this name already exists for your company');
-    createSkill.mockRejectedValueOnce(dup);
+    post.mockRejectedValueOnce(dup);
     let caught: unknown;
     await act(async () => {
       caught = await addSkill('AC repair').catch(e => e);
@@ -125,19 +174,21 @@ describe('addSkill', () => {
 
   it('does not let a GET that started before addSkill overwrite the mutation', async () => {
     // A GET hangs in flight while the user adds a skill.
-    let resolveList!: (v: Skill[]) => void;
-    list.mockImplementationOnce(() => new Promise<Skill[]>(res => (resolveList = res)));
+    let resolveList!: (v: { data: { skills: Skill[] } }) => void;
+    get.mockImplementationOnce(
+      () => new Promise<{ data: { skills: Skill[] } }>(res => (resolveList = res)),
+    );
     renderProbe();
     const pendingGet = loadSkills();
 
-    createSkill.mockResolvedValueOnce(skill('s3', 'AC repair'));
+    post.mockResolvedValueOnce({ data: skill('s3', 'AC repair') });
     await act(async () => {
       await addSkill('AC repair');
     });
 
     // The stale, pre-mutation GET settles after the mutation.
     await act(async () => {
-      resolveList([skill('s1', 'Drilling')]);
+      resolveList({ data: { skills: [skill('s1', 'Drilling')] } });
       await pendingGet;
     });
     expect(probe.skills.map(s => s.name)).toContain('AC repair');
@@ -146,7 +197,9 @@ describe('addSkill', () => {
 
 describe('removeSkill', () => {
   it('removes the row optimistically and restores it when the DELETE fails', async () => {
-    list.mockResolvedValueOnce([skill('s1', 'Drilling'), skill('s2', 'Wiring')]);
+    get.mockResolvedValueOnce({
+      data: { skills: [skill('s1', 'Drilling'), skill('s2', 'Wiring')] },
+    });
     renderProbe();
     await act(async () => {
       await loadSkills();
@@ -174,7 +227,9 @@ describe('removeSkill', () => {
   });
 
   it('does not resurrect a row deleted concurrently when a delete fails', async () => {
-    list.mockResolvedValueOnce([skill('s1', 'Drilling'), skill('s2', 'Wiring')]);
+    get.mockResolvedValueOnce({
+      data: { skills: [skill('s1', 'Drilling'), skill('s2', 'Wiring')] },
+    });
     renderProbe();
     await act(async () => {
       await loadSkills();
@@ -204,7 +259,9 @@ describe('removeSkill', () => {
   });
 
   it('leaves the skill removed when the server answers 404 (already gone)', async () => {
-    list.mockResolvedValueOnce([skill('s1', 'Drilling'), skill('s2', 'Wiring')]);
+    get.mockResolvedValueOnce({
+      data: { skills: [skill('s1', 'Drilling'), skill('s2', 'Wiring')] },
+    });
     renderProbe();
     await act(async () => {
       await loadSkills();
@@ -222,7 +279,7 @@ describe('removeSkill', () => {
 
 describe('clearSkills', () => {
   it('resets the store to the pre-login state', async () => {
-    list.mockResolvedValueOnce([skill('s1', 'Drilling')]);
+    get.mockResolvedValueOnce({ data: { skills: [skill('s1', 'Drilling')] } });
     renderProbe();
     await act(async () => {
       await loadSkills();
@@ -236,8 +293,10 @@ describe('clearSkills', () => {
   });
 
   it('ignores a GET response that lands after clearSkills (logout race)', async () => {
-    let resolveList!: (v: Skill[]) => void;
-    list.mockImplementationOnce(() => new Promise<Skill[]>(res => (resolveList = res)));
+    let resolveList!: (v: { data: { skills: Skill[] } }) => void;
+    get.mockImplementationOnce(
+      () => new Promise<{ data: { skills: Skill[] } }>(res => (resolveList = res)),
+    );
     renderProbe();
     const pendingGet = loadSkills();
 
@@ -248,7 +307,7 @@ describe('clearSkills', () => {
     // The in-flight GET settles after the clear — it must not repopulate the
     // next session's store with the previous tenant's rows.
     await act(async () => {
-      resolveList([skill('s1', 'Old tenant skill')]);
+      resolveList({ data: { skills: [skill('s1', 'Old tenant skill')] } });
       await pendingGet;
     });
     expect(probe.skills).toEqual([]);
@@ -271,12 +330,12 @@ describe('autoLoad opt', () => {
       renderer = create(<HiddenProbe />);
     });
 
-    expect(list).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
     expect(probe.hasLoaded).toBe(false);
 
     // The caller's own load still works — the opt only silences the mount
     // effect, not the store.
-    list.mockResolvedValueOnce([skill('s1', 'Drilling')]);
+    get.mockResolvedValueOnce({ data: { skills: [skill('s1', 'Drilling')] } });
     await act(async () => {
       await loadSkills();
     });
@@ -285,10 +344,10 @@ describe('autoLoad opt', () => {
   });
 
   it('still loads on mount by default (omitted opts)', async () => {
-    list.mockResolvedValueOnce([]);
+    get.mockResolvedValueOnce({ data: { skills: [] } });
     const renderer = renderProbe();
     await act(async () => {});
-    expect(list).toHaveBeenCalledTimes(1);
+    expect(get).toHaveBeenCalledTimes(1);
     renderer.unmount();
   });
 });

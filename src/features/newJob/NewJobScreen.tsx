@@ -5,13 +5,15 @@
  * sections and will grow (address, parts, estimate), and a sheet that tall
  * fights the keyboard on small phones.
  *
- * ⚠️ Every option on the form is real: service types from the tenant's
- * `serviceCategories` and the technician roster from `GET /users/me`, customers
- * from `GET /customers`. Submitting POSTs to `/jobs`.
+ * ⚠️ Every option on the form is real: the skill tiles come from the global
+ * catalog (`GET /skills`, via the shared `useSkills` store), the technician
+ * roster from `GET /users/me`, customers from `GET /customers`. Submitting
+ * POSTs to `/jobs` with the selected `skillId`.
  *
- * Technicians are filtered to those whose skills match the selected service
- * type, so the service type has to be chosen first. Customer, service type and
- * technician are all required — `POST /jobs` rejects a job without an assignee.
+ * Technicians are filtered to those whose `skillIds` contain the selected
+ * skill id (exact id membership — no name comparison), so the skill has to be
+ * chosen first. Customer, skill and technician are all required — `POST /jobs`
+ * rejects a job without an assignee.
  */
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -28,7 +30,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, UserPlus } from 'lucide-react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button, Input, Select, Switch } from '../../components/ui';
+import { Button, Input, Select } from '../../components/ui';
 import { colors, spacing, touch, typography } from '../../theme';
 import { jobService } from '../../services';
 import type { ApiError } from '../../services';
@@ -37,11 +39,10 @@ import type { RootStackParamList } from '../../navigation/types';
 import { useCustomers } from '../customers';
 import { loadMyProfile, useMyProfile } from '../profile';
 import { TechnicianPicker } from '../../components/TechnicianPicker';
+import { loadSkills, useSkills } from '../skills';
 import { DateTimeFields } from './components/DateTimeFields';
-import { ServiceTypePicker } from './components/ServiceTypePicker';
-import { resolveServiceCategories, technicianHasSkill } from './serviceCategories';
+import { SkillPicker } from './components/SkillPicker';
 import type { NewJobDraft } from './types';
-import { toJobServiceType } from "../../services/resources/jobs.ts";
 
 type Props = NativeStackScreenProps<RootStackParamList, 'NewJob'>;
 
@@ -60,13 +61,11 @@ function nextHalfHour(): Date {
 }
 
 const initialDraft = (): NewJobDraft => ({
-  serviceCategory: null,
+  skillId: null,
   customerId: null,
   scheduledAt: nextHalfHour(),
   technicianId: null,
   notes: '',
-  requireCompletionPhoto: false,
-  requireCompletionSignature: false,
 });
 
 export default function NewJobScreen({ navigation, route }: Props) {
@@ -87,10 +86,35 @@ export default function NewJobScreen({ navigation, route }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route.params?.createdCustomerId, navigation]);
 
-  // Service types are the tenant's own `serviceCategories`, chosen at company
-  // setup. Home already populates this store, so arriving here normally costs
-  // no request — but a cold start straight to this route can still be loading.
-  const { profile, isLoading, error, refresh } = useMyProfile();
+  // The tile grid needs the catalog. The store auto-loads on its subscribers'
+  // mount too — this explicit call makes the screen self-sufficient on a cold
+  // start regardless (loadSkills joins any in-flight request, so no double
+  // GET).
+  useEffect(() => {
+    void loadSkills();
+  }, []);
+
+  // Skills come from the fixed global catalog, not the tenant. The store is
+  // shared with the invite flow's picker, so arriving here after opening that
+  // sheet normally costs no request — but a cold start straight to this route
+  // still kicks one off (the mount effect below joins the store's own
+  // auto-load rather than duplicating it; `loadSkills` is throttle/join-safe).
+  const {
+    skills,
+    isLoading: skillsLoading,
+    error: skillsError,
+    refresh: refreshSkills,
+  } = useSkills();
+
+  // The roster and its degraded states. `Home` normally populates this store,
+  // so arriving here costs no request — but a cold start straight to this
+  // route can still be loading or failing.
+  const {
+    profile,
+    isLoading: profileLoading,
+    error: profileError,
+    refresh: refreshProfile,
+  } = useMyProfile();
 
   const {
     customers,
@@ -99,11 +123,6 @@ export default function NewJobScreen({ navigation, route }: Props) {
     hasLoaded: customersLoaded,
     refresh: refreshCustomers,
   } = useCustomers();
-
-  const serviceTypes = useMemo(
-    () => resolveServiceCategories(profile?.tenant.serviceCategories ?? []),
-    [profile?.tenant.serviceCategories],
-  );
 
   /**
    * `Name · City`, not the full `customerLocation` string. A dropdown row needs
@@ -156,15 +175,18 @@ export default function NewJobScreen({ navigation, route }: Props) {
   );
 
   /**
-   * Only those tagged with the selected service type. Empty until a type is
-   * picked — the section prompts for one rather than showing a roster that
-   * then visibly shrinks, which reads like a bug.
+   * Only those whose `skillIds` contain the selected skill id — exact id
+   * membership, never a name comparison. Empty until a skill is picked — the
+   * section prompts for one rather than showing a roster that then visibly
+   * shrinks, which reads like a bug.
    */
   const matchingTechnicians = useMemo(() => {
-    const category = draft.serviceCategory;
-    if (!category) return [];
-    return allTechnicians.filter(t => technicianHasSkill(t.skills, category));
-  }, [allTechnicians, draft.serviceCategory]);
+    const skillId = draft.skillId;
+    if (!skillId) return [];
+    // `skillIds ?? []`: a technician with a missing/null field simply never
+    // matches — no crash, no special case.
+    return allTechnicians.filter(t => (t.skillIds ?? []).includes(skillId));
+  }, [allTechnicians, draft.skillId]);
 
   /**
    * The skill match is advisory, so a technician with no matching skill is
@@ -172,7 +194,7 @@ export default function NewJobScreen({ navigation, route }: Props) {
    * the owner would see the full roster with no hint that none of them fit.
    */
   const noSkillMatch =
-    Boolean(draft.serviceCategory) &&
+    Boolean(draft.skillId) &&
     allTechnicians.length > 0 &&
     matchingTechnicians.length === 0;
 
@@ -182,22 +204,22 @@ export default function NewJobScreen({ navigation, route }: Props) {
     setDraft(current => ({ ...current, ...changes }));
 
   /**
-   * Changing the service type clears a technician who isn't skilled in the new
-   * one — otherwise the job silently carries a pairing the owner can no longer
-   * see, since that technician has just been filtered out of the picker.
+   * Changing the skill clears a technician who doesn't carry it — otherwise
+   * the job silently carries a pairing the owner can no longer see, since
+   * that technician has just been filtered out of the picker.
    */
-  const handleServiceCategoryChange = (code: string) => {
+  const handleSkillChange = (id: string) => {
     setDraft(current => {
-      if (current.serviceCategory === code) return current;
+      if (current.skillId === id) return current;
       const roster = profile?.technicians ?? [];
       const keepTechnician =
         current.technicianId !== null &&
         roster.some(
-          t => t.id === current.technicianId && technicianHasSkill(t.skills, code),
+          t => t.id === current.technicianId && (t.skillIds ?? []).includes(id),
         );
       return {
         ...current,
-        serviceCategory: code,
+        skillId: id,
         technicianId: keepTechnician ? current.technicianId : null,
       };
     });
@@ -207,7 +229,7 @@ export default function NewJobScreen({ navigation, route }: Props) {
   // earlier version treated assignment as optional (book now, assign later),
   // which the API doesn't allow.
   const canSubmit =
-    Boolean(draft.serviceCategory) &&
+    Boolean(draft.skillId) &&
     Boolean(draft.customerId) &&
     Boolean(draft.technicianId) &&
     !isPastSlot &&
@@ -216,15 +238,15 @@ export default function NewJobScreen({ navigation, route }: Props) {
   const handleSubmit = async () => {
     // Narrowed once here rather than cast at each use: `canSubmit` already
     // proves all three are set, but TypeScript can't see through it.
-    const { serviceCategory, customerId, technicianId } = draft;
-    if (!canSubmit || !serviceCategory || !customerId || !technicianId) return;
+    const { skillId, customerId, technicianId } = draft;
+    if (!canSubmit || !skillId || !customerId || !technicianId) return;
     setSubmitting(true);
     setSubmitError('');
     try {
       const job = await jobService.create({
         customerId,
         technicianId,
-        serviceType: toJobServiceType(serviceCategory),
+        skillId,
         // The API's example is UTC with a trailing `Z`, which is exactly what
         // toISOString produces. The picker works in device-local time, so this
         // is the conversion point.
@@ -236,8 +258,6 @@ export default function NewJobScreen({ navigation, route }: Props) {
         ...(trimmedNotes
           ? { description: trimmedNotes, notesForTechnician: trimmedNotes }
           : {}),
-        requireCompletionPhoto: draft.requireCompletionPhoto,
-        requireCompletionSignature: draft.requireCompletionSignature,
         // `priority` is deliberately omitted — no UI for it, so the server's
         // default (normal) applies.
       });
@@ -290,13 +310,20 @@ export default function NewJobScreen({ navigation, route }: Props) {
 
   /**
    * Four outcomes, none of which existed while this ran on sample constants:
-   * the profile is still loading, the load failed, it succeeded but the tenant
-   * set up no categories, or there are tiles to show. The empty case is not a
-   * silent blank — without a category the form can't be submitted at all, so it
-   * has to say why.
+   * the catalog is still loading, the load failed with nothing to show, it
+   * succeeded but the platform seeds no skills, or there are tiles to show.
+   * The empty case is not a silent blank — without a skill the form can't be
+   * submitted at all, so it has to say why.
+   *
+   * A failed refresh with rows already on screen keeps the tiles (stale but
+   * usable) rather than blanking the grid — only a failure with nothing to
+   * show blocks the form behind the retry.
    */
-  const renderServiceTypes = () => {
-    if (!profile && isLoading) {
+  const renderSkills = () => {
+    // Spinner whenever nothing is on screen yet — a first load or a retry
+    // that started from empty. (A retry over existing rows is handled below:
+    // the stale-but-usable tiles stay up.)
+    if (skillsLoading && skills.length === 0) {
       return (
         <View style={styles.sectionStatus}>
           <ActivityIndicator color={colors.primary} />
@@ -304,41 +331,43 @@ export default function NewJobScreen({ navigation, route }: Props) {
       );
     }
 
-    if (!profile) {
+    if (skillsError && skills.length === 0) {
       return (
         <View style={styles.sectionStatus}>
-          <Text style={styles.statusText}>
-            {error ?? "Couldn't load your service types."}
-          </Text>
-          <Button variant="secondary" size="sm" onPress={refresh}>
+          <Text style={styles.statusText}>{skillsError}</Text>
+          <Button variant="secondary" size="sm" onPress={refreshSkills}>
             Try again
           </Button>
         </View>
       );
     }
 
-    if (serviceTypes.length === 0) {
+    if (skills.length === 0) {
       return (
         <View style={styles.sectionStatus}>
           <Text style={styles.statusText}>
-            No service types set up yet. Add them to your business profile from
-            Account, then create the job.
+            No skills are available yet. Try again shortly.
           </Text>
         </View>
       );
     }
 
     return (
-      <ServiceTypePicker
-        options={serviceTypes}
-        value={draft.serviceCategory}
-        onChange={handleServiceCategoryChange}
+      <SkillPicker
+        options={skills}
+        value={draft.skillId}
+        onChange={handleSkillChange}
       />
     );
   };
 
   /**
-   * Gated on the service type, per the filtering rule above.
+   * Gated on the skill, per the filtering rule above.
+   *
+   * The roster's own degraded states mirror the skills section: while the
+   * profile is still loading (or failed) there is nothing to show yet, and
+   * saying "No technicians yet" for a roster that merely didn't arrive would
+   * read as "you have nobody" — a spinner/retry is the honest state.
    *
    * `POST /jobs` requires `technicianId`, so unlike the other sections this one
    * genuinely blocks submission when it can't offer anyone — which is why the
@@ -346,12 +375,31 @@ export default function NewJobScreen({ navigation, route }: Props) {
    * later.
    */
   const renderTechnicians = () => {
-    if (!draft.serviceCategory) {
+    if (!draft.skillId) {
       return (
         <View style={styles.sectionStatus}>
           <Text style={styles.statusText}>
-            Choose a service type first to see who can take this job.
+            Choose a skill first to see who can take this job.
           </Text>
+        </View>
+      );
+    }
+
+    if (profileLoading && allTechnicians.length === 0) {
+      return (
+        <View style={styles.sectionStatus}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      );
+    }
+
+    if (profileError && allTechnicians.length === 0) {
+      return (
+        <View style={styles.sectionStatus}>
+          <Text style={styles.statusText}>{profileError}</Text>
+          <Button variant="secondary" size="sm" onPress={refreshProfile}>
+            Try again
+          </Button>
         </View>
       );
     }
@@ -408,8 +456,8 @@ export default function NewJobScreen({ navigation, route }: Props) {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Service type</Text>
-            {renderServiceTypes()}
+            <Text style={styles.sectionLabel}>Skill</Text>
+            {renderSkills()}
           </View>
 
           <View style={styles.section}>
@@ -467,20 +515,6 @@ export default function NewJobScreen({ navigation, route }: Props) {
             placeholder="Any special instructions..."
             multiline
           />
-
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Job requirements</Text>
-            <Switch
-              label="Require completion photos"
-              value={draft.requireCompletionPhoto}
-              onValueChange={next => patch({ requireCompletionPhoto: next })}
-            />
-            <Switch
-              label="Require customer signature"
-              value={draft.requireCompletionSignature}
-              onValueChange={next => patch({ requireCompletionSignature: next })}
-            />
-          </View>
         </ScrollView>
 
         {/* Footer sits outside the ScrollView so "Create job" is always
@@ -547,9 +581,9 @@ const styles = StyleSheet.create({
     ...typography.label,
     color: colors.textStrong,
   },
-  // Stand-in for the tile grid while loading / on failure / when the tenant has
-  // no categories. Roughly one tile row tall so the form doesn't jump when the
-  // real grid arrives.
+  // Stand-in for the tile grid while loading / on failure / when the catalog
+  // has no skills. Roughly one tile row tall so the form doesn't jump when
+  // the real grid arrives.
   sectionStatus: {
     minHeight: 84,
     alignItems: 'flex-start',

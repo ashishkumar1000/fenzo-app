@@ -78,8 +78,8 @@ it('offers exactly the skills the shared store holds', () => {
   ];
   mockStore({
     skills: [
-      { id: 's1', name: 'AC repair', tenantId: 't1', createdAt: '2026-08-01T06:00:00.000Z' },
-      { id: 's2', name: 'Wiring', tenantId: 't1', createdAt: '2026-08-01T06:00:00.000Z' },
+      { id: 's1', name: 'AC repair' },
+      { id: 's2', name: 'Wiring' },
     ],
   });
   const root = renderSheet(true);

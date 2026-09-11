@@ -26,6 +26,18 @@ jest.mock('../profile', () => ({
   loadMyProfile: jest.fn(),
 }));
 
+jest.mock('../skills', () => ({
+  useSkills: jest.fn(() => ({
+    skills: [],
+    isLoading: false,
+    error: null,
+    hasLoaded: true,
+    lastLoadedAt: 1,
+    refresh: jest.fn(),
+  })),
+  loadSkills: jest.fn().mockResolvedValue(undefined),
+}));
+
 import type ReactTestRenderer from 'react-test-renderer';
 import React from 'react';
 import { act, create } from 'react-test-renderer';

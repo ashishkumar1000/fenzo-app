@@ -8,7 +8,7 @@
  * main app.
  */
 import { useCallback, useState } from 'react';
-import { DIAL_CODE, OTP_LENGTH, SERVICE_CATEGORY_BY_BUSINESS_TYPE } from './constants';
+import { DIAL_CODE, OTP_LENGTH } from './constants';
 import type { AuthResult, AuthStep, BusinessProfile } from './types';
 import { PhoneScreen } from './screens/PhoneScreen';
 import { OtpScreen } from './screens/OtpScreen';
@@ -51,14 +51,6 @@ function setupCompanyErrorMessage(err: ApiError): string {
     return "This account can't set up a company. Contact your business owner.";
   }
   return err.message;
-}
-
-/** Maps `businessTypes` labels to their service-category codes, per `SERVICE_CATEGORY_BY_BUSINESS_TYPE` — deduped in case two labels ever map to the same code. */
-function serviceCategoriesFor(businessTypes: string[]): string[] {
-  const codes = businessTypes.map(
-    t => SERVICE_CATEGORY_BY_BUSINESS_TYPE[t as keyof typeof SERVICE_CATEGORY_BY_BUSINESS_TYPE] ?? 'other',
-  );
-  return [...new Set(codes)];
 }
 
 export default function AuthFlow({ onComplete }: Props) {
@@ -207,7 +199,6 @@ export default function AuthFlow({ onComplete }: Props) {
         stateCode: profile.stateCode,
         gstin: profile.gstNumber || undefined,
         address: profile.city || undefined,
-        serviceCategories: serviceCategoriesFor(profile.businessTypes),
       });
       // CRITICAL: this token replaces the one from verifyOtp — it now has
       // tenantId populated. The old one would keep failing tenant-scoped

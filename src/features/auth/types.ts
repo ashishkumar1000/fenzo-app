@@ -13,7 +13,7 @@ export type AuthStep = 'phone' | 'otp' | 'profile';
 export type BusinessProfile = {
   businessName: string;
   ownerName: string;
-  /** One or more business types — maps 1:1 to `serviceCategories` on company setup. */
+  /** One or more business types — profile data only, nothing downstream reads them. */
   businessTypes: string[];
   city: string;
   /** 2-letter ISO 3166-2: IN state code, e.g. "KA" — required by company setup. */

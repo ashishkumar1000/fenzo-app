@@ -51,7 +51,6 @@ function makeProfile(overrides: Partial<MyProfile> = {}): MyProfile {
       gstin: null,
       address: null,
       stateCode: 'TN',
-      serviceCategories: [],
       upiVpa: null,
     },
     technicians: [],

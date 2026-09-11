@@ -1,5 +1,18 @@
 # fenzit-be API Contracts — FE Reference (extracted from BE source 2026-09-01)
 
+> **⚠️ Redesign note (Epic 4 / Epic 5, 2026-09-11):** the skill-workflow redesign
+> changed several shapes documented below — `GET /skills` now returns
+> `{ skills: [{ id, name }] }` (global catalog, seed order; no tenantId/createdAt),
+> `POST /jobs` takes `skillId` (no `serviceType`, no `requireCompletion*` flags),
+> and signup no longer sends `serviceCategories`. Additionally: the technician
+> embeds in `/users/me` and job detail carry `skillIds` (global-catalog UUIDs —
+> the exact field the new-job roster filter matches on), and every job read
+> response now carries the Story 4.5 embeds `skill` (`{ id, name } | null`),
+> `workflowTemplate` (`{ version, steps } | null`) and `currentStepIndex`
+> (`number | null`). Sections below still describe the pre-redesign shapes.
+> Full doc sweep is Story 5.4 — until then treat
+> `workspace/core/backend/fenzit-be/docs/api-contracts.md` as authoritative.
+
 Authoritative request/response shapes for every endpoint the fenzo-app stories consume. Extracted directly from the BE source in this meta repo (`workspace/core/backend/fenzit-be/src/**`), NOT from docs — each section cites its source file. If BE code changes, re-verify against source.
 
 ## 0. Conventions

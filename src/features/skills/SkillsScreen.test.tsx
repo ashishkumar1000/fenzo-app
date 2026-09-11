@@ -27,7 +27,7 @@ import SkillsScreen from './SkillsScreen';
 const useSkillsMock = useSkills as jest.Mock;
 
 function skill(id: string, name: string): Skill {
-  return { id, name, tenantId: 'tenant-1', createdAt: '2026-08-01T06:00:00.000Z' };
+  return { id, name };
 }
 
 function mockStore(overrides: Partial<ReturnType<typeof useSkills>> = {}) {
@@ -88,8 +88,10 @@ it('shows the load-failure EmptyState with a working retry when nothing loaded',
   expect(refresh).toHaveBeenCalledTimes(1);
 });
 
-it('renders the shared store rows in store (alphabetical) order', () => {
-  mockStore({ skills: [skill('s1', 'AC repair'), skill('s2', 'Brake check')], count: 2 });
+it('renders the shared store rows in store order', () => {
+  // Deliberately NOT alphabetical — the screen must render the store's
+  // (seed) order verbatim, never re-sort.
+  mockStore({ skills: [skill('s1', 'Wiring'), skill('s2', 'Brake check')], count: 2 });
   const texts = visibleTexts(renderScreen());
-  expect(texts.indexOf('AC repair')).toBeLessThan(texts.indexOf('Brake check'));
+  expect(texts.indexOf('Wiring')).toBeLessThan(texts.indexOf('Brake check'));
 });

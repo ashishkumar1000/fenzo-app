@@ -1,26 +1,33 @@
 /**
- * ServiceTypePicker — single-select grid of service-type tiles.
+ * SkillPicker — single-select grid of skill tiles, fed by the global skills
+ * catalog (`GET /skills` via the `useSkills` store).
  *
- * Tile width is measured from the container via `onLayout` rather than
- * derived from the screen width, so the grid stays correct wherever it's
- * placed (and on rotation / split-screen) without needing to know the
- * parent's padding.
+ * Deliberately modeled on the deleted service-type tile grid (same 3-column
+ * grid, `accessibilityState={{ selected }}`, controlled `value`/`onChange`),
+ * with two deltas: the options are `Skill` rows (id + name from the catalog)
+ * and there is no per-skill icon — skills carry no icon data, so every tile
+ * renders the same neutral `Wrench` glyph above its label for visual
+ * continuity with the grid it replaced.
+ *
+ * Presentational, like its predecessor: the parent owns the option list and
+ * the selection.
  */
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Wrench } from 'lucide-react-native';
 import { colors, radius, spacing, typography } from '../../../theme';
-import type { ServiceType } from '../types';
+import type { Skill } from '../../../services';
 
 const COLUMNS = 3;
 const GAP = spacing.s3;
 
 type Props = {
-  options: ServiceType[];
+  options: Skill[];
   value: string | null;
   onChange: (id: string) => void;
 };
 
-export function ServiceTypePicker({ options, value, onChange }: Props) {
+export function SkillPicker({ options, value, onChange }: Props) {
   const [rowWidth, setRowWidth] = useState(0);
 
   // 0 until the first layout pass — tiles render at natural width for that
@@ -33,7 +40,6 @@ export function ServiceTypePicker({ options, value, onChange }: Props) {
       style={styles.grid}
       onLayout={e => setRowWidth(e.nativeEvent.layout.width)}>
       {options.map(option => {
-        const Icon = option.icon;
         const isSelected = option.id === value;
 
         return (
@@ -41,14 +47,14 @@ export function ServiceTypePicker({ options, value, onChange }: Props) {
             key={option.id}
             accessibilityRole="button"
             accessibilityState={{ selected: isSelected }}
-            accessibilityLabel={option.label}
+            accessibilityLabel={option.name}
             onPress={() => onChange(option.id)}
             style={[
               styles.tile,
               tileWidth ? { width: tileWidth } : null,
               isSelected && styles.tileSelected,
             ]}>
-            <Icon
+            <Wrench
               size={22}
               strokeWidth={1.75}
               color={isSelected ? colors.primary : colors.textStrong}
@@ -56,7 +62,7 @@ export function ServiceTypePicker({ options, value, onChange }: Props) {
             <Text
               numberOfLines={1}
               style={[styles.label, isSelected && styles.labelSelected]}>
-              {option.label}
+              {option.name}
             </Text>
           </Pressable>
         );

@@ -60,19 +60,24 @@ describe('jobService.advanceWorkflow', () => {
 });
 
 describe('jobService.create', () => {
-  it('posts the body verbatim to /jobs, completion flags included', async () => {
+  it('posts the body verbatim to /jobs with skillId and none of the dropped keys', async () => {
     post.mockResolvedValueOnce({ data: JOB });
     const input = {
       customerId: 'customer-1',
       technicianId: 'tech-1',
-      serviceType: 'ac_service' as const,
+      skillId: 'sk-1',
       scheduledStart: '2026-09-04T10:00:00.000Z',
       serviceLocation: '12 MG Road, Bengaluru',
-      requireCompletionPhoto: true,
-      requireCompletionSignature: true,
     };
     await jobService.create(input);
     expect(post).toHaveBeenCalledWith('/jobs', input);
+    // Story 4.4/4.3 wire contract: `serviceType` is replaced by `skillId`,
+    // and the completion flags are gone from the create body (the backend
+    // strips them — edit-flow-only via PATCH since then).
+    const body = post.mock.calls[0][1] as Record<string, unknown>;
+    expect(body).not.toHaveProperty('serviceType');
+    expect(body).not.toHaveProperty('requireCompletionPhoto');
+    expect(body).not.toHaveProperty('requireCompletionSignature');
   });
 });
 

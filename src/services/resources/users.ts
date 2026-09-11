@@ -37,7 +37,6 @@ export interface ProfileTenant {
   address: string | null;
   /** 2-letter uppercase ISO 3166-2:IN code, e.g. `KA`. */
   stateCode: string;
-  serviceCategories: string[];
   /** UPI VPA for payments, e.g. `name@bank`. */
   upiVpa: string | null;
 }
