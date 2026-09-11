@@ -1,8 +1,11 @@
 /**
  * Render tests for the Customer-signature card gate (Story 3.5 Task 5 /
- * AC 6): the card exists only on non-terminal jobs that require a signature
- * — flag-off and terminal jobs render nothing — and a captured signature
- * offers the Re-capture affordance when the screen wires it.
+ * AC 6): the card exists only on non-terminal jobs that have a step with
+ * requiresSignature=true — and a captured signature offers the Re-capture
+ * affordance when the screen wires it.
+ *
+ * Story 5.2: signature gate is template-driven (checks workflowTemplate.steps
+ * for requiresSignature, not a job-level flag).
  *
  * The upload hook is mocked (PhotoSection's own tests cover its states);
  * everything else renders through the real components so the gate and the
@@ -16,9 +19,30 @@ jest.mock('../useAttachmentUpload', () => ({
 import ReactTestRenderer, { act, create } from 'react-test-renderer';
 import { Linking } from 'react-native';
 import { TechJobDetailContent } from './TechJobDetailContent';
-import type { JobDetail } from '../../../services';
+import type { JobDetail, WorkflowTemplateStep } from '../../../services';
 
 const useHook = require('../useAttachmentUpload').useAttachmentUpload as jest.Mock;
+
+const baseTemplate = {
+  version: 1,
+  steps: [
+    { key: 'on_my_way', label: 'On my way', requiresPhoto: false, requiresSignature: false, setsStatus: null, advancesOn: null } as WorkflowTemplateStep,
+    { key: 'arrived', label: 'Arrived', requiresPhoto: false, requiresSignature: false, setsStatus: null, advancesOn: null } as WorkflowTemplateStep,
+    { key: 'in_progress', label: 'Start work', requiresPhoto: false, requiresSignature: false, setsStatus: 'in_progress', advancesOn: null } as WorkflowTemplateStep,
+    { key: 'photos_uploaded', label: 'Upload photos', requiresPhoto: true, requiresSignature: false, setsStatus: null, advancesOn: 'photo_confirm' } as WorkflowTemplateStep,
+    { key: 'signature_captured', label: 'Capture signature', requiresPhoto: false, requiresSignature: true, setsStatus: null, advancesOn: null } as WorkflowTemplateStep,
+    { key: 'completed', label: 'Mark complete', requiresPhoto: false, requiresSignature: false, setsStatus: 'completed', advancesOn: null } as WorkflowTemplateStep,
+  ],
+};
+
+const noSigTemplate = {
+  version: 1,
+  steps: [
+    { key: 'on_my_way', label: 'On my way', requiresPhoto: false, requiresSignature: false, setsStatus: null, advancesOn: null } as WorkflowTemplateStep,
+    { key: 'in_progress', label: 'Start work', requiresPhoto: false, requiresSignature: false, setsStatus: 'in_progress', advancesOn: null } as WorkflowTemplateStep,
+    { key: 'completed', label: 'Mark complete', requiresPhoto: false, requiresSignature: false, setsStatus: 'completed', advancesOn: null } as WorkflowTemplateStep,
+  ],
+};
 
 function detail(overrides: Partial<JobDetail> = {}): JobDetail {
   return {
@@ -29,13 +53,16 @@ function detail(overrides: Partial<JobDetail> = {}): JobDetail {
     technicianId: 'tech-1',
     serviceLocation: '12 MG Road, Bengaluru',
     serviceType: 'ac_service',
+    skill: { id: 'skill-1', name: 'AC Service' },
+    workflowTemplate: baseTemplate,
+    currentStepIndex: 2,
     scheduledStart: '2026-09-04T10:00:00.000Z',
     scheduledEnd: null,
     status: 'in_progress',
     currentStep: 'in_progress',
     priority: 'normal',
     requireCompletionPhoto: false,
-    requireCompletionSignature: true,
+    requireCompletionSignature: false,
     description: null,
     notesForTechnician: null,
     createdAt: '2026-09-01T06:00:00.000Z',
@@ -89,16 +116,17 @@ describe('TechJobDetailContent — signature card gate', () => {
     });
   });
 
-  it('flag on, no signature → the dashed placeholder invites the step', () => {
-    const root = renderContent({ detail: detail() });
+  it('template with signature step, no attachment → dashed placeholder', () => {
+    const root = renderContent({ detail: detail({ workflowTemplate: baseTemplate }) });
     expect(textCount(root, 'Customer signature')).toBeGreaterThan(0);
     expect(textCount(root, 'Captured at the signature step.')).toBeGreaterThan(0);
   });
 
-  it('flag on, signature captured → Re-capture affordance when wired', () => {
+  it('template with signature step, signature captured → Re-capture affordance when wired', () => {
     const onRecapture = jest.fn();
     const root = renderContent({
       detail: detail({
+        workflowTemplate: baseTemplate,
         attachments: [{ id: 'att-1', type: 'signature', url: 'https://r2/read', createdAt: '2026-09-05T01:00:00.000Z' }],
       }),
       onRecaptureSignature: onRecapture,
@@ -122,6 +150,7 @@ describe('TechJobDetailContent — signature card gate', () => {
   it('two signatures → the newest one (last in the oldest-first list) is shown', () => {
     const root = renderContent({
       detail: detail({
+        workflowTemplate: baseTemplate,
         attachments: [
           { id: 'att-old', type: 'signature', url: 'https://r2/old', createdAt: '2026-09-04T01:00:00.000Z' },
           { id: 'att-new', type: 'signature', url: 'https://r2/new', createdAt: '2026-09-05T01:00:00.000Z' },
@@ -136,25 +165,24 @@ describe('TechJobDetailContent — signature card gate', () => {
     expect(withUri('https://r2/old')).toBe(0);
   });
 
-  it('flag off → no signature card at all (no voluntary capture)', () => {
-    const root = renderContent({ detail: detail({ requireCompletionSignature: false }) });
+  it('template without signature step → no card at all', () => {
+    const root = renderContent({ detail: detail({ workflowTemplate: noSigTemplate }) });
     expect(textCount(root, 'Customer signature')).toBe(0);
   });
 
-  it('flag off → the progress count matches the filtered row list (3 of 5)', () => {
-    // currentStep in_progress → three done rows (on_my_way, arrived,
-    // in_progress) over the 5 surviving rows; the dropped signature row must
-    // not inflate the denominator (reverting to STEP_ORDER.length would
-    // render "3 of 6" against a 5-row rail).
-    const root = renderContent({ detail: detail({ requireCompletionSignature: false }) });
-    expect(textCount(root, '3 of 5')).toBeGreaterThan(0);
-    expect(textCount(root, '3 of 6')).toBe(0);
+  it('no-signature template → stepper shows only 3 rows (matched to template)', () => {
+    const root = renderContent({ detail: detail({ workflowTemplate: noSigTemplate, currentStepIndex: 1 }) });
+    // currentStepIndex: 1 over 3 steps = "2 of 3"
+    expect(textCount(root, '2 of 3')).toBeGreaterThan(0);
+    expect(textCount(root, '2 of 6')).toBe(0);
   });
 
-  it('terminal job with the flag on → no signature card (AC 6)', () => {
+  it('terminal job with signature step → no card (AC 6)', () => {
     const root = renderContent({
       detail: detail({
+        workflowTemplate: baseTemplate,
         status: 'completed',
+        currentStepIndex: 5,
         currentStep: 'completed',
         attachments: [{ id: 'att-1', type: 'signature', url: 'https://r2/read', createdAt: '2026-09-05T01:00:00.000Z' }],
       }),

@@ -22,22 +22,9 @@
  */
 import type { ActivityLogEntry, ApiError } from '../../services';
 import { FALLBACK_ERROR_MESSAGE, workflowCurrentStep } from '../../services/api/apiError';
-import { buildStepper, type StepperJob, type WorkflowStep } from './stepperModel';
+import { buildStepper, type StepperJob } from './stepperModel';
 
-/**
- * Button copy per step (spec §9). `photos_uploaded` is never a button — the
- * bar shows the photo-hint pill instead (its label lives in
- * `PHOTO_HINT_MESSAGE`), so the map excludes it at the type level.
- */
-export const ADVANCE_LABELS: Record<Exclude<WorkflowStep, 'photos_uploaded'>, string> = {
-  on_my_way: 'On my way',
-  arrived: 'Arrived',
-  in_progress: 'Start work',
-  signature_captured: 'Capture signature',
-  completed: 'Mark complete',
-};
-
-/** The non-tappable photo pill's copy — shared with the action bar render. */
+/** The non-tappable photo-confirm pill's copy — shared with the action bar render. */
 export const PHOTO_HINT_MESSAGE = 'Upload a photo to continue';
 
 /** Fixed 409 copy (AC6) — the backend's raw message is never shown. */
@@ -45,7 +32,7 @@ export const JOB_LOCKED_MESSAGE = 'This job can no longer be updated';
 
 export type ActionBarAction =
   /** The single primary advance button for `step`. */
-  | { kind: 'button'; step: WorkflowStep; label: string }
+  | { kind: 'button'; step: string; label: string }
   /** Non-tappable "Upload a photo to continue" pill. */
   | { kind: 'photoHint' }
   /** Static success row: tick + "Job completed". */
@@ -61,8 +48,8 @@ export function actionBarAction(job: StepperJob, log: ActivityLogEntry[]): Actio
   // A non-terminal job always has exactly one actionable step — an absent
   // `next` is a contract violation, and showing no bar is the safe fallback.
   if (!next) return { kind: 'none' };
-  if (next.step === 'photos_uploaded') return { kind: 'photoHint' };
-  return { kind: 'button', step: next.step, label: ADVANCE_LABELS[next.step] };
+  if ((next.advancesOn ?? null) === 'photo_confirm') return { kind: 'photoHint' };
+  return { kind: 'button', step: next.step, label: next.label };
 }
 
 export type AdvanceErrorPlan =

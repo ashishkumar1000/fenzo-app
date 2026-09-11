@@ -9,15 +9,14 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Check } from 'lucide-react-native';
 import { colors, spacing, touch, typography } from '../../../theme';
-import { STEP_LABELS } from '../../jobDetail/eventLabels';
-import type { StepView, WorkflowStep } from '../stepperModel';
+import type { StepView } from '../stepperModel';
 
 type Props = {
   steps: StepView[];
   /** 3.3 — present: the 'next' row is tappable to advance (secondary to the bottom bar). */
-  onAdvance?: (step: WorkflowStep) => void;
+  onAdvance?: (step: string) => void;
   /** 3.3 — the step whose advance request is in flight: subtle pressed state. 4.2 reuses it for the optimistic queue. */
-  pendingStep?: WorkflowStep | null;
+  pendingStep?: string | null;
 };
 
 /** "2:14 PM" — the done-row caption format (spec §9). Unparseable input → raw. */
@@ -33,7 +32,6 @@ export function WorkflowStepper({ steps, onAdvance, pendingStep }: Props) {
       {steps.map((view, index) => {
         const isPending = pendingStep === view.step;
         const next = steps[index + 1];
-        const label = STEP_LABELS[view.step] ?? view.step;
         const row = (
           <>
             <View style={styles.rail}>
@@ -52,7 +50,7 @@ export function WorkflowStepper({ steps, onAdvance, pendingStep }: Props) {
             </View>
             <View style={styles.labelColumn}>
               <Text style={labelStyle(view)} numberOfLines={1}>
-                {label}
+                {view.label}
               </Text>
               {view.state === 'done' && view.timestamp ? (
                 <Text style={styles.timestamp}>{timeLabel(view.timestamp)}</Text>
@@ -61,21 +59,20 @@ export function WorkflowStepper({ steps, onAdvance, pendingStep }: Props) {
             <RightCaption view={view} pending={isPending} />
           </>
         );
-        // Only the 'next' row is ever tappable — done/locked/skipped rows stay
+        // Only the 'next' row is ever tappable — done/locked rows stay
         // display-only (no Pressable, not even a flash) whether or not the
-        // advance handler is wired. EXCEPTION: a `next` photos_uploaded row is
-        // display-only too — that step advances server-side when a photo is
-        // confirmed (fenzit-be Story 3.6), and the backend would 422 a direct
-        // photos_uploaded POST that skipped the upload, so the pill in the
-        // bottom bar (and 3.4's capture) is the only path forward.
+        // advance handler is wired. EXCEPTION: a step with advancesOn set is
+        // auto-advance only (advances server-side on the triggering event, e.g.
+        // photo confirm) and is display-only here; the bottom bar controls the
+        // action path forward.
         const pressable =
-          onAdvance !== undefined && view.state === 'next' && view.step !== 'photos_uploaded';
+          onAdvance !== undefined && view.state === 'next' && (view.advancesOn ?? null) === null;
         return pressable ? (
           <Pressable
             key={view.step}
             onPress={() => onAdvance?.(view.step)}
             accessibilityRole="button"
-            accessibilityLabel={label}
+            accessibilityLabel={view.label}
             style={({ pressed }) => [styles.row, (pressed || isPending) && styles.pressedRow]}>
             {row}
           </Pressable>
@@ -89,19 +86,19 @@ export function WorkflowStepper({ steps, onAdvance, pendingStep }: Props) {
   );
 }
 
-/** Step label color/weight by state: next pops, locked fades, rest muted. */
+/** Step label color/weight by state: next pops, locked fades, done muted. */
 function labelStyle(view: StepView) {
   switch (view.state) {
     case 'next':
       return { ...typography.bodyStrong, color: colors.textStrong };
     case 'locked':
       return { ...typography.body, color: colors.textDisabled };
-    default:
+    case 'done':
       return { ...typography.body, color: colors.textMuted };
   }
 }
 
-/** The left-rail glyph: done/next/locked/skipped/pending circles (spec §9). */
+/** The left-rail glyph: done/next/locked circles (spec §9). */
 function Glyph({ view, pending }: { view: StepView; pending: boolean }) {
   if (view.state === 'done' || pending) {
     return (
@@ -117,22 +114,16 @@ function Glyph({ view, pending }: { view: StepView; pending: boolean }) {
       </View>
     );
   }
-  if (view.state === 'skipped') {
-    return <View style={[styles.circle, styles.skippedCircle]} />;
-  }
   return <View style={[styles.circle, styles.lockedCircle]} />;
 }
 
-/** The right-hand caption: "Up next" / "Skipped" / "Waiting to sync". */
+/** The right-hand caption: "Up next" / "Waiting to sync". */
 function RightCaption({ view, pending }: { view: StepView; pending: boolean }) {
   if (pending) {
     return <Text style={styles.pendingCaption}>Waiting to sync</Text>;
   }
   if (view.state === 'next') {
     return <Text style={styles.nextCaption}>Up next</Text>;
-  }
-  if (view.state === 'skipped') {
-    return <Text style={styles.skippedCaption}>Skipped</Text>;
   }
   return null;
 }
@@ -184,12 +175,6 @@ const styles = StyleSheet.create({
     borderColor: colors.borderDefault,
     backgroundColor: colors.surfaceCard,
   },
-  skippedCircle: {
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: colors.borderDefault,
-    backgroundColor: colors.surfaceCard,
-  },
   connector: {
     width: 2,
     flex: 1,
@@ -207,11 +192,6 @@ const styles = StyleSheet.create({
   nextCaption: {
     ...typography.caption,
     color: colors.primary,
-    marginTop: spacing.s4,
-  },
-  skippedCaption: {
-    ...typography.caption,
-    color: colors.textMuted,
     marginTop: spacing.s4,
   },
   pendingCaption: {

@@ -97,7 +97,25 @@ import type { ApiJob, JobDetail, Paginated } from '../src/services';
 const getById = jobService.getById as jest.Mock;
 const list = jobService.list as jest.Mock;
 
+const defaultTemplate = {
+  version: 1,
+  steps: [
+    { key: 'on_my_way', label: 'On my way', requiresPhoto: false, requiresSignature: false, setsStatus: null, advancesOn: null },
+    { key: 'arrived', label: 'Arrived', requiresPhoto: false, requiresSignature: false, setsStatus: null, advancesOn: null },
+    { key: 'in_progress', label: 'Start work', requiresPhoto: false, requiresSignature: false, setsStatus: 'in_progress', advancesOn: null },
+    { key: 'photos_uploaded', label: 'Upload photos', requiresPhoto: true, requiresSignature: false, setsStatus: null, advancesOn: 'photo_confirm' },
+    { key: 'signature_captured', label: 'Capture signature', requiresPhoto: false, requiresSignature: true, setsStatus: null, advancesOn: null },
+    { key: 'completed', label: 'Mark complete', requiresPhoto: false, requiresSignature: false, setsStatus: 'completed', advancesOn: null },
+  ],
+};
+
 function makeDetail(overrides: Partial<JobDetail> = {}): JobDetail {
+  // Map currentStep to currentStepIndex for convenience in tests
+  let currentStepIndex: number | null = overrides.currentStepIndex ?? null;
+  if (overrides.currentStep && overrides.currentStepIndex === undefined) {
+    currentStepIndex = defaultTemplate.steps.findIndex(s => s.key === overrides.currentStep) || null;
+  }
+
   return {
     id: 'j-1',
     jobNumber: 'JB-2026-0007',
@@ -118,6 +136,8 @@ function makeDetail(overrides: Partial<JobDetail> = {}): JobDetail {
     notesForTechnician: 'Gate code 1234',
     createdAt: '2026-09-01T09:00:00Z',
     updatedAt: '2026-09-01T09:00:00Z',
+    workflowTemplate: defaultTemplate,
+    currentStepIndex: currentStepIndex ?? null,
     technician: {
       id: 'tech-1',
       name: 'Anil',

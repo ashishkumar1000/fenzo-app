@@ -32,7 +32,7 @@ import {
   serviceTypeLabel,
   serviceTypeToIcon,
 } from '../../jobs/format';
-import { buildStepper, type WorkflowStep } from '../stepperModel';
+import { buildStepper } from '../stepperModel';
 import { WorkflowStepper } from './WorkflowStepper';
 import { SignatureTile } from './SignatureTile';
 import { PhotoSection } from './PhotoSection';
@@ -57,9 +57,9 @@ function dateLine(iso: string): string {
 type Props = {
   detail: JobDetail;
   /** 3.3 — wired to the screen's advance; absent → the stepper renders read-only. */
-  onAdvance?: (step: WorkflowStep) => void;
+  onAdvance?: (step: string) => void;
   /** 3.3 — the step whose advance request is in flight (subtle pressed state). */
-  pendingStep?: WorkflowStep | null;
+  pendingStep?: string | null;
   /** 3.4 — fired per confirmed photo upload (the screen's silent refetch). */
   onPhotosConfirmed?: () => void;
   /**
@@ -189,12 +189,12 @@ export function TechJobDetailContent({
         </Card>
       ) : null}
 
-      {/* 6. Customer signature — only when the owner requires one on a
-          non-terminal job (spec §8 + §11; AC 6: flag-off and terminal jobs
+      {/* 6. Customer signature — only when the template requires signature on
+          a non-terminal job (spec §8 + §11; AC 6: flag-off and terminal jobs
           show no signature card, and there is no voluntary capture). The
           captured tile offers Re-capture; the dashed placeholder stands until
           the signature step happens. */}
-      {detail.requireCompletionSignature && !isTerminal ? (
+      {detail.workflowTemplate?.steps?.some(s => s.requiresSignature) && !isTerminal ? (
         <Card padding="md">
           <Text style={styles.sectionTitle}>Customer signature</Text>
           {signature ? (

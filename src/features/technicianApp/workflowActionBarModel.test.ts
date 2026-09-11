@@ -3,15 +3,28 @@
  * job (button label per next step, photo-hint pill, completed row, nothing),
  * and how an advance failure classifies into the screen's branches (silent
  * 422 reconcile / 422-no-step refetch / 409 locked / 403 unassigned /
- * offline / generic) — pure logic, no rendering.
+ * offline / generic) — pure logic, no rendering. Story 5.2: labels and photo-hint
+ * detection are template-driven.
  */
-import type { ActivityLogEntry, ApiError, JobDetail } from '../../services';
+import type { ActivityLogEntry, ApiError, JobDetail, WorkflowTemplateStep } from '../../services';
 import { FALLBACK_ERROR_MESSAGE } from '../../services/api/apiError';
 import {
   actionBarAction,
   classifyAdvanceError,
   JOB_LOCKED_MESSAGE,
 } from './workflowActionBarModel';
+
+const baseTemplate = {
+  version: 1,
+  steps: [
+    { key: 'on_my_way', label: 'On my way', requiresPhoto: false, requiresSignature: false, setsStatus: null, advancesOn: null } as WorkflowTemplateStep,
+    { key: 'arrived', label: 'Arrived', requiresPhoto: false, requiresSignature: false, setsStatus: null, advancesOn: null } as WorkflowTemplateStep,
+    { key: 'in_progress', label: 'Start work', requiresPhoto: false, requiresSignature: false, setsStatus: 'in_progress', advancesOn: null } as WorkflowTemplateStep,
+    { key: 'photos_uploaded', label: 'Upload photos', requiresPhoto: true, requiresSignature: false, setsStatus: null, advancesOn: 'photo_confirm' } as WorkflowTemplateStep,
+    { key: 'signature_captured', label: 'Capture signature', requiresPhoto: false, requiresSignature: true, setsStatus: null, advancesOn: null } as WorkflowTemplateStep,
+    { key: 'completed', label: 'Mark complete', requiresPhoto: false, requiresSignature: false, setsStatus: 'completed', advancesOn: null } as WorkflowTemplateStep,
+  ],
+};
 
 function job(overrides: Partial<JobDetail> = {}): JobDetail {
   return {
@@ -22,6 +35,9 @@ function job(overrides: Partial<JobDetail> = {}): JobDetail {
     technicianId: 'tech-1',
     serviceLocation: '12 MG Road, Bengaluru',
     serviceType: 'ac_service',
+    skill: { id: 'skill-1', name: 'AC Service' },
+    workflowTemplate: baseTemplate,
+    currentStepIndex: null,
     scheduledStart: '2026-09-04T10:00:00.000Z',
     scheduledEnd: null,
     status: 'scheduled',
@@ -42,57 +58,59 @@ function job(overrides: Partial<JobDetail> = {}): JobDetail {
   };
 }
 
-function stepLog(step: string, at = '2026-09-04T10:30:00.000Z'): ActivityLogEntry {
-  return { id: `log-${step}`, eventType: `step_${step}`, actorId: 'tech-1', metadata: null, createdAt: at };
+function stepLog(stepKey: string, at = '2026-09-04T10:30:00.000Z'): ActivityLogEntry {
+  return { id: `log-${stepKey}`, eventType: `step_${stepKey}`, actorId: 'tech-1', metadata: null, createdAt: at };
 }
 
 describe('actionBarAction', () => {
-  it('labels each next step: fresh → On my way', () => {
+  it("fresh job → button with first step's label", () => {
     expect(actionBarAction(job(), [])).toEqual({ kind: 'button', step: 'on_my_way', label: 'On my way' });
   });
 
-  it('on_my_way → Arrived', () => {
-    expect(actionBarAction(job({ currentStep: 'on_my_way', status: 'in_progress' }), [stepLog('on_my_way')]))
+  it('mid-chain (currentStepIndex: 0) → next step button with template label', () => {
+    expect(actionBarAction(job({ currentStepIndex: 0, currentStep: 'on_my_way', status: 'in_progress' }), [stepLog('on_my_way')]))
       .toEqual({ kind: 'button', step: 'arrived', label: 'Arrived' });
   });
 
-  it('arrived → Start work', () => {
-    expect(actionBarAction(job({ currentStep: 'arrived', status: 'in_progress' }), [stepLog('arrived')]))
+  it('next step is in_progress → button with template label', () => {
+    expect(actionBarAction(job({ currentStepIndex: 1, currentStep: 'arrived', status: 'in_progress' }), [stepLog('arrived')]))
       .toEqual({ kind: 'button', step: 'in_progress', label: 'Start work' });
   });
 
-  it('in_progress with photo required → photo hint, never a button', () => {
-    expect(actionBarAction(job({ currentStep: 'in_progress', status: 'in_progress', requireCompletionPhoto: true }), [stepLog('in_progress')]))
+  it('next step has advancesOn=photo_confirm → photo hint pill, not a button', () => {
+    expect(actionBarAction(job({ currentStepIndex: 2, currentStep: 'in_progress', status: 'in_progress' }), [stepLog('in_progress')]))
       .toEqual({ kind: 'photoHint' });
   });
 
-  it('in_progress, photos skipped, signature required → Capture signature', () => {
-    expect(actionBarAction(job({ currentStep: 'in_progress', status: 'in_progress', requireCompletionPhoto: false, requireCompletionSignature: true }), [stepLog('in_progress')]))
+  it('next step is signature_captured → button with template label', () => {
+    expect(actionBarAction(job({ currentStepIndex: 3, currentStep: 'photos_uploaded', status: 'in_progress' }), [stepLog('photos_uploaded')]))
       .toEqual({ kind: 'button', step: 'signature_captured', label: 'Capture signature' });
   });
 
-  it('in_progress with both flags off → straight to Mark complete (effective chain)', () => {
-    expect(actionBarAction(job({ currentStep: 'in_progress', status: 'in_progress', requireCompletionPhoto: false, requireCompletionSignature: false }), [stepLog('in_progress')]))
-      .toEqual({ kind: 'button', step: 'completed', label: 'Mark complete' });
-  });
-
-  it('photos required + signature off → after photos, Mark complete', () => {
-    expect(actionBarAction(job({ currentStep: 'photos_uploaded', status: 'in_progress', requireCompletionPhoto: true, requireCompletionSignature: false }), [stepLog('photos_uploaded')]))
-      .toEqual({ kind: 'button', step: 'completed', label: 'Mark complete' });
-  });
-
-  it('signature_captured → Mark complete', () => {
-    expect(actionBarAction(job({ currentStep: 'signature_captured', status: 'in_progress' }), [stepLog('signature_captured')]))
+  it('next step is completed → button with template label', () => {
+    expect(actionBarAction(job({ currentStepIndex: 4, currentStep: 'signature_captured', status: 'in_progress' }), [stepLog('signature_captured')]))
       .toEqual({ kind: 'button', step: 'completed', label: 'Mark complete' });
   });
 
   it('completed status → the static Job completed row', () => {
-    expect(actionBarAction(job({ status: 'completed', currentStep: 'completed' }), [stepLog('completed')]))
+    expect(actionBarAction(job({ status: 'completed', currentStepIndex: 5, currentStep: 'completed' }), [stepLog('completed')]))
       .toEqual({ kind: 'completed' });
   });
 
   it('cancelled → no bar at all', () => {
     expect(actionBarAction(job({ status: 'cancelled' }), [])).toEqual({ kind: 'none' });
+  });
+
+  it('custom template with custom labels → uses template labels, not hardcoded strings', () => {
+    const customTemplate = {
+      version: 1,
+      steps: [
+        { key: 'start', label: 'Let\'s go', requiresPhoto: false, requiresSignature: false, setsStatus: null, advancesOn: null } as WorkflowTemplateStep,
+        { key: 'finish', label: 'All done', requiresPhoto: false, requiresSignature: false, setsStatus: 'completed', advancesOn: null } as WorkflowTemplateStep,
+      ],
+    };
+    expect(actionBarAction(job({ workflowTemplate: customTemplate, currentStepIndex: 0, currentStep: 'start', status: 'in_progress' }), [stepLog('start')]))
+      .toEqual({ kind: 'button', step: 'finish', label: 'All done' });
   });
 });
 

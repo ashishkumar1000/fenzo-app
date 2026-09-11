@@ -37,14 +37,6 @@ export type JobPriority = 'normal' | 'urgent';
 /** Status enum as the API spells it (snake_case), per api-contracts §1. */
 export type JobStatusApi = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
 
-/** Workflow steps as the API spells them. Fixed order; fresh job has none. */
-export type WorkflowStepApi =
-  | 'on_my_way'
-  | 'arrived'
-  | 'in_progress'
-  | 'photos_uploaded'
-  | 'signature_captured'
-  | 'completed';
 
 /**
  * One step of a job's stamped workflow template, as the Story 4.5 response
@@ -119,8 +111,11 @@ export type UpdateJobEditFields = {
   notesForTechnician?: string;
   technicianId?: string;
   priority?: JobPriority;
-  /** Completion-evidence toggles: absent = unchanged (COALESCE server-side). */
+  /** Completion-evidence toggles: absent = unchanged (COALESCE server-side).
+   * @deprecated Use workflowTemplate.steps instead. Story 5.3 removes these in favour of per-step requirements.
+   */
   requireCompletionPhoto?: boolean;
+  /** @deprecated Use workflowTemplate.steps instead. Story 5.3 removes this in favour of per-step requirements. */
   requireCompletionSignature?: boolean;
 };
 
@@ -179,15 +174,19 @@ export interface ApiJob {
    * treat missing rows as lacking the field rather than asserting it exists.
    */
   completedAt: string | null;
-  /** One of `WorkflowStepApi`, or null before the technician starts. */
-  currentStep: WorkflowStepApi | null;
+  /** One of the job's template steps, or null before the technician starts. */
+  currentStep: string | null;
   priority: JobPriority;
+  /**
+   * @deprecated Use workflowTemplate.steps[].requiresPhoto instead. Story 5.3 removes this in favour of per-step requirements.
+   */
   requireCompletionPhoto: boolean;
   /**
    * Always present — the backend sends it on every row, delta-sync payloads
    * included (BE Story 3-8), so the field is required rather than optional:
    * an optional field would lie about the wire. Read by the technician's
    * signature step (Story 3-5) and editable by the owner (this story).
+   * @deprecated Use workflowTemplate.steps[].requiresSignature instead. Story 5.3 removes this in favour of per-step requirements.
    */
   requireCompletionSignature: boolean;
   /** Null when the form left it blank. */
@@ -337,6 +336,22 @@ async function list(query: ListJobsQuery = {}): Promise<Paginated<ApiJob>> {
 }
 
 /**
+ * Transforms API response by deriving currentStepIndex from currentStep
+ * and the template. If currentStep is a string, finds its index in
+ * workflowTemplate.steps; otherwise null/-1 for fresh jobs.
+ */
+function deriveCurrentStepIndex(job: JobDetail): JobDetail {
+  if (!job.currentStep || !job.workflowTemplate?.steps) {
+    return { ...job, currentStepIndex: null };
+  }
+  const stepIndex = job.workflowTemplate.steps.findIndex(s => s.key === job.currentStep);
+  return {
+    ...job,
+    currentStepIndex: stepIndex >= 0 ? stepIndex : null,
+  };
+}
+
+/**
  * `GET /jobs/:id` — one job with everything: technician and customer
  * profiles (names/phones/skills embedded), the activity log oldest-first,
  * and the attachments with fresh presigned read URLs (1-hour TTL, may be
@@ -350,7 +365,7 @@ async function list(query: ListJobsQuery = {}): Promise<Paginated<ApiJob>> {
  */
 async function getById(id: string, signal?: AbortSignal): Promise<JobDetail> {
   const res = await apiClient.get<JobDetail>(`/jobs/${id}`, { signal });
-  return res.data;
+  return deriveCurrentStepIndex(res.data);
 }
 
 /**
@@ -388,7 +403,7 @@ async function update(id: string, patch: UpdateJobRequest): Promise<ApiJob> {
  *   read it via `workflowCurrentStep` in apiError.ts) or a malformed
  *   X-Idempotency-Key (must be a strict UUID v4)
  */
-async function advanceWorkflow(id: string, step: WorkflowStepApi, idempotencyKey: string): Promise<ApiJob> {
+async function advanceWorkflow(id: string, step: string, idempotencyKey: string): Promise<ApiJob> {
   const res = await apiClient.post<ApiJob>(`/jobs/${id}/workflow`, { step }, {
     headers: { 'X-Idempotency-Key': idempotencyKey },
   });

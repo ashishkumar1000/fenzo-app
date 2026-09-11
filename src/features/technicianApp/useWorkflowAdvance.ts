@@ -23,7 +23,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { jobService, type ApiError, type JobDetail } from '../../services';
 import { generateIdempotencyKey } from '../../utils/idempotency';
-import { STEP_ORDER, type WorkflowStep } from './stepperModel';
 import { apiJobOf, upsertTechnicianJob } from './useTechnicianJobs';
 import { classifyAdvanceError, JOB_LOCKED_MESSAGE } from './workflowActionBarModel';
 
@@ -61,7 +60,7 @@ export function useWorkflowAdvance({
   onUnassigned,
   onCaptureSignature,
 }: Params) {
-  const [pendingStep, setPendingStep] = useState<WorkflowStep | null>(null);
+  const [pendingStep, setPendingStep] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   // The real double-tap guard — plain state can't close the window between
@@ -74,11 +73,12 @@ export function useWorkflowAdvance({
   detailRef.current = detail;
 
   const advance = useCallback(
-    async (step: WorkflowStep) => {
+    async (step: string) => {
       if (!jobId || pendingRef.current) return;
-      // The signature step navigates instead of posting — the Signature
-      // screen owns capture → upload → advance (see onCaptureSignature).
-      if (step === 'signature_captured') {
+      // If the target step requires a signature, navigate instead of posting —
+      // the Signature screen owns capture → upload → advance (see onCaptureSignature).
+      const targetStep = detail?.workflowTemplate?.steps?.find(s => s.key === step);
+      if (targetStep?.requiresSignature) {
         onCaptureSignature();
         return;
       }
@@ -104,10 +104,13 @@ export function useWorkflowAdvance({
           case 'reconcile': {
             // 422 step race — silent reconcile: adopt the server's step with
             // NO error UI; the stepper and bar re-derive from it.
-            const currentStep = plan.currentStep as WorkflowStep | null;
+            const currentStep = plan.currentStep;
             // An out-of-vocabulary step can't patch the UI (no stepper row
             // exists for it) — fall back to a refetch instead.
-            if (currentStep !== null && !STEP_ORDER.includes(currentStep)) {
+            if (
+              currentStep !== null &&
+              !detailRef.current?.workflowTemplate?.steps?.some(s => s.key === currentStep)
+            ) {
               void load(false);
               break;
             }
