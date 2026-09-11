@@ -13,12 +13,9 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
-  Droplet,
   MapPin,
   Navigation,
   PenLine,
-  Snowflake,
-  Wrench,
 } from 'lucide-react-native';
 import { Button, Card } from '../../../components/ui';
 import { colors, radius, spacing, touch, typography } from '../../../theme';
@@ -29,19 +26,11 @@ import { ActivityTimeline } from '../../jobDetail/components/ActivityTimeline';
 import { formatPhone } from '../../profile';
 import {
   formatTimeLabel,
-  serviceTypeLabel,
-  serviceTypeToIcon,
 } from '../../jobs/format';
 import { buildStepper } from '../stepperModel';
 import { WorkflowStepper } from './WorkflowStepper';
 import { SignatureTile } from './SignatureTile';
 import { PhotoSection } from './PhotoSection';
-
-const SERVICE_ICON = {
-  wrench: Wrench,
-  droplet: Droplet,
-  snowflake: Snowflake,
-} as const;
 
 /** "12 Aug 2026" — the date line's format (spec §0). Unparseable input → raw. */
 function dateLine(iso: string): string {
@@ -89,9 +78,7 @@ export function TechJobDetailContent({
   const description = detail.description;
   const customerAddress = detail.customer.address;
   const customerCity = detail.customer.city;
-
-  // The service-type glyph — icon name mapped to the actual lucide component.
-  const ServiceIcon = SERVICE_ICON[serviceTypeToIcon(detail.serviceType)];
+  const skillLabel = detail.skill?.name || 'Service';
 
   return (
     <>
@@ -154,8 +141,7 @@ export function TechJobDetailContent({
           </Text>
         </View>
         <View style={styles.metaRow}>
-          <ServiceIcon size={15} color={colors.textMuted} strokeWidth={2} />
-          <Text style={styles.metaText}>{serviceTypeLabel(detail.serviceType)}</Text>
+          <Text style={styles.metaText}>{skillLabel}</Text>
         </View>
         {description ? (
           <>

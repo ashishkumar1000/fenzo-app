@@ -3,8 +3,6 @@
  */
 import {
   formatTimeLabel,
-  serviceTypeLabel,
-  serviceTypeToIcon,
   statusToBadge,
 } from '../src/features/jobs/format';
 import type { JobStatusApi } from '../src/services';
@@ -21,32 +19,6 @@ describe('statusToBadge', () => {
 
   it('falls back to scheduled for an unknown status (enum drift)', () => {
     expect(statusToBadge('mystery_status' as JobStatusApi)).toBe('scheduled');
-  });
-});
-
-describe('serviceTypeToIcon', () => {
-  it.each([
-    ['ac_service', 'snowflake'],
-    ['ac_installation', 'snowflake'],
-    ['plumbing', 'droplet'],
-    ['pest_control', 'wrench'],
-    ['electrical', 'wrench'],
-    ['other', 'wrench'],
-  ] as const)('maps %s to the %s icon', (serviceType, icon) => {
-    expect(serviceTypeToIcon(serviceType)).toBe(icon);
-  });
-});
-
-describe('serviceTypeLabel', () => {
-  it.each([
-    ['ac_service', 'AC service'],
-    ['ac_installation', 'AC installation'],
-    ['pest_control', 'Pest control'],
-    ['plumbing', 'Plumbing'],
-    ['electrical', 'Electrical'],
-    ['other', 'Service'],
-  ] as const)('labels %s as "%s"', (serviceType, label) => {
-    expect(serviceTypeLabel(serviceType)).toBe(label);
   });
 });
 

@@ -5,17 +5,17 @@
  * only ids — the screen resolves them from the customers store and roster),
  * and every other piece comes from the formatter layer in `format.ts`.
  * Header: title + status badge (with an Urgent marker when applicable) ·
- * meta rows: service + time · footer: the assigned technician. No amount —
+ * meta rows: skill + time · footer: the assigned technician. No amount —
  * jobs don't carry one.
  */
 import { StyleSheet, Text, View } from 'react-native';
-import { Clock, Droplet, Snowflake, Wrench } from 'lucide-react-native';
+import { Clock } from 'lucide-react-native';
 import { Avatar, Badge, Card } from '../../../components/ui';
 import { colors, spacing, typography } from '../../../theme';
 import type { StatusKey } from '../../../theme';
 import { daysOverdue, formatIstDateLabel } from '../../../utils';
 import type { ApiJob, JobScope } from '../types';
-import { formatTimeLabel, serviceTypeLabel, serviceTypeToIcon, statusToBadge } from '../format';
+import { formatTimeLabel, statusToBadge } from '../format';
 
 type Props = {
   job: ApiJob;
@@ -31,7 +31,7 @@ type Props = {
    *   history  — completion date/time from `completedAt`, or "Cancelled".
    */
   scope?: JobScope;
-  /** Resolved customer display name; falls back to the service type label. */
+  /** Resolved customer display name; falls back to the skill name if absent. */
   customerName?: string;
   /** Resolved technician display name; falls back to a neutral placeholder. */
   technicianName?: string;
@@ -52,12 +52,6 @@ const STATUS_LABEL: Record<Exclude<StatusKey, 'neutral'>, string> = {
   cancelled: 'Cancelled',
 };
 
-const SERVICE_ICON = {
-  wrench: Wrench,
-  droplet: Droplet,
-  snowflake: Snowflake,
-} as const;
-
 export function JobCard({
   job,
   scope = 'today',
@@ -67,8 +61,7 @@ export function JobCard({
   onPress,
 }: Props) {
   const badgeStatus = statusToBadge(job.status);
-  const ServiceIcon = SERVICE_ICON[serviceTypeToIcon(job.serviceType)];
-  const serviceLabel = serviceTypeLabel(job.serviceType);
+  const skillLabel = job.skill?.name || 'Service';
 
   // The scheduled-time meta row, per scope. Today keeps the original
   // time-only rendering byte-for-byte. In history, a completed row with a
@@ -94,7 +87,7 @@ export function JobCard({
       style={styles.card}>
       <View style={styles.headerRow}>
         <Text style={styles.customerName} numberOfLines={1}>
-          {customerName ?? serviceLabel}
+          {customerName ?? skillLabel}
         </Text>
         <View style={styles.badgeRow}>
           {job.priority === 'urgent' ? (
@@ -111,9 +104,8 @@ export function JobCard({
       </View>
 
       <View style={styles.metaRow}>
-        <ServiceIcon size={15} color={colors.textMuted} strokeWidth={2} />
         <Text style={styles.metaText} numberOfLines={1}>
-          {job.description ?? serviceLabel}
+          {job.description ?? skillLabel}
         </Text>
       </View>
       <View style={styles.metaRow}>

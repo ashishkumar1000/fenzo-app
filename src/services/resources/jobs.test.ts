@@ -25,7 +25,7 @@ const JOB: ApiJob = {
   customerId: 'customer-1',
   technicianId: 'tech-1',
   serviceLocation: '12 MG Road, Bengaluru',
-  serviceType: 'ac_service',
+  skill: { id: 'skill-1', name: 'AC Service' },
   scheduledStart: '2026-09-04T10:00:00.000Z',
   scheduledEnd: null,
   status: 'scheduled',

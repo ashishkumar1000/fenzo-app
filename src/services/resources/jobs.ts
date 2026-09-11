@@ -138,15 +138,12 @@ export interface ApiJob {
   /** uuid — resolve the display name from the roster, not here. */
   technicianId: string;
   serviceLocation: string;
-  /** Dead data — the backend stopped returning it in Story 4.3. See above. */
-  serviceType: JobServiceType;
   /**
    * The job's tagged skills-catalog skill (Story 4.5 response shape), always
    * present on the wire — `null` only for a skill that has since been
-   * archived or for pre-4.3 rows. Optional here only because existing
-   * fixtures predate the field; rendering it is Story 5.2/5.3 work.
+   * archived or for pre-4.3 rows.
    */
-  skill?: { id: string; name: string } | null;
+  skill: { id: string; name: string } | null;
   /**
    * The stamped template the job advances through (Story 4.5 response
    * shape): version plus the step list in template order. `null` on a

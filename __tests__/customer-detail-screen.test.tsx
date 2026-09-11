@@ -55,7 +55,6 @@ function makeHistory(id: string, overrides: Partial<JobHistoryItem> = {}): JobHi
     jobNumber: `JB-2026-${id}`,
     scheduledStart: '2026-08-12T10:00:00Z',
     status: 'scheduled',
-    serviceType: 'plumbing',
     ...overrides,
   };
 }
@@ -163,12 +162,12 @@ it('shows the spinner while the first load is in flight, then the profile + hist
   }
 });
 
-it('renders history rows as given: jobNumber, badge, date, service label', async () => {
+it('renders history rows as given: jobNumber, badge, date', async () => {
   getById.mockResolvedValue(
     makeDetail({
       jobHistory: {
         data: [
-          makeHistory('a', { status: 'completed', serviceType: 'ac_service' }),
+          makeHistory('a', { status: 'completed' }),
           makeHistory('b', { status: 'cancelled' }),
         ],
         nextCursor: null,
@@ -182,7 +181,6 @@ it('renders history rows as given: jobNumber, badge, date, service label', async
   expect(text).toContain('JB-2026-a');
   expect(text).toContain('Done'); // badge label
   expect(text).toContain('12 Aug 2026'); // en-IN date line
-  expect(text).toContain('AC service');
   expect(text).toContain('Cancelled');
   expect(renderer.root.findAllByType(Badge).length).toBe(2);
 });

@@ -34,7 +34,6 @@ function job(overrides: Partial<JobDetail> = {}): JobDetail {
     customerId: 'customer-1',
     technicianId: 'tech-1',
     serviceLocation: '12 MG Road, Bengaluru',
-    serviceType: 'ac_service',
     skill: { id: 'skill-1', name: 'AC Service' },
     workflowTemplate: baseTemplate,
     currentStepIndex: null,

@@ -3,7 +3,7 @@
  * vocabulary out. No React, no side effects; unit-testable on their own.
  */
 import type { StatusKey } from '../../theme';
-import type { JobServiceType, JobStatusApi } from '../../services';
+import type { JobStatusApi } from '../../services';
 
 /**
  * API status → the Badge vocabulary (`StatusKey`). `in_progress` collapses to
@@ -20,25 +20,6 @@ export function statusToBadge(s: JobStatusApi): Exclude<StatusKey, 'neutral'> {
   // Fallback for enum drift: an unknown status must not render `undefined`
   // into `<Badge status>` — fall back to the scheduled badge.
   return map[s] ?? 'scheduled';
-}
-
-/** Lucide icon name for the job's service-type glyph. */
-export function serviceTypeToIcon(t: JobServiceType): 'wrench' | 'droplet' | 'snowflake' {
-  return t === 'plumbing' ? 'droplet' : t.startsWith('ac_') ? 'snowflake' : 'wrench';
-}
-
-/** Human label for a service type (spec §1 map), used as description fallback. */
-const SERVICE_TYPE_LABEL: Record<JobServiceType, string> = {
-  ac_service: 'AC service',
-  ac_installation: 'AC installation',
-  pest_control: 'Pest control',
-  plumbing: 'Plumbing',
-  electrical: 'Electrical',
-  other: 'Service',
-};
-
-export function serviceTypeLabel(t: JobServiceType): string {
-  return SERVICE_TYPE_LABEL[t];
 }
 
 /**

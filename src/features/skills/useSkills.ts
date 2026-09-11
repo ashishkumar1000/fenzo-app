@@ -2,15 +2,12 @@
  * useSkills — shared store for the global skills catalog, from `GET /skills`.
  *
  * Same `useSyncExternalStore` shared-store pattern as `useCustomers`: one
- * module-level state object, any number of subscribers. The Skills screen,
- * AddTechnicianSheet's skill picker and the New job screen's skill picker all
- * read the same fetch, so there is exactly one path to the endpoint and the
- * surfaces can never disagree about the rows.
+ * module-level state object, any number of subscribers. The AddTechnicianSheet's
+ * skill picker and the New job screen's skill picker all read the same fetch,
+ * so there is exactly one path to the endpoint and the surfaces can never
+ * disagree about the rows.
  *
- * The read path serves the rows exactly as the backend sends them — seed
- * order (`sort_order` asc), active only — and never re-sorts. The write-path
- * mutations (`addSkill`, optimistic `removeSkill`) keep their sorted-insert
- * behavior untouched (both are Story 5.4 deletions).
+ * Read-only — write paths were removed in Story 5.4 (skill management screens deleted).
  */
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { skillService } from '../../services';
@@ -75,15 +72,6 @@ function getSnapshot() {
   // Same reference until something actually changes — required by
   // useSyncExternalStore to avoid an infinite re-render loop.
   return state;
-}
-
-/** Case-insensitive name order — used only by the write-path mutations. */
-function byName(a: Skill, b: Skill) {
-  return (
-    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
-    // Case-equal names ("ac" vs "AC") still need a deterministic order.
-    a.name.localeCompare(b.name)
-  );
 }
 
 async function fetchSkills(): Promise<void> {
@@ -157,63 +145,6 @@ export function loadSkills(opts: { force?: boolean } = {}): Promise<void> {
   });
   inFlight = request;
   return request;
-}
-
-/**
- * Creates a skill (`POST /skills`) and inserts it into the list in
- * alphabetical position — no follow-up refresh, the caller already holds the
- * full row from the response.
- *
- * Rejects with `ApiError` (409 `DUPLICATE_RESOURCE` for a duplicate name, per
- * the API contract) — the AddSkillSheet catches it to keep the sheet open and
- * show the inline copy instead of closing on a failed save.
- */
-export async function addSkill(name: string): Promise<Skill> {
-  const created = await skillService.create({ name });
-  // Invalidate any GET that started before this create: its pre-mutation
-  // response must not settle after this setState and drop the new row.
-  requestSeq += 1;
-  const rest = state.skills.filter(s => s.id !== created.id);
-  setState({ skills: [...rest, created].sort(byName), hasLoaded: true, error: null });
-  return created;
-}
-
-/**
- * Deletes a skill (`DELETE /skills/:id`) optimistically: the row leaves the
- * list immediately, and a failed call (anything except 404) puts it back —
- * a 404 means the skill is already gone server-side (deleted elsewhere), so
- * the removal stands and the call resolves instead of throwing.
- *
- * The backend delete CASCADES to `user_skills` — technicians silently lose
- * the skill — which is exactly what the screen's confirm dialog warns about;
- * nothing extra to handle client-side here.
- */
-export async function removeSkill(id: string): Promise<void> {
-  const snapshot = state.skills;
-  const removed = snapshot.find(s => s.id === id) ?? null;
-  setState({ skills: snapshot.filter(s => s.id !== id) });
-  try {
-    await skillService.remove(id);
-  } catch (error) {
-    const apiError = error as ApiError;
-    if (apiError?.status !== 404) {
-      console.warn('[useSkills] DELETE /skills/:id failed →', error);
-      // Restore ONLY this skill. A concurrent add or delete may have landed
-      // while the request ran; restoring the whole pre-delete snapshot would
-      // resurrect rows the server really has removed.
-      if (removed && !state.skills.some(s => s.id === id)) {
-        setState({ skills: [...state.skills, removed].sort(byName) });
-      }
-      throw error;
-    }
-    // 404: already deleted elsewhere — treated as success below, the removal
-    // stands.
-  }
-  // The server agrees the skill is gone (or already was). Invalidate any GET
-  // that started before this delete — its pre-delete response would otherwise
-  // settle after this and resurrect the row.
-  requestSeq += 1;
-  setState({ skills: state.skills.filter(s => s.id !== id) });
 }
 
 /**

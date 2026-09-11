@@ -1,12 +1,8 @@
 /**
- * Skills feature — public surface.
+ * Skills feature — read-only catalog only (write paths deleted in Story 5.4).
  */
-export { default as SkillsScreen } from './SkillsScreen';
-export { AddSkillSheet } from './components/AddSkillSheet';
 export {
   useSkills,
   loadSkills,
-  addSkill,
-  removeSkill,
   clearSkills,
 } from './useSkills';

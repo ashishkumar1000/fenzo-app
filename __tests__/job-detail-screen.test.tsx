@@ -58,13 +58,12 @@ function makeDetail(overrides: Partial<JobDetail> = {}): JobDetail {
     technicianId: 't1',
     serviceLocation: '12 Anna Nagar, Chennai',
     serviceType: 'plumbing',
+    skill: { id: 'skill-plumbing', name: 'Plumbing' },
     scheduledStart: '2026-09-03T10:00:00Z',
     scheduledEnd: null,
     status: 'in_progress',
     currentStepIndex: 2,
     priority: 'urgent',
-    skillId: 'skill-plumbing',
-    skillName: 'Plumbing',
     workflowTemplate: {
       steps: [
         { key: 'on_my_way', label: 'On my way', advancesOn: null, requiresPhoto: false, requiresSignature: false, setsStatus: null },
@@ -225,7 +224,7 @@ it('fetches on mount with the route param and renders the full detail', async ()
   expect(text).toContain('JB-2026-0042'); // back-header title
   expect(text).toContain('Urgent');
   expect(text).toContain('In Progress');
-  expect(text).toContain('Plumbing'); // serviceTypeLabel
+  expect(text).toContain('Plumbing'); // skill name
   expect(text).toContain('Step 3 of 6 — In progress'); // current step line
   expect(text).toContain('Leaking tap in the kitchen'); // description
   expect(text).toContain('Notes for technician');

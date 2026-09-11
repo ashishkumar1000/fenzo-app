@@ -50,8 +50,6 @@ export type RootStackParamList = {
   Notifications: undefined;
   /** Owner-only customer profile + job history — opened with the customer's uuid. */
   CustomerDetail: { customerId: string };
-  /** Tenant skill list management (More tab → Skills row). */
-  Skills: undefined;
   /**
    * Full-page "Add customer" form, pushed from either `CustomersScreen` or
    * `NewJobScreen`. `returnRouteName` decides post-save behavior — see

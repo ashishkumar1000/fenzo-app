@@ -30,7 +30,7 @@ import {
   Clock,
   FileQuestion,
   MapPin,
-  Wrench,
+  Wrench
 } from 'lucide-react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -55,7 +55,7 @@ import { AttachmentGrid } from './components/AttachmentGrid';
 import { EditJobSheet } from './components/EditJobSheet';
 import { SectionCard } from './components/SectionCard';
 import { eventLabel } from './eventLabels';
-import { formatTimeLabel, serviceTypeLabel, statusToBadge } from '../jobs/format';
+import { formatTimeLabel, statusToBadge } from '../jobs/format';
 import { formatPhone } from '../profile';
 import { isAbort } from '../../utils';
 
@@ -312,7 +312,7 @@ export default function JobDetailScreen() {
               ) : null}
             </View>
             <Text style={styles.serviceLabel} numberOfLines={1}>
-              {serviceTypeLabel(detail.serviceType)}
+              {detail.skill?.name || 'Service'}
             </Text>
 
             <View style={styles.metaRow}>

@@ -44,7 +44,6 @@ function detailWithTemplate(template: { version: number; steps: WorkflowTemplate
     customerId: 'customer-1',
     technicianId: 'tech-1',
     serviceLocation: '12 MG Road',
-    serviceType: 'ac_service',
     skill: { id: 'skill-1', name: 'AC Service' },
     workflowTemplate: template,
     currentStepIndex: 0,

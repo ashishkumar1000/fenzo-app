@@ -23,7 +23,7 @@ const BASE_JOB: JobDetail = {
   customerId: 'customer-1',
   technicianId: 'tech-1',
   serviceLocation: '12 MG Road, Bengaluru',
-  serviceType: 'ac_service',
+  skill: { id: 'skill-ac', name: 'AC Service' },
   scheduledStart: '2026-09-04T10:00:00.000Z',
   scheduledEnd: '2026-09-04T12:00:00.000Z',
   status: 'scheduled',
@@ -34,8 +34,6 @@ const BASE_JOB: JobDetail = {
   createdAt: '2026-09-01T06:00:00.000Z',
   completedAt: null,
   updatedAt: '2026-09-01T06:00:00.000Z',
-  skillId: 'skill-ac',
-  skillName: 'AC Service',
   workflowTemplate: null,
   technician: {
     id: 'tech-1',

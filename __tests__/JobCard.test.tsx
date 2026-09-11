@@ -21,6 +21,7 @@ function makeJob(overrides: Partial<ApiJob> = {}): ApiJob {
     technicianId: 'tech-1',
     serviceLocation: 'Chennai',
     serviceType: 'plumbing',
+    skill: { id: 's-1', name: 'Plumbing' },
     scheduledStart: '2026-09-03T10:00:00Z',
     scheduledEnd: null,
     status: 'completed',
@@ -83,6 +84,11 @@ describe('JobCard', () => {
     const text = renderCard(makeJob());
     expect(text).toContain('Plumbing');
     expect(text).not.toContain('Ravi Kumar');
+  });
+
+  it('falls back to "Service" when no customer name and skill is null', () => {
+    const text = renderCard(makeJob({ skill: null }));
+    expect(text).toContain('Service');
   });
 
   it('marks an urgent job with an extra badge', () => {

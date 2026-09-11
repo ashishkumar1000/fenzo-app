@@ -111,7 +111,6 @@ export interface JobHistoryItem {
   jobNumber: string;
   scheduledStart: string;
   status: JobStatusApi;
-  serviceType: JobServiceType;
 }
 
 /**

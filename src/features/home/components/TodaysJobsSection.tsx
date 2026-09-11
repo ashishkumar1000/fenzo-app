@@ -14,7 +14,6 @@ import { Calendar } from 'lucide-react-native';
 import { Button, Card } from '../../../components/ui';
 import { colors, radius, spacing, typography } from '../../../theme';
 import { JobCard } from '../../jobs/components/JobCard';
-import { serviceTypeLabel } from '../../jobs/format';
 import type { ProfileJob, ProfileTechnician } from '../../../services';
 import { selectTodayJobs } from '../selectTodayJobs';
 import { OverdueStrip } from './OverdueStrip';
@@ -56,7 +55,7 @@ export function TodaysJobsSection({
           // `||`, not `??`: an anomaly row's embed name can be `''` as well as
           // `null` (fenzit-be Story 3-9 review notes) — either must fall
           // through to the next source, not render blank.
-          customerName={job.customer.name || serviceTypeLabel(job.serviceType)}
+          customerName={job.customer.name || job.skill?.name}
           technicianName={job.technician.name || technicianNames.get(job.technicianId) || undefined}
           onPress={() => onPressJob(job.id)}
         />

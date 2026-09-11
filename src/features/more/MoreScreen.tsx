@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { Alert, ActivityIndicator, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { Bell, ChevronRight, HardHat, LogOut, Pencil, Phone, Settings, ShieldCheck, Wrench } from 'lucide-react-native';
+import { Bell, ChevronRight, HardHat, LogOut, Pencil, Phone, Settings, ShieldCheck } from 'lucide-react-native';
 import { Avatar, Card, IconButton } from '../../components/ui';
 import { colors, radius, spacing, typography } from '../../theme';
 import { runAllResets } from '../../services';
@@ -89,21 +89,6 @@ export default function MoreScreen() {
             size={tileSize}
           />
         </View>
-
-        <Card
-          padding="none"
-          interactive
-          onPress={() => navigation.navigate('Skills')}
-          style={styles.row}>
-          <View style={[styles.rowIconBox, styles.skillsIconBox]}>
-            <Wrench size={18} color={colors.primary} strokeWidth={1.75} />
-          </View>
-          <View style={styles.rowInfo}>
-            <Text style={styles.rowTitle}>Skills</Text>
-            <Text style={styles.rowSubtitle}>Manage service skills</Text>
-          </View>
-          <ChevronRight size={20} color={colors.textMuted} strokeWidth={2} />
-        </Card>
 
         <Card padding="none" interactive style={styles.row}>
           <View style={[styles.rowIconBox, { backgroundColor: colors.surfaceSunken }]}>
@@ -211,13 +196,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  skillsIconBox: {
-    // 36px per the skills-row spec — smaller box, same row layout.
-    width: 36,
-    height: 36,
-    borderRadius: radius.md,
-    backgroundColor: colors.primarySoft,
   },
   rowInfo: {
     flex: 1,
