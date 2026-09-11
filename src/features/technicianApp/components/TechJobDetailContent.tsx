@@ -240,7 +240,7 @@ export function TechJobDetailContent({
             <ChevronDown size={20} color={colors.textMuted} strokeWidth={2} />
           )}
         </Pressable>
-        {isHistoryOpen ? <ActivityTimeline entries={detail.activityLog} /> : null}
+        {isHistoryOpen ? <ActivityTimeline entries={detail.activityLog} workflowTemplate={detail.workflowTemplate} /> : null}
       </Card>
     </>
   );

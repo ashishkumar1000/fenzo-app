@@ -7,12 +7,14 @@
  */
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, spacing, typography } from '../../../theme';
-import type { ActivityLogEntry } from '../../../services';
+import type { ActivityLogEntry, WorkflowTemplate } from '../../../services';
 import { eventLabel } from '../eventLabels';
 
 type Props = {
   /** Oldest-first, exactly as the API returns them. */
   entries: ActivityLogEntry[];
+  /** Job's workflow template to resolve step labels from; may be null. */
+  workflowTemplate?: WorkflowTemplate | null;
 };
 
 /**
@@ -28,6 +30,38 @@ function dotColor(eventType: string): string {
   return colors.textDisabled;
 }
 
+/**
+ * Resolve event label, with template-aware lookup for step events.
+ * For `step_*` events, extract the step key and look it up in the template;
+ * fall back to the raw event type if the step is not found.
+ */
+function resolveEventLabel(
+  eventType: string,
+  workflowTemplate?: WorkflowTemplate | null,
+): string {
+  // Guard against null/undefined eventType (API contract violation, but safe).
+  if (!eventType) return eventType;
+
+  // Non-step events get the standard lookup.
+  if (!eventType.startsWith('step_')) {
+    return eventLabel(eventType);
+  }
+
+  // Step events: extract the key (e.g., 'step_on_my_way' → 'on_my_way').
+  const stepKey = eventType.replace(/^step_/, '');
+
+  // Look up the step in the template if available.
+  if (workflowTemplate?.steps) {
+    const step = workflowTemplate.steps.find(s => s.key === stepKey);
+    if (step?.label) {
+      return step.label;
+    }
+  }
+
+  // Fallback: return the raw event type (never crash).
+  return eventType;
+}
+
 /** "12 Aug, 2:14 PM" — the timeline's timestamp format (AC 3). Unparseable input → raw. */
 function timestampLabel(iso: string): string {
   const date = new Date(iso);
@@ -40,7 +74,7 @@ function timestampLabel(iso: string): string {
   });
 }
 
-export function ActivityTimeline({ entries }: Props) {
+export function ActivityTimeline({ entries, workflowTemplate }: Props) {
   return (
     <View>
       {entries.map((entry, index) => {
@@ -55,7 +89,7 @@ export function ActivityTimeline({ entries }: Props) {
             </View>
             <View style={styles.content}>
               {/* Unknown event types render their raw value (never crash). */}
-              <Text style={styles.label}>{eventLabel(entry.eventType)}</Text>
+              <Text style={styles.label}>{resolveEventLabel(entry.eventType, workflowTemplate)}</Text>
               <Text style={styles.timestamp}>{timestampLabel(entry.createdAt)}</Text>
             </View>
           </View>

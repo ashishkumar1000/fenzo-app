@@ -54,7 +54,7 @@ import { ActivityTimeline } from './components/ActivityTimeline';
 import { AttachmentGrid } from './components/AttachmentGrid';
 import { EditJobSheet } from './components/EditJobSheet';
 import { SectionCard } from './components/SectionCard';
-import { STEP_LABELS, STEP_ORDER, stepNumber } from './eventLabels';
+import { eventLabel } from './eventLabels';
 import { formatTimeLabel, serviceTypeLabel, statusToBadge } from '../jobs/format';
 import { formatPhone } from '../profile';
 import { isAbort } from '../../utils';
@@ -333,15 +333,14 @@ export default function JobDetailScreen() {
             </View>
 
             {detail.status === 'in_progress' &&
-            detail.currentStep !== null &&
-            // An unknown step has no position — "Step 0 of 6" would be a lie,
-            // so the line stays hidden rather than rendering nonsense.
-            stepNumber(detail.currentStep) !== 0 ? (
-              // "Step N of 6 — <label>" only while the work is actually
+            detail.currentStepIndex !== null &&
+            detail.workflowTemplate?.steps ? (
+              // "Step N of M — <label>" only while the work is actually
               // under way; a fresh job has no current step to show.
               <Text style={styles.progressLine}>
-                {`Step ${stepNumber(detail.currentStep)} of ${STEP_ORDER.length} — ${
-                  STEP_LABELS[detail.currentStep] ?? detail.currentStep
+                {`Step ${detail.currentStepIndex + 1} of ${detail.workflowTemplate.steps.length} — ${
+                  detail.workflowTemplate.steps[detail.currentStepIndex]?.label ??
+                  'Unknown step'
                 }`}
               </Text>
             ) : null}
@@ -432,7 +431,7 @@ export default function JobDetailScreen() {
           {/* 6. Activity — oldest-first timeline; nothing logged yet → no card. */}
           {detail.activityLog.length ? (
             <SectionCard title="Activity">
-              <ActivityTimeline entries={detail.activityLog} />
+              <ActivityTimeline entries={detail.activityLog} workflowTemplate={detail.workflowTemplate} />
             </SectionCard>
           ) : null}
         </ScrollView>

@@ -27,15 +27,16 @@ const BASE_JOB: JobDetail = {
   scheduledStart: '2026-09-04T10:00:00.000Z',
   scheduledEnd: '2026-09-04T12:00:00.000Z',
   status: 'scheduled',
-  currentStep: null,
+  currentStepIndex: null,
   priority: 'normal',
-  requireCompletionPhoto: false,
-  requireCompletionSignature: false,
   description: 'AC not cooling',
   notesForTechnician: 'Gate code 1234',
   createdAt: '2026-09-01T06:00:00.000Z',
   completedAt: null,
   updatedAt: '2026-09-01T06:00:00.000Z',
+  skillId: 'skill-ac',
+  skillName: 'AC Service',
+  workflowTemplate: null,
   technician: {
     id: 'tech-1',
     name: 'Suresh Kumar',
@@ -64,8 +65,6 @@ function makeDraft(overrides: Partial<EditJobDraft> = {}): EditJobDraft {
     scheduledStart: new Date('2026-09-04T10:00:00.000Z'),
     notesForTechnician: 'Gate code 1234',
     priority: 'normal',
-    requireCompletionPhoto: false,
-    requireCompletionSignature: false,
     technicianId: 'tech-1',
     ...overrides,
   };
@@ -136,38 +135,6 @@ describe('buildPatch', () => {
     });
     // Deselecting (null) cannot clear the assignment — omit it entirely.
     expect(buildPatch(BASE_JOB, makeDraft({ technicianId: null }))).toBeNull();
-  });
-
-  it('sends a completion flag only when toggled, in either direction', () => {
-    expect(
-      buildPatch(BASE_JOB, makeDraft({ requireCompletionPhoto: true })),
-    ).toEqual({ requireCompletionPhoto: true });
-    expect(
-      buildPatch(BASE_JOB, makeDraft({ requireCompletionSignature: true })),
-    ).toEqual({ requireCompletionSignature: true });
-    // Toggling OFF is as much a change as toggling ON.
-    const photoJob = { ...BASE_JOB, requireCompletionPhoto: true };
-    expect(
-      buildPatch(photoJob, makeDraft({ requireCompletionPhoto: false })),
-    ).toEqual({ requireCompletionPhoto: false });
-  });
-
-  it('keeps Save enabled for a flags-only change (a flag diff is a non-empty patch)', () => {
-    const patch = buildPatch(BASE_JOB, makeDraft({ requireCompletionSignature: true }));
-    expect(patch).not.toBeNull();
-    expect(patch).toEqual({ requireCompletionSignature: true });
-  });
-
-  it('merges flag changes into a mixed patch alongside other edited fields', () => {
-    const patch = buildPatch(
-      BASE_JOB,
-      makeDraft({ priority: 'urgent', requireCompletionPhoto: true, requireCompletionSignature: true }),
-    );
-    expect(patch).toEqual({
-      priority: 'urgent',
-      requireCompletionPhoto: true,
-      requireCompletionSignature: true,
-    });
   });
 
   it('assembles several changed fields into one patch', () => {

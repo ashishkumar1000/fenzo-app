@@ -24,9 +24,6 @@ export interface EditJobDraft {
   scheduledStart: Date;
   notesForTechnician: string;
   priority: JobPriority;
-  /** Completion-evidence toggles, seeded from the job and diffed like any other field. */
-  requireCompletionPhoto: boolean;
-  requireCompletionSignature: boolean;
   /** `null` = the selected tile was tapped again (deselect) — never a patch field. */
   technicianId: string | null;
 }
@@ -82,16 +79,6 @@ export function buildPatch(job: JobDetail, draft: EditJobDraft): UpdateJobEditFi
 
   if (draft.priority !== job.priority) {
     patch.priority = draft.priority;
-  }
-
-  // Booleans diff directly — a toggle in either direction is a change. Only
-  // legal on a `scheduled` job (the sheet is gated on that), which is also
-  // what the server's patch guard expects.
-  if (draft.requireCompletionPhoto !== job.requireCompletionPhoto) {
-    patch.requireCompletionPhoto = draft.requireCompletionPhoto;
-  }
-  if (draft.requireCompletionSignature !== job.requireCompletionSignature) {
-    patch.requireCompletionSignature = draft.requireCompletionSignature;
   }
 
   // `null` (deselect) means "keep the prior technician" — the API cannot

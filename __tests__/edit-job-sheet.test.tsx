@@ -37,15 +37,16 @@ const BASE_JOB: JobDetail = {
   scheduledStart: '2026-09-04T10:00:00.000Z',
   scheduledEnd: '2026-09-04T12:00:00.000Z',
   status: 'scheduled',
-  currentStep: null,
+  currentStepIndex: null,
   priority: 'normal',
-  requireCompletionPhoto: false,
-  requireCompletionSignature: false,
   description: 'AC not cooling',
   notesForTechnician: 'Gate code 1234',
   createdAt: '2026-09-01T06:00:00.000Z',
   completedAt: null,
   updatedAt: '2026-09-01T06:00:00.000Z',
+  skillId: 'skill-ac',
+  skillName: 'AC Service',
+  workflowTemplate: null,
   technician: {
     id: 'tech-1',
     name: 'Suresh Kumar',
@@ -179,10 +180,6 @@ describe('EditJobSheet', () => {
     expect(inputs.map(node => node.props.value)).toContain('AC not cooling');
     expect(text).toContain('Normal');
     expect(text).toContain('Urgent');
-    // The requirement switches render with their labels.
-    expect(text).toContain('Job requirements');
-    expect(text).toContain('Require completion photos');
-    expect(text).toContain('Require customer signature');
     // Both roster technicians are listed (rows variant).
     expect(text).toContain('Suresh Kumar');
     expect(text).toContain('Anil Verma');
@@ -227,37 +224,6 @@ describe('EditJobSheet', () => {
     expect(text).toContain('Suresh Kumar');
     expect(text).toContain('Anil Verma');
     expect(text).not.toContain('Priya Nair');
-  });
-
-  it('seeds the requirement switches from the job and PATCHes a toggled flag', async () => {
-    const flaggedJob: JobDetail = { ...BASE_JOB, requireCompletionSignature: true };
-    updateMock.mockResolvedValueOnce(UPDATED_JOB);
-    let renderer!: ReactTestRenderer;
-    act(() => {
-      renderer = create(
-        <EditJobSheet
-          visible
-          job={flaggedJob}
-          technicians={ROSTER}
-          onClose={jest.fn()}
-          onSaved={jest.fn()}
-        />,
-      );
-    });
-
-    const photo = renderer.root.findByProps({ label: 'Require completion photos' });
-    const signature = renderer.root.findByProps({ label: 'Require customer signature' });
-    // Seeded from the job, not from defaults.
-    expect(signature.props.value).toBe(true);
-    expect(photo.props.value).toBe(false);
-
-    // Toggling photo ON is a flags-only change — Save enables and the patch
-    // carries just that flag (the signature seed must not leak into the diff).
-    await act_(renderer, () => photo.props.onValueChange(true));
-    expect(pressableFor(renderer, 'Save changes').props.disabled).toBe(false);
-
-    await act_(renderer, () => pressableFor(renderer, 'Save changes').props.onPress());
-    expect(updateMock).toHaveBeenCalledWith('job-1', { requireCompletionPhoto: true });
   });
 
   it('sends only the changed field and reports the saved job on success', async () => {
