@@ -3,7 +3,7 @@ import { Calendar, Clock, MapPin } from 'lucide-react-native';
 import { Badge, Card } from '../../../components/ui';
 import { colors, spacing, typography } from '../../../theme';
 import type { JobDetail } from '../../../services';
-import { formatTimeLabel } from '../format';
+import { formatTimeLabel } from '../../jobs/format';
 
 type Props = {
   detail: JobDetail;

@@ -27,6 +27,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ChevronLeft,
   FileQuestion,
+  MapPin,
+  Phone,
   Wrench
 } from 'lucide-react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
@@ -307,13 +309,29 @@ export default function JobDetailScreen() {
             {detail.customer.address ? (
               <View style={styles.sectionMetaRow}>
                 <MapPin size={15} color={colors.textMuted} strokeWidth={2} />
-                <Text style={styles.metaText} numberOfLines={2}>
+                <Text style={styles.metaText} numberOfLines={4}>
                   {[detail.customer.address, detail.customer.city]
                     .filter(Boolean)
                     .join(', ')}
                 </Text>
               </View>
             ) : null}
+            <View style={styles.buttonRow}>
+              <Button
+                variant="secondary"
+                size="md"
+                style={{ flex: 1, gap: spacing.s1 }}
+                onPress={() => console.log('Call pressed')}>
+                Call
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
+                style={{ flex: 1, gap: spacing.s1 }}
+                onPress={() => console.log('Direction pressed')}>
+                Direction
+              </Button>
+            </View>
           </SectionCard>
 
           {/* 4. Technician */}
@@ -421,5 +439,15 @@ const styles = StyleSheet.create({
     gap: spacing.s2,
     flex: 1,
     maxHeight: spacing.s4 * 3,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: spacing.s2,
+    marginTop: spacing.s3,
+  },
+  metaText: {
+    ...typography.body,
+    fontSize: 14,
+    color: colors.textMuted,
   },
 });
