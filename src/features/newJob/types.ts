@@ -19,4 +19,6 @@ export interface NewJobDraft {
   scheduledAt: Date;
   technicianId: string | null;
   notes: string;
+  /** Require technician location when completing steps. Defaults to true. */
+  captureLocationOnSteps: boolean;
 }

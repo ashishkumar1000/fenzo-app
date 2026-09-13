@@ -42,7 +42,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Take photos of completed work</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
+	<string>Fenzit uses your location to record where you complete technician jobs.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Attach photos of completed work</string>
 	<key>RCTNewArchEnabled</key>

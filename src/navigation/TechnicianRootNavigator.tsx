@@ -10,6 +10,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import TechnicianTabs from './TechnicianTabs';
 import TechJobDetailScreen from '../features/technicianApp/TechJobDetailScreen';
 import SignatureScreen from '../features/technicianApp/SignatureScreen';
+import { LocationCaptureScreen } from '../features/technicianApp/LocationCaptureScreen';
 import type { TechnicianRootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<TechnicianRootStackParamList>();
@@ -21,6 +22,8 @@ export default function TechnicianRootNavigator() {
       <Stack.Screen name="TechJobDetail" component={TechJobDetailScreen} options={{ headerShown: false }} />
       {/* 3.5 — pushed over the detail for the customer-signature capture. */}
       <Stack.Screen name="Signature" component={SignatureScreen} options={{ headerShown: false }} />
+      {/* 7.7 — pushed over the detail for location capture. */}
+      <Stack.Screen name="LocationCapture" component={LocationCaptureScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }

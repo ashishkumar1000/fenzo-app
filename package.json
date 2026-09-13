@@ -30,6 +30,7 @@
     "react-native-bootsplash": "^7.3.2",
     "react-native-image-picker": "^8.2.1",
     "react-native-mmkv": "^4.3.2",
+    "react-native-nitro-geolocation": "^1.4.3",
     "react-native-nitro-modules": "^0.35.10",
     "react-native-reanimated": "^4.6.0",
     "react-native-safe-area-context": "^5.8.0",

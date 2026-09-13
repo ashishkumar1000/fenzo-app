@@ -73,6 +73,8 @@ export type TechnicianRootStackParamList = {
   TechJobDetail: { jobId: string };
   /** Registered in Story 3.5 — the type is declared now so nav params are stable. */
   Signature: { jobId: string; stepKey: string; steps: WorkflowTemplateStep[] };
+  /** Registered in Story 7.7 — location capture flow. */
+  LocationCapture: { jobId: string; stepKey: string; signatureRef?: string };
 };
 
 declare global {

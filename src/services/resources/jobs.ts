@@ -48,6 +48,7 @@ export interface WorkflowTemplateStep {
   label: string;
   requiresPhoto: boolean;
   requiresSignature: boolean;
+  requiresLocation: boolean;
   /** Status this step sets, or null for an intermediate step. */
   setsStatus: string | null;
   /** Step key an attachment confirm auto-advances to, or null. */
@@ -90,6 +91,8 @@ export interface CreateJobRequest {
   /** Defaults to `normal` server-side when omitted. */
   priority?: JobPriority;
   notesForTechnician?: string;
+  /** Require location capture on step completion. Defaults to true server-side. */
+  captureLocationOnSteps?: boolean;
 }
 
 /**
@@ -197,6 +200,8 @@ export interface ApiJob {
   notesForTechnician: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Require location capture on step completion. */
+  captureLocationOnSteps: boolean;
 }
 
 /**
@@ -388,6 +393,18 @@ async function update(id: string, patch: UpdateJobRequest): Promise<ApiJob> {
 }
 
 /**
+ * Geographic coordinates captured at the time of step completion.
+ * - `latitude`: degrees north of the equator (±90)
+ * - `longitude`: degrees east of the prime meridian (±180)
+ * - `accuracy`: radius in meters of the 95% confidence circle
+ */
+export interface LocationData {
+  latitude: number | null;
+  longitude: number | null;
+  accuracy: number | null;
+}
+
+/**
  * `POST /jobs/:id/workflow` — advances the assigned technician's workflow by
  * one step. `200` returns the full post-advance `ApiJob` (same shape as list
  * rows); posting the job's exact `currentStep` again is a 200 no-op (no new
@@ -405,10 +422,17 @@ async function update(id: string, patch: UpdateJobRequest): Promise<ApiJob> {
  *   read it via `workflowCurrentStep` in apiError.ts) or a malformed
  *   X-Idempotency-Key (must be a strict UUID v4)
  */
-async function advanceWorkflow(id: string, step: string, idempotencyKey: string): Promise<ApiJob> {
-  const res = await apiClient.post<ApiJob>(`/jobs/${id}/workflow`, { step }, {
-    headers: { 'X-Idempotency-Key': idempotencyKey },
-  });
+async function advanceWorkflow(
+  id: string,
+  step: string,
+  idempotencyKey: string,
+  location?: LocationData,
+): Promise<ApiJob> {
+  const res = await apiClient.post<ApiJob>(
+    `/jobs/${id}/workflow`,
+    { step, ...(location ?? {}) },
+    { headers: { 'X-Idempotency-Key': idempotencyKey } },
+  );
   return res.data;
 }
 

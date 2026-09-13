@@ -48,7 +48,9 @@ type Params = {
    * screen's own Save runs upload → advance (the direct POST remains the
    * 422-reconcile fallback there and for Epic 4's replay).
    */
-  onCaptureSignature: (stepKey: string) => void;
+  onCaptureSignature: (stepKey: string, params?: { thenRequiresLocation?: boolean }) => void;
+  /** 7.7 — divert to location capture when a step requires location. */
+  onCaptureLocation: (stepKey: string) => void;
 };
 
 export function useWorkflowAdvance({
@@ -59,6 +61,7 @@ export function useWorkflowAdvance({
   load,
   onUnassigned,
   onCaptureSignature,
+  onCaptureLocation,
 }: Params) {
   const [pendingStep, setPendingStep] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -79,7 +82,12 @@ export function useWorkflowAdvance({
       // the Signature screen owns capture → upload → advance (see onCaptureSignature).
       const targetStep = detail?.workflowTemplate?.steps?.find(s => s.key === step);
       if (targetStep?.requiresSignature) {
-        onCaptureSignature(targetStep.key);
+        onCaptureSignature(targetStep.key, { thenRequiresLocation: !!targetStep.requiresLocation });
+        return;
+      }
+      // If the target step requires location (and not signature), navigate to location capture
+      if (targetStep?.requiresLocation) {
+        onCaptureLocation(targetStep.key);
         return;
       }
       pendingRef.current = true;
@@ -153,7 +161,7 @@ export function useWorkflowAdvance({
         setPendingStep(null);
       }
     },
-    [jobId, setDetail, detailGenRef, load, onUnassigned, onCaptureSignature],
+    [jobId, setDetail, detailGenRef, load, onUnassigned, onCaptureSignature, onCaptureLocation],
   );
 
   return { pendingStep, actionError, clearActionError: () => setActionError(null), advance };

@@ -228,6 +228,11 @@ export default function TechJobDetailScreen() {
       if (!jobId || !stepKey || !detail?.workflowTemplate?.steps) return;
       navigation.navigate('Signature', { jobId, stepKey, steps: detail.workflowTemplate.steps });
     },
+    // 7.7 — the location capture step uses a dedicated screen.
+    onCaptureLocation: (stepKey: string) => {
+      if (!jobId || !stepKey) return;
+      navigation.navigate('LocationCapture', { jobId, stepKey });
+    },
   });
   clearActionErrorRef.current = clearActionError;
 
