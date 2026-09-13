@@ -91,8 +91,6 @@ export interface CreateJobRequest {
   /** Defaults to `normal` server-side when omitted. */
   priority?: JobPriority;
   notesForTechnician?: string;
-  /** Require location capture on step completion. Defaults to true server-side. */
-  captureLocationOnSteps?: boolean;
 }
 
 /**

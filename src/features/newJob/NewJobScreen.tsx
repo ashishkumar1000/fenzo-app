@@ -32,7 +32,6 @@ import { ArrowLeft, UserPlus } from 'lucide-react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button, Input, Select } from '../../components/ui';
 import { colors, spacing, touch, typography } from '../../theme';
-import { Switch } from 'react-native';
 import { jobService } from '../../services';
 import type { ApiError } from '../../services';
 import { upsertJob } from '../jobs';
@@ -67,7 +66,6 @@ const initialDraft = (): NewJobDraft => ({
   scheduledAt: nextHalfHour(),
   technicianId: null,
   notes: '',
-  captureLocationOnSteps: true,
 });
 
 export default function NewJobScreen({ navigation, route }: Props) {
@@ -254,7 +252,6 @@ export default function NewJobScreen({ navigation, route }: Props) {
         // is the conversion point.
         scheduledStart: draft.scheduledAt.toISOString(),
         serviceLocation,
-        captureLocationOnSteps: draft.captureLocationOnSteps,
         // One Notes field feeds both: `notesForTechnician` is its natural home,
         // and `description` mirrors it so a job isn't left with no summary.
         // Omitted entirely rather than sent as "" when the field is blank.
@@ -511,17 +508,6 @@ export default function NewJobScreen({ navigation, route }: Props) {
             {renderTechnicians()}
           </View>
 
-          <View style={styles.toggleRow}>
-            <Text style={styles.toggleLabel}>
-              Require technician location when completing steps
-            </Text>
-            <Switch
-              value={draft.captureLocationOnSteps}
-              onValueChange={val => patch({ captureLocationOnSteps: val })}
-              accessibilityLabel="Require technician location when completing steps"
-            />
-          </View>
-
           <Input
             label="Notes for technician"
             value={draft.notes}
@@ -635,20 +621,5 @@ const styles = StyleSheet.create({
   fieldError: {
     ...typography.caption,
     color: colors.danger,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.s3,
-    marginHorizontal: -spacing.s4,
-    paddingHorizontal: spacing.s4,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSubtle,
-  },
-  toggleLabel: {
-    ...typography.bodySm,
-    color: colors.textStrong,
-    flex: 1,
   },
 });
