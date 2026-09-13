@@ -29,33 +29,24 @@ export function LocationCaptureScreen({ navigation, route }: Props) {
   const isMountedRef = useRef(true);
 
   useEffect(() => {
-    console.log('[LOCATION_SCREEN] Mounted with jobId:', jobId, 'stepKey:', stepKey);
     void captureLocation();
     return () => {
-      console.log('[LOCATION_SCREEN] Unmounting');
       isMountedRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function captureLocation() {
-    console.log('[LOCATION_SCREEN] captureLocation starting');
     setLoading(true);
     setError(null);
 
     try {
-      console.log('[LOCATION_SCREEN] Requesting location permission...');
       const permOutcome = await requestLocationPermission();
-      console.log('[LOCATION_SCREEN] Permission outcome:', permOutcome);
 
       let position: typeof undefined | GeolocationCoordinates = undefined;
 
       if (permOutcome.status === 'granted') {
-        console.log('[LOCATION_SCREEN] Permission granted, fetching position...');
         position = await getCurrentPosition(15000);
-        console.log('[LOCATION_SCREEN] Position obtained:', position);
-      } else {
-        console.log('[LOCATION_SCREEN] Permission not granted, proceeding without location');
       }
 
       const key = (keyRef.current ??= generateIdempotencyKey());
@@ -64,34 +55,30 @@ export function LocationCaptureScreen({ navigation, route }: Props) {
         longitude: position?.longitude ?? null,
         accuracy: position?.accuracy ?? null,
       };
-      console.log('[LOCATION_SCREEN] Advancing workflow with payload:', payload);
 
       await jobService.advanceWorkflow(jobId, stepKey, key, payload);
-      console.log('[LOCATION_SCREEN] Workflow advanced successfully');
 
       keyRef.current = null;
       navigation.goBack();
     } catch (caught) {
       const err = caught as Error | ApiError;
       const msg = 'message' in err ? err.message : String(caught);
-      console.error('[LOCATION_SCREEN] Error during location capture:', msg);
+      console.error('[location-capture] Error:', msg);
 
       try {
-        console.log('[LOCATION_SCREEN] Advancing workflow with null location due to error');
         const key = (keyRef.current ??= generateIdempotencyKey());
         await jobService.advanceWorkflow(jobId, stepKey, key, {
           latitude: null,
           longitude: null,
           accuracy: null,
         });
-        console.log('[LOCATION_SCREEN] Fallback advance succeeded');
         keyRef.current = null;
         navigation.goBack();
       } catch (advanceErr) {
         const advanceMsg = 'message' in (advanceErr as any)
           ? (advanceErr as Error).message
           : String(advanceErr);
-        console.error('[LOCATION_SCREEN] Fallback advance failed:', advanceMsg);
+        console.error('[location-capture] fallback failed:', advanceMsg);
         setError(advanceMsg);
         setLoading(false);
       }
