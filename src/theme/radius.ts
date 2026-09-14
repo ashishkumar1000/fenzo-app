@@ -14,7 +14,7 @@ export const radius = {
   lg: 14, // cards
   xl: 20, // sheets, modals
   '2xl': 28,
-  pill: 999, // badges, chips, avatars
+  pill: 5, // badges, chips, avatars
 } as const;
 
 // Shadow color is the cool-gray brand ink (#111827 = palette.gray900).

@@ -7,11 +7,10 @@
  * (spec §4). Shared by the owner detail (1.2) and the technician detail
  * (3.2); dumb by design: props in, UI out.
  */
+import { type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Phone } from 'lucide-react-native';
 import { Avatar, IconButton } from '../../../components/ui';
 import { colors, spacing, touch, typography } from '../../../theme';
-import { openTel } from '../../../utils/linking';
 
 type Props = {
   name: string;
@@ -19,9 +18,17 @@ type Props = {
   phoneNumber: string;
   /** Optional single line under the name (e.g. a role or note). */
   subLine?: string | null;
+  /** Optional small control (e.g. a copy icon) shown right after the phone number. */
+  action?: ReactNode;
 };
 
-export function PersonRow({ name, countryCode, phoneNumber, subLine }: Props) {
+export function PersonRow({
+  name,
+  countryCode,
+  phoneNumber,
+  subLine,
+  action,
+}: Props) {
   return (
     <View style={styles.row}>
       <Avatar name={name} size="md" />
@@ -30,18 +37,14 @@ export function PersonRow({ name, countryCode, phoneNumber, subLine }: Props) {
           {name}
         </Text>
         {subLine ? (
-          <Text style={styles.subLine} numberOfLines={1}>
-            {subLine}
-          </Text>
+          <View style={styles.subLineRow}>
+            <Text style={styles.subLine} numberOfLines={1}>
+              {subLine}
+            </Text>
+            {action}
+          </View>
         ) : null}
       </View>
-      <IconButton
-        variant="ghost"
-        size="md"
-        label={`Call ${name}`}
-        onPress={() => void openTel(countryCode, phoneNumber)}>
-        <Phone size={18} color={colors.primary} strokeWidth={2} />
-      </IconButton>
     </View>
   );
 }
@@ -63,5 +66,10 @@ const styles = StyleSheet.create({
   subLine: {
     ...typography.bodySm,
     color: colors.textMuted,
+  },
+  subLineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s1,
   },
 });

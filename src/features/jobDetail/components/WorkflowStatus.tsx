@@ -1,8 +1,9 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { Check } from 'lucide-react-native';
+import {Check, Workflow} from 'lucide-react-native';
 import Svg, { Line } from 'react-native-svg';
-import { colors, spacing } from '../../../theme';
+import { colors, spacing, type StatusKey } from '../../../theme';
 import type { WorkflowTemplateStep } from '../../../services';
+import { Badge } from '../../../components/ui';
 
 type Props = {
   steps: WorkflowTemplateStep[];
@@ -46,19 +47,20 @@ function getStatusLabel(steps: WorkflowTemplateStep[], currentStepIndex: number 
   return `Step ${currentStepIndex + 1} of ${steps.length}`;
 }
 
-function getBadgeColor(jobStatus: string, colors: any): { bg: string; fg: string } {
+/** Job status → Badge status key, so the pill's colour follows the job. */
+function badgeStatusFor(jobStatus: string): StatusKey {
   if (jobStatus === 'completed') {
-    return { bg: colors.status.done.bg, fg: colors.status.done.solid };
+    return 'done';
   }
   if (jobStatus === 'cancelled') {
-    return { bg: colors.status.cancelled.bg, fg: colors.status.cancelled.solid };
+    return 'cancelled';
   }
-  return { bg: colors.status.progress.bg, fg: colors.status.progress.solid };
+  return 'progress';
 }
 
 export function WorkflowStatusCard({ steps, currentStepIndex, jobStatus }: Props) {
   const statusLabel = getStatusLabel(steps, currentStepIndex, jobStatus);
-  const badgeColors = getBadgeColor(jobStatus, colors);
+  const badgeStatus = badgeStatusFor(jobStatus);
   const completedCount = steps.findIndex((_, index) => {
     const status = getStepStatus(index, currentStepIndex, jobStatus);
     return status === 'pending';
@@ -70,9 +72,14 @@ export function WorkflowStatusCard({ steps, currentStepIndex, jobStatus }: Props
       {/* Header Section */}
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.textMuted }]}>WORKFLOW STATUS</Text>
-        <View style={[styles.badge, { backgroundColor: badgeColors.bg }]}>
-          <Text style={[styles.badgeText, { color: badgeColors.fg }]}>{statusLabel}</Text>
-        </View>
+        <Badge
+            status={badgeStatus}
+            tone="soft"
+            icon={
+              <Workflow size={12} color={colors.status[badgeStatus].fg} />
+            }>
+          {statusLabel}
+        </Badge>
       </View>
 
       {/* Progress Stepper Section */}
@@ -183,15 +190,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
-  },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '600',
   },
   flowContainer: {
     position: 'relative',

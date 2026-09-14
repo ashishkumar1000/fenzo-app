@@ -21,6 +21,8 @@ export type BadgeProps = {
   status?: StatusKey;
   tone?: Tone;
   dot?: boolean;
+  /** Optional leading icon (e.g. a lucide glyph) rendered before the label. */
+  icon?: ReactNode;
   size?: Size;
   style?: StyleProp<ViewStyle>;
 };
@@ -35,6 +37,7 @@ export function Badge({
   status = 'neutral',
   tone = 'soft',
   dot = false,
+  icon,
   size = 'md',
   style,
 }: BadgeProps) {
@@ -69,6 +72,7 @@ export function Badge({
           }}
         />
       ) : null}
+      {icon}
       <Text
         numberOfLines={1}
         style={[styles.label, { fontSize: s.fontSize, color: textColor }]}>

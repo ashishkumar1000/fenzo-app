@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Clipboard,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -26,10 +27,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ChevronLeft,
+  Copy,
   FileQuestion,
-  MapPin,
-  Phone,
-  Wrench
+  Info,
 } from 'lucide-react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -41,7 +41,7 @@ import {
   IconButton,
   InlineError,
 } from '../../components/ui';
-import { colors, spacing, touch, typography } from '../../theme';
+import { colors, palette, radius, spacing, typography } from '../../theme';
 import { jobService } from '../../services';
 import type { ApiError, ApiJob, JobDetail } from '../../services';
 import type { RootStackParamList } from '../../navigation/types';
@@ -57,9 +57,13 @@ import { WorkflowStatusCard } from './components/WorkflowStatus';
 import { JobHeaderCard } from './components/JobHeaderCard';
 import { JobActionsSection } from './components/JobActionsSection';
 import { eventLabel } from './eventLabels';
+import {
+  jobSiteCoords,
+  lastKnownTechnicianLocation,
+} from './locationMetadata';
 import { formatTimeLabel, statusToBadge } from '../jobs/format';
 import { formatPhone } from '../profile';
-import { isAbort } from '../../utils';
+import { isAbort, openMaps, openTel } from '../../utils';
 
 type Navigation = NativeStackNavigationProp<RootStackParamList, 'JobDetail'>;
 
@@ -78,6 +82,31 @@ export default function JobDetailScreen() {
   // — the only source of server-issued ids safe to send on a reassign.
   const { profile } = useMyProfile();
   const [isEditOpen, setIsEditOpen] = useState(false);
+
+  // Copy affordances on the person cards (after the phone number): a brief
+  // "Copied" note confirms the tap. Copies the raw diallable number.
+  const [copiedPhone, setCopiedPhone] = useState<
+    'customer' | 'technician' | null
+  >(null);
+  const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (copyResetRef.current) clearTimeout(copyResetRef.current);
+    },
+    [],
+  );
+  const copyPhone = useCallback(
+    (side: 'customer' | 'technician', countryCode: string, phoneNumber: string) => {
+      // No number, nothing to copy — mirror openTel's guard so a blank
+      // half never earns the "Copied" feedback.
+      if (!countryCode.trim() || !phoneNumber.trim()) return;
+      void Clipboard.setString(`${countryCode}${phoneNumber}`);
+      setCopiedPhone(side);
+      if (copyResetRef.current) clearTimeout(copyResetRef.current);
+      copyResetRef.current = setTimeout(() => setCopiedPhone(null), 2000);
+    },
+    [],
+  );
 
   // One request at a time: a retry/refresh is ignored while a fetch is in
   // flight, so responses can't interleave or land out of order.
@@ -224,6 +253,22 @@ export default function JobDetailScreen() {
   const failedWithNoDetail = Boolean(error && !detail && !notFound);
   const urgent = detail?.priority === 'urgent';
   const statusBadge = detail ? statusToBadge(detail.status) : null;
+  // Latest captured GPS fix from the activity log — null until the
+  // technician has completed a location-required step; gates the Direction
+  // button on the technician card.
+  const lastKnownLocation = detail
+    ? lastKnownTechnicianLocation(detail.activityLog)
+    : null;
+  // The customer's Direction button is on when there is anything to open:
+  // saved coordinates win (precise pin), else the address/city text query —
+  // the same "nothing to search → nothing to open" rule `openMaps` applies.
+  const customerDirection = detail
+    ? Boolean(
+        (detail.customer.latitude != null && detail.customer.longitude != null) ||
+          detail.customer.address?.trim() ||
+          detail.customer.city?.trim(),
+      )
+    : false;
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
@@ -305,33 +350,69 @@ export default function JobDetailScreen() {
               countryCode={detail.customer.countryCode}
               phoneNumber={detail.customer.phoneNumber}
               subLine={formatPhone(detail.customer)}
+              action={
+                <>
+                  <IconButton
+                    variant="ghost"
+                    size="sm"
+                    label="Copy customer phone number"
+                    onPress={() =>
+                      copyPhone(
+                        'customer',
+                        detail.customer.countryCode,
+                        detail.customer.phoneNumber,
+                      )
+                    }>
+                    <Copy size={15} color={colors.textMuted} strokeWidth={2} />
+                  </IconButton>
+                  {copiedPhone === 'customer' ? (
+                    <Text
+                      style={styles.copiedNote}
+                      accessibilityLiveRegion="polite">
+                      Copied
+                    </Text>
+                  ) : null}
+                </>
+              }
             />
-            {detail.customer.address ? (
-              <View style={styles.sectionMetaRow}>
-                <MapPin size={15} color={colors.textMuted} strokeWidth={2} />
-                <Text style={styles.metaText} numberOfLines={4}>
-                  {[detail.customer.address, detail.customer.city]
-                    .filter(Boolean)
-                    .join(', ')}
-                </Text>
-              </View>
-            ) : null}
+            {/* Address + city now live only in the header card's bordered
+                box — no duplicate here. */}
             <View style={styles.buttonRow}>
               <Button
                 variant="secondary"
                 size="md"
                 style={{ flex: 1, gap: spacing.s1 }}
-                onPress={() => console.log('Call pressed')}>
+                onPress={() =>
+                  void openTel(detail.customer.countryCode, detail.customer.phoneNumber)
+                }>
                 Call
               </Button>
               <Button
                 variant="primary"
                 size="md"
                 style={{ flex: 1, gap: spacing.s1 }}
-                onPress={() => console.log('Direction pressed')}>
+                disabled={!customerDirection}
+                onPress={() =>
+                  void openMaps(
+                    detail.customer.address ?? '',
+                    detail.customer.city,
+                    {
+                      latitude: detail.customer.latitude,
+                      longitude: detail.customer.longitude,
+                    },
+                  )
+                }>
                 Direction
               </Button>
             </View>
+            {!customerDirection ? (
+              <View style={styles.disabledHintRow}>
+                <Info size={13} color={colors.textMuted} strokeWidth={2} />
+                <Text style={styles.disabledHint}>
+                  No address or location is saved for this customer yet.
+                </Text>
+              </View>
+            ) : null}
           </SectionCard>
 
           {/* 4. Technician */}
@@ -341,19 +422,83 @@ export default function JobDetailScreen() {
               countryCode={detail.technician.countryCode}
               phoneNumber={detail.technician.phoneNumber}
               subLine={formatPhone(detail.technician)}
+              action={
+                <>
+                  <IconButton
+                    variant="ghost"
+                    size="sm"
+                    label="Copy technician phone number"
+                    onPress={() =>
+                      copyPhone(
+                        'technician',
+                        detail.technician.countryCode,
+                        detail.technician.phoneNumber,
+                      )
+                    }>
+                    <Copy size={15} color={colors.textMuted} strokeWidth={2} />
+                  </IconButton>
+                  {copiedPhone === 'technician' ? (
+                    <Text
+                      style={styles.copiedNote}
+                      accessibilityLiveRegion="polite">
+                      Copied
+                    </Text>
+                  ) : null}
+                </>
+              }
             />
             {detail.technician.skills.length ? (
-              <View style={styles.skillsRow}>
-                <Wrench size={15} color={colors.textMuted} strokeWidth={2} />
-                <View style={styles.skillsChips}>
-                  {detail.technician.skills.map((skill) => (
-                    <Badge key={skill} status="scheduled" tone="soft" size="sm">
-                      {skill}
-                    </Badge>
-                  ))}
+                <View style={styles.skillsRow}>
+                  <View style={styles.skillsChips}>
+                    {detail.technician.skills.map((skill) => (
+                        <Badge key={skill} status="scheduled" tone="soft" size="sm">
+                          {skill}
+                        </Badge>
+                    ))}
+                  </View>
                 </View>
-              </View>
             ) : null}
+            <View style={styles.buttonRow}>
+              <Button
+                variant="secondary"
+                size="md"
+                style={{ flex: 1, gap: spacing.s1 }}
+                onPress={() =>
+                  void openTel(detail.technician.countryCode, detail.technician.phoneNumber)
+                }>
+                Call
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
+                style={{ flex: 1, gap: spacing.s1 }}
+                disabled={!lastKnownLocation}
+                onPress={() =>
+                  void openMaps('', null, lastKnownLocation)
+                }>
+                Direction
+              </Button>
+            </View>
+            {!lastKnownLocation ? (
+              <View style={styles.disabledHintRow}>
+                <Info size={13} color={colors.textMuted} strokeWidth={2} style={{marginTop: spacing.s1}}/>
+                <Text style={styles.disabledHint}>
+                  Direction is available once the technician's location is
+                  captured on a step.
+                </Text>
+              </View>
+            ) : (
+              // Enabled-state hint: make clear this is the position captured
+              // at step time, not live tracking (story 7.10 — display only).
+              <View style={styles.disabledHintRow}>
+                <Info size={13} color={colors.textMuted} strokeWidth={2} style={{marginTop: spacing.s1}}/>
+                <Text style={styles.disabledHint}>
+                  Directions will take you to the technician's last known
+                  location, not live tracking.
+                </Text>
+              </View>
+            )}
+
           </SectionCard>
 
           {/* 5. Photos & signature — only when the job has attachments. */}
@@ -365,8 +510,12 @@ export default function JobDetailScreen() {
 
           {/* 6. Activity — oldest-first timeline; nothing logged yet → no card. */}
           {detail.activityLog.length ? (
-            <SectionCard title="Activity">
-              <ActivityTimeline entries={detail.activityLog} workflowTemplate={detail.workflowTemplate} />
+            <SectionCard title="Activity Timeline">
+              <ActivityTimeline
+                entries={detail.activityLog}
+                workflowTemplate={detail.workflowTemplate}
+                jobSite={jobSiteCoords(detail.customer)}
+              />
             </SectionCard>
           ) : null}
         </ScrollView>
@@ -420,13 +569,6 @@ const styles = StyleSheet.create({
     gap: spacing.s4,
   },
   // Extra air between a PersonRow and the meta rows below it in a section.
-  sectionMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.s2,
-    minHeight: touch.min,
-    marginTop: spacing.s2,
-  },
   skillsRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -445,9 +587,21 @@ const styles = StyleSheet.create({
     gap: spacing.s2,
     marginTop: spacing.s3,
   },
-  metaText: {
-    ...typography.body,
-    fontSize: 14,
+  copiedNote: {
+    ...typography.caption,
     color: colors.textMuted,
+  },
+  // Why a disabled Direction button is off — muted, same tier as metaText,
+  // with a small Info glyph leading the line.
+  disabledHintRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.s1,
+    marginTop: spacing.s2,
+  },
+  disabledHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    flex: 1,
   },
 });

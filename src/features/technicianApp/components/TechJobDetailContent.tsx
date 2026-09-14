@@ -23,6 +23,7 @@ import type { JobDetail } from '../../../services';
 import { openMaps } from '../../../utils/linking';
 import { PersonRow } from '../../jobDetail/components/PersonRow';
 import { ActivityTimeline } from '../../jobDetail/components/ActivityTimeline';
+import { jobSiteCoords } from '../../jobDetail/locationMetadata';
 import { formatPhone } from '../../profile';
 import {
   formatTimeLabel,
@@ -96,8 +97,9 @@ export function TechJobDetailContent({
         <WorkflowStepper steps={steps} onAdvance={onAdvance} pendingStep={pendingStep} />
       </Card>
 
-      {/* 2. Customer — the phone affordance lives in PersonRow; the address
-          row (when there is one) opens the maps app. */}
+      {/* 2. Customer — identity row only (no tap-to-dial here; the owner
+          detail screen owns the call affordance). The address row (when
+          there is one) opens the maps app. */}
       <Card padding="md">
         <Text style={styles.sectionTitle}>Customer</Text>
         <PersonRow
@@ -226,7 +228,7 @@ export function TechJobDetailContent({
             <ChevronDown size={20} color={colors.textMuted} strokeWidth={2} />
           )}
         </Pressable>
-        {isHistoryOpen ? <ActivityTimeline entries={detail.activityLog} workflowTemplate={detail.workflowTemplate} /> : null}
+        {isHistoryOpen ? <ActivityTimeline entries={detail.activityLog} workflowTemplate={detail.workflowTemplate} jobSite={jobSiteCoords(detail.customer)} /> : null}
       </Card>
     </>
   );
