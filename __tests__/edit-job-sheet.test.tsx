@@ -183,8 +183,10 @@ describe('EditJobSheet', () => {
     // Both roster technicians are listed (rows variant).
     expect(text).toContain('Suresh Kumar');
     expect(text).toContain('Anil Verma');
-    // The can't-clear hint is always visible above Save.
-    expect(text).toContain('keep their saved value');
+    // The dropped-edit hints are conditional — a fresh, untouched form drops
+    // nothing, so neither hint shows above Save.
+    expect(text).not.toContain("Empty or spacing-only text won't save");
+    expect(text).not.toContain("You can't remove the technician here");
 
     expect(pressableFor(renderer, 'Save changes').props.disabled).toBe(true);
 
@@ -194,6 +196,46 @@ describe('EditJobSheet', () => {
     expect(renderer.root.findByProps({ testID: 'edit-job-priority-normal' })).toBeDefined();
     expect(renderer.root.findByProps({ testID: 'edit-job-priority-urgent' })).toBeDefined();
     expect(renderer.root.findByProps({ testID: 'technician-row-tech-1' })).toBeDefined();
+  });
+
+  it('shows the dropped-edit hints exactly while the draft would silently drop an edit', async () => {
+    const { renderer } = mountSheet();
+
+    // Clear the description (saved value nonempty) → the text-drop hint fires;
+    // the technician hint stays hidden — the selection is untouched.
+    const descriptionInput = renderer.root
+      .findAll(node => typeof node.type !== 'string' && node.type === TextInput)
+      .find(node => node.props.value === 'AC not cooling');
+    expect(descriptionInput).toBeDefined();
+    await act_(renderer, () => descriptionInput!.props.onChangeText(''));
+    expect(allText(renderer)).toContain("Empty or spacing-only text won't save");
+    expect(allText(renderer)).not.toContain("You can't remove the technician here");
+
+    // Deselect the technician (tap the assigned row again) → its hint fires
+    // alongside, and both point at edits this API build cannot send.
+    await act_(renderer, () => pressableFor(renderer, 'Suresh Kumar').props.onPress());
+    expect(allText(renderer)).toContain("You can't remove the technician here");
+
+    // Typing real text back drops the hint again — the patch would carry it.
+    await act_(renderer, () => descriptionInput!.props.onChangeText('AC leaking now'));
+    expect(allText(renderer)).not.toContain("Empty or spacing-only text won't save");
+  });
+
+  it('warns on whitespace-only edits too — spacing tweaks are dropped by buildPatch', async () => {
+    const { renderer } = mountSheet();
+
+    // Same text plus surrounding whitespace: the trimmed compare in
+    // `textChanged` drops it, so the hint must fire even though the field
+    // is neither empty nor cleared.
+    const descriptionInput = renderer.root
+      .findAll(node => typeof node.type !== 'string' && node.type === TextInput)
+      .find(node => node.props.value === 'AC not cooling');
+    await act_(renderer, () => descriptionInput!.props.onChangeText('  AC not cooling  '));
+    expect(allText(renderer)).toContain("Empty or spacing-only text won't save");
+
+    // The untouched value itself never warns.
+    await act_(renderer, () => descriptionInput!.props.onChangeText('AC not cooling'));
+    expect(allText(renderer)).not.toContain("Empty or spacing-only text won't save");
   });
 
   it('hides invited technicians from the roster (they cannot take work yet)', () => {

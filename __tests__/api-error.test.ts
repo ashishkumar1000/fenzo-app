@@ -5,15 +5,17 @@
  * through, and the status-based defaults fill in when the envelope is empty.
  */
 import type { AxiosError } from 'axios';
-import { toApiError } from '../src/services/api/apiError';
+import { DEADLINE_ABORTED, toApiError } from '../src/services/api/apiError';
 
-function axiosError(response?: {
-  status: number;
-  data: unknown;
-}): AxiosError {
+function axiosError(
+  response?: { status: number; data: unknown },
+  code?: string,
+  config?: Record<string, unknown>,
+): AxiosError {
   return {
     isAxiosError: true,
-    code: undefined,
+    code,
+    config,
     response,
   } as unknown as AxiosError;
 }
@@ -52,4 +54,30 @@ it('falls back to the status default when the envelope has no message', () => {
     axiosError({ status: 422, data: { error_code: 'VALIDATION_ERROR', message: ['only'] } }),
   );
   expect(oneItem.message).toBe('only');
+});
+describe('deadline aborts vs deliberate cancels', () => {
+  // The deadline rejects cancel-shaped (ERR_CANCELED). Whether it classifies
+  // as TIMEOUT or CANCELLED hinges entirely on the config stamp apiClient's
+  // deadline interceptor sets right before aborting.
+  const stampedConfig = { [DEADLINE_ABORTED]: true };
+
+  it('classifies an ERR_CANCELED rejection carrying the deadline stamp as TIMEOUT', () => {
+    const apiError = toApiError(
+      axiosError(undefined, 'ERR_CANCELED', stampedConfig),
+    );
+
+    expect(apiError).toMatchObject({
+      status: 0,
+      code: 'TIMEOUT',
+      message: 'The request took too long. Check your connection and try again.',
+    });
+  });
+
+  it('keeps a plain ERR_CANCELED rejection as CANCELLED (a deliberate cancel)', () => {
+    const apiError = toApiError(
+      axiosError(undefined, 'ERR_CANCELED', { signal: {} }),
+    );
+
+    expect(apiError).toMatchObject({ status: 0, code: 'CANCELLED' });
+  });
 });

@@ -1,8 +1,8 @@
 /**
  * EditJobSheet — bottom-sheet form to edit, reassign or (via its parent) cancel
  * a scheduled job. Uses the DS `Sheet` (native TrueSheet) at a fixed 85%
- * detent with a scrollable body, so the hint + Save stay pinned below the
- * form.
+ * detent with a scrollable body; the hint + error + Save live in the native
+ * `footer`, pinned to the sheet's bottom edge while the form scrolls beneath.
  *
  * Form state is re-initialized from the job each time the sheet opens — but
  * only on the false→true transition: a background refetch landing while the
@@ -13,7 +13,8 @@
  *
  * The API cannot clear a field (null/absent mean "leave unchanged") and
  * cannot unassign a job, so emptied text and a deselected technician are
- * silently dropped from the patch — the hint line above Save says so.
+ * silently dropped from the patch — a hint above Save says so, but only
+ * while the draft actually contains such a dropped edit.
  *
  * Error handling mirrors the backend's documented failures (api-contracts §6):
  * a job that started while being edited closes the sheet (the parent refetches
@@ -22,10 +23,11 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Input, Sheet, Switch } from '../../../components/ui';
+import { Button, Input, Sheet } from '../../../components/ui';
+import { Info } from 'lucide-react-native';
 import { TechnicianPicker } from '../../../components/TechnicianPicker';
 import { DateTimeFields } from '../../newJob/components/DateTimeFields';
-import { colors, radius, spacing, touch, typography } from '../../../theme';
+import { colors, palette, radius, spacing, touch, typography } from '../../../theme';
 import { jobService } from '../../../services';
 import type { ApiError, ApiJob, JobDetail, JobPriority, ProfileTechnician } from '../../../services';
 import { loadMyProfile } from '../../profile';
@@ -44,9 +46,17 @@ import {
  */
 const CLOSE_DELAY_MS = 1500;
 
-/** The API can't clear fields or unassign — say so instead of a silent no-op. */
-const NO_CLEAR_HINT =
-  'Emptied fields keep their saved value, and the assigned technician stays until you pick another one.';
+/**
+ * Shown only when the current draft would silently drop an edit — the API
+ * can't clear fields (null/absent mean "leave unchanged") or unassign a job,
+ * so a cleared field keeps its saved value and a deselected technician stays
+ * assigned. Saying it at the moment it applies beats a permanent disclaimer
+ * above Save.
+ */
+const DROPPED_TEXT_HINT =
+  "Empty or spacing-only text won't save — the field keeps its saved value.";
+const UNASSIGN_HINT =
+  "You can't remove the technician here — they stay assigned until you pick a different one.";
 
 type Props = {
   visible: boolean;
@@ -71,6 +81,13 @@ export function EditJobSheet({ visible, job, technicians, onClose, onSaved }: Pr
 
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+  /**
+   * Measured height of the pinned footer — pads the scrolled content so its
+   * last fields can't end up hidden behind the floating footer when fully
+   * scrolled. 0 until the first layout; the content padding updates as the
+   * footer grows (e.g. when a form error appears).
+   */
+  const [footerHeight, setFooterHeight] = useState(0);
   /**
    * True during the 1.5s "job already started" auto-close — Save stays
    * disabled and the backdrop/back are inert until the sheet actually closes.
@@ -130,6 +147,29 @@ export function EditJobSheet({ visible, job, technicians, onClose, onSaved }: Pr
     technicianId,
   };
   const patch = buildPatch(job, draft);
+
+  // Clearance under the scrolled content: the measured footer height plus a
+  // small buffer, so the last field clears the floating footer when fully
+  // scrolled (falls back to a plain gap until the footer lays out).
+  const footerClearance = footerHeight > 0 ? footerHeight + spacing.s32 : spacing.s32;
+
+  // Hints for edits the API would silently drop — shown only while they apply.
+  // The text-field test mirrors `buildPatch`'s drop rule exactly (`textChanged`:
+  // a field is dropped when the trimmed draft is empty OR equals the saved
+  // text), but fires on the raw draft — so a cleared field, spaces typed into
+  // an empty field, and a whitespace-only tweak of the saved text all warn,
+  // because in every case the user's typed text never reaches the wire.
+  const textDropped = (draft: string, saved: string | null): boolean => {
+    const trimmed = draft.trim();
+    return trimmed === '' || trimmed === (saved ?? '');
+  };
+  const droppedHints = [
+    (textDropped(description, job.description) && description !== (job.description ?? '')) ||
+    (textDropped(notes, job.notesForTechnician) && notes !== (job.notesForTechnician ?? ''))
+      ? DROPPED_TEXT_HINT
+      : null,
+    job.technicianId !== null && technicianId === null ? UNASSIGN_HINT : null,
+  ].filter((hint): hint is string => hint !== null);
 
   const handleClose = () => {
     // Don't let a backdrop tap or the Android back button dismiss the sheet
@@ -192,8 +232,48 @@ export function EditJobSheet({ visible, job, technicians, onClose, onSaved }: Pr
     }
   };
 
+  // Pinned natively by the Sheet's `footer` — stays at the sheet's bottom
+  // edge while the form scrolls beneath it. Opaque background so scrolled
+  // content doesn't show through. `footerHeight` feeds the scroll content's
+  // bottom clearance so the last fields stay reachable above the floating
+  // footer.
+  const footer = (
+    <View
+      style={styles.footer}
+      onLayout={event => setFooterHeight(event.nativeEvent.layout.height)}>
+      {droppedHints.map(hint => (
+        <View key={hint} style={styles.hintRow}>
+          <Info
+            size={16}
+            color={colors.textMuted}
+            strokeWidth={2}
+            style={styles.hintIcon}
+          />
+          <Text style={styles.hint}>{hint}</Text>
+        </View>
+      ))}
+
+      {formError ? (
+        <Text style={styles.formError} testID="edit-job-form-error">
+          {formError}
+        </Text>
+      ) : null}
+
+      <Button
+        variant="primary"
+        size="lg"
+        fullWidth
+        testID="edit-job-save"
+        disabled={!patch || submitting || isAutoClosing}
+        onPress={handleSave}>
+        {submitting ? 'Saving…' : 'Save changes'}
+      </Button>
+    </View>
+  );
+
   return (
     <Sheet
+      footer={footer}
       visible={visible}
       onClose={handleClose}
       // While the PATCH is in flight, drag-down and Android back are blocked
@@ -204,11 +284,14 @@ export function EditJobSheet({ visible, job, technicians, onClose, onSaved }: Pr
       subtitle="Only scheduled jobs can be edited."
       detents={[0.85]}
       scrollable>
-      {/* Scrolls so the pinned hint + Save stay reachable on small screens
-          with the keyboard up (the `scrollable` sheet hands drags off to the
-          native gesture). */}
+      {/* The native sheet stretches this ScrollView over the whole content
+          area, so it always scrolls — even when the form is short. Drags hand
+          off to the native gesture via the `scrollable` sheet. The footer
+          (hint + error + Save) floats above it, so the scrolled content keeps
+          a bottom clearance equal to the footer's measured height — otherwise
+          the last fields could hide behind the floating Save button. */}
       <ScrollView
-        contentContainerStyle={styles.form}
+        contentContainerStyle={[styles.form, { paddingBottom: footerClearance }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
         <Input
@@ -288,24 +371,6 @@ export function EditJobSheet({ visible, job, technicians, onClose, onSaved }: Pr
           />
         </View>
       </ScrollView>
-
-      <Text style={styles.hint}>{NO_CLEAR_HINT}</Text>
-
-      {formError ? (
-        <Text style={styles.formError} testID="edit-job-form-error">
-          {formError}
-        </Text>
-      ) : null}
-
-      <Button
-        variant="primary"
-        size="lg"
-        fullWidth
-        testID="edit-job-save"
-        disabled={!patch || submitting || isAutoClosing}
-        onPress={handleSave}>
-        {submitting ? 'Saving…' : 'Save changes'}
-      </Button>
     </Sheet>
   );
 }
@@ -314,10 +379,28 @@ const styles = StyleSheet.create({
   hint: {
     ...typography.bodySm,
     color: colors.textMuted,
+    flex: 1,
+  },
+  hintRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: spacing.s2,
+    backgroundColor: palette.gray50,
+  },
+  hintIcon: {
+    // Optical alignment with the hint's first text line (bodySm cap height).
+    marginTop: spacing.s1,
+  },
+  footer: {
+    // Sits on the sheet's own background, full width (the native footer
+    // wrapper spans the sheet edge to edge with no padding).
+    backgroundColor: colors.surfaceCard,
+    paddingHorizontal: spacing.s5,
+    paddingTop: spacing.s2,
+    paddingBottom: spacing.s4,
   },
   form: {
     gap: spacing.s4,
-    paddingBottom: spacing.s2,
   },
   section: {
     gap: spacing.s3,

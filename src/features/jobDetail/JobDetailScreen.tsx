@@ -520,7 +520,12 @@ export default function JobDetailScreen() {
           ) : null}
         </ScrollView>
 
-        {isEditOpen ? (
+        {/* Gated on `detail`, never on `isEditOpen`: TrueSheet's unmount does
+            NOT dismiss a presented sheet, so unmounting on close would strand
+            the native sheet on screen, frozen (seen live 2026-09-15 — the
+            sheet stayed on "Saving…" after a successful save). Kept mounted
+            while the detail exists, `visible` alone drives present/dismiss. */}
+        {detail ? (
           <EditJobSheet
             visible={isEditOpen}
             job={detail}

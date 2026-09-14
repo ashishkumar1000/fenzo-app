@@ -22,10 +22,10 @@
  *   ApiService.ts → generic per-resource CRUD class (built on this instance)
  */
 import axios from 'axios';
-import type { AxiosError } from 'axios';
+import type { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { API_BASE_URL, API_TIMEOUT } from '../../config';
 import { clearAuthToken, getAuthToken } from '../authToken';
-import { toApiError } from './apiError';
+import { DEADLINE_ABORTED, toApiError } from './apiError';
 
 export type { ApiError } from './apiError';
 
@@ -75,6 +75,61 @@ apiClient.interceptors.request.use(config => {
   return config;
 });
 
+// --- Per-request abort deadline ---------------------------------------------
+// axios's `timeout` only sets `xhr.timeout`, and React Native's networking
+// doesn't reliably honor it when a connection stalls after being accepted
+// (observed live 2026-09-14: a PATCH hung far past API_TIMEOUT with no error —
+// the Edit job sheet stayed locked on "Saving…"). An AbortController deadline
+// is honored natively by the RN network stack, so every request gets one,
+// combined with any caller-supplied signal (either source aborting cancels).
+const requestTimers = new WeakMap<InternalAxiosRequestConfig, ReturnType<typeof setTimeout>>();
+
+apiClient.interceptors.request.use(config => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    // Stamp the config BEFORE aborting: the rejection surfaces cancel-shaped
+    // (ERR_CANCELED), and `toApiError` reads this stamp to classify it as
+    // TIMEOUT — without it, abort-filtering callers (isAbort) would swallow a
+    // real timeout as "the app's own cancel" and a loading screen would spin
+    // forever with no error/Retry (JobDetailScreen's load does exactly that).
+    (config as InternalAxiosRequestConfig & Record<string, unknown>)[DEADLINE_ABORTED] = true;
+    // Self-clean at fire time: a rejection that reaches the response
+    // interceptor without `error.config` (a request interceptor registered
+    // after this one throwing) never runs `clearRequestTimer`, so the WeakMap
+    // entry must not outlive its fired timer.
+    requestTimers.delete(config);
+    controller.abort();
+  }, API_TIMEOUT);
+  requestTimers.set(config, timer);
+
+  const callerSignal = config.signal;
+  if (callerSignal) {
+    if (callerSignal.aborted) controller.abort();
+    // axios's signal type also allows a bare `{aborted}` object with no
+    // addEventListener — only subscribe when the real signal API is there.
+    else if (typeof callerSignal.addEventListener === 'function') {
+      callerSignal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+  }
+  config.signal = controller.signal;
+  return config;
+});
+
+/**
+ * Stops a request's deadline timer once it has settled (response or error).
+ * A rejection that arrives with no `config` at all (only reachable via a
+ * downstream request interceptor throwing) has no handle to its timer — that
+ * timer fires once at the deadline and aborts an already-detached controller,
+ * a harmless no-op that self-cleans from the map at fire time.
+ */
+function clearRequestTimer(config: InternalAxiosRequestConfig | undefined) {
+  const timer = config && requestTimers.get(config);
+  if (timer) {
+    clearTimeout(timer);
+    requestTimers.delete(config);
+  }
+}
+
 // --- Response interceptor: normalize every failure into ApiError -----------
 // Ensures the forced-logout callback fires at most once per "session
 // expiring" event, even if several requests were in flight and all come
@@ -84,8 +139,12 @@ apiClient.interceptors.request.use(config => {
 let handlingUnauthorized = false;
 
 apiClient.interceptors.response.use(
-  response => response,
+  response => {
+    clearRequestTimer(response.config);
+    return response;
+  },
   (error: AxiosError) => {
+    clearRequestTimer(error.config);
     // Only treat a 401 as "session expired" (and force a logout) if a token
     // was actually attached to this request. Without this check, a login
     // request itself returning 401 (wrong OTP/credentials — there was never

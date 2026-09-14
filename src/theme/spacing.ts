@@ -16,6 +16,8 @@ export const spacing = {
   s12: 48,
   s16: 64,
   s20: 80,
+  // Added for the Edit sheet's footer scroll clearance (footerHeight + buffer).
+  s32: 128,
 } as const;
 
 export const touch = {

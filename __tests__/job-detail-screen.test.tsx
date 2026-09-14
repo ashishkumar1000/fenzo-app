@@ -233,10 +233,10 @@ it('fetches on mount with the route param and renders the full detail', async ()
   expect(text).toContain('Ravi Kumar');
   expect(text).toContain('Technician');
   expect(text).toContain('Anil Kumar');
-  expect(text).toContain('Plumbing, AC repair'); // skills joined
+  expect(text).toContain('AC repair'); // skills render as individual chips
   expect(text).toContain('Photos & signature');
   expect(text).toContain('Customer signature');
-  expect(text).toContain('Activity');
+  expect(text).toContain('Activity Timeline');
   expect(text).toContain('Job created'); // oldest event first
   expect(text).toContain('On my way');
   expect(text).toContain('brand_new_event'); // unknown type passes through raw
@@ -332,7 +332,14 @@ it('pull-to-refresh refetches the detail', async () => {
   // The refetch carries an abort signal now too (cancelled on unmount) and no
   // spinner swap — content stays on screen under the RefreshControl spinner.
   expect(getById).toHaveBeenLastCalledWith('j-1', expect.anything());
-  expect(renderer.root.findAllByType(ScrollView).length).toBe(1);
+  // Scope to the detail's own ScrollView (the one carrying the RefreshControl):
+  // the EditJobSheet stays mounted while closed (TrueSheet must not be
+  // unmounted mid-present) and its mocked sheet adds another ScrollView here.
+  expect(
+    renderer.root
+      .findAllByType(ScrollView)
+      .filter(scrollView => scrollView.props.refreshControl).length,
+  ).toBe(1);
 });
 
 it('keeps the loaded content when a refresh fails', async () => {
@@ -347,8 +354,14 @@ it('keeps the loaded content when a refresh fails', async () => {
   });
 
   // Spec §3: existing content stays on screen under the RefreshControl
-  // spinner — a failed refresh must not swap it for the error view.
-  expect(renderer.root.findAllByType(ScrollView).length).toBe(1);
+  // spinner — a failed refresh must not swap it for the error view. Scoped to
+  // the detail's RefreshControl-carrying ScrollView (the closed EditJobSheet
+  // stays mounted and its mocked sheet adds another ScrollView here).
+  expect(
+    renderer.root
+      .findAllByType(ScrollView)
+      .filter(scrollView => scrollView.props.refreshControl).length,
+  ).toBe(1);
   expect(renderedText(renderer)).toContain('Ravi Kumar');
   expect(renderer.root.findAllByType(InlineError).length).toBe(0);
   expect(renderedText(renderer).some(t => t.includes('Offline'))).toBe(false);
@@ -434,7 +447,10 @@ it('renders no actions for a non-scheduled job', async () => {
   getById.mockResolvedValue(makeDetail()); // in_progress
   const renderer = await mountScreen();
 
-  expect(renderedText(renderer)).not.toContain('Edit job');
+  // Assert on the actions slot, not page text: the EditJobSheet stays mounted
+  // while closed (unmounting it would strand TrueSheet's presented sheet), so
+  // its hidden "Edit job" title shows up in a whole-page text scan.
+  expect(renderer.root.findAllByProps({ testID: 'job-detail-actions' }).length).toBe(0);
   expect(renderedText(renderer)).not.toContain('Cancel job');
 });
 

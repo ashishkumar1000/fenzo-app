@@ -28,7 +28,7 @@
  * Content stays mounted while the sheet is closed, matching the old Modal
  * behaviour; children must tolerate being mounted while hidden.
  */
-import React, { useEffect, useRef, type ReactNode } from 'react';
+import React, { useEffect, useRef, type ReactElement, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { TrueSheet, type TrueSheetProps } from '@lodev09/react-native-true-sheet';
 import { X } from 'lucide-react-native';
@@ -58,6 +58,15 @@ export type SheetProps = {
    *  out from under an in-flight action. Programmatic dismiss via `visible`
    *  still works either way. Default `true` (native default). */
   dismissible?: boolean;
+  /** Bottom content (e.g. hint + submit button) pinned natively at the
+   *  sheet's bottom edge — keyboard-aware on both platforms. REQUIRED with a
+   *  fixed detent + `scrollable`: the native sheet stretches the first
+   *  ScrollView over the full content area, so anything rendered after it in
+   *  `children` is laid out below the sheet's visible bottom and never seen.
+   *  The footer floats above the stretched ScrollView, so give it an opaque
+   *  background and pad the scrolled content (contentContainerStyle) by the
+   *  footer's height to keep the last fields reachable. */
+  footer?: ReactElement;
   children: ReactNode;
 };
 
@@ -70,6 +79,7 @@ export function Sheet({
   detents = ['auto'],
   scrollable = false,
   dismissible = true,
+  footer,
   children,
 }: SheetProps) {
   const sheet = useRef<TrueSheet>(null);
@@ -86,6 +96,21 @@ export function Sheet({
       sheet.current?.dismiss();
     }
   }, [visible]);
+
+  // TrueSheet's unmount does NOT dismiss a presented sheet — it would stay
+  // stranded natively on whatever screen comes next (the exact failure class
+  // JobDetailScreen's `detail ?` mount gate fixes for in-screen unmounts).
+  // That gate can't cover the screen itself going away while the sheet is up
+  // (a 401 forced-logout navigation reset, a deep-link reset), so dismiss
+  // here during unmount cleanup, while the ref is still valid.
+  useEffect(() => {
+    return () => {
+      if (presentedRef.current) {
+        presentedRef.current = false;
+        sheet.current?.dismiss();
+      }
+    };
+  }, []);
 
   const handleDidDismiss = () => {
     // A programmatic close already synced state via the `visible` effect —
@@ -123,7 +148,8 @@ export function Sheet({
       dimmed
       dimmedDetentIndex={0}
       onDidDismiss={handleDidDismiss}
-      onDidPresent={onDidPresent}>
+      onDidPresent={onDidPresent}
+      footer={footer}>
       <View style={styles.content}>
         <View style={styles.header}>
           <View style={styles.headerText}>

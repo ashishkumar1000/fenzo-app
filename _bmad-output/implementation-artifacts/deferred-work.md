@@ -188,3 +188,8 @@
   `selectTodayJobs.ts` follow each sibling file's existing relative style rather than the
   CLAUDE.md `@/` aliases; same repo-wide alias migration already deferred from 1-6/2-1/3-5
   reviews.
+
+## Deferred from: code review of story 1-3 (2026-09-15)
+
+- **Screen-test closed-sheet assertions track the Jest mock, not device** — the ScrollView-count and text-absence assertions in `job-detail-screen.test.tsx` are calibrated against `@lodev09/react-native-true-sheet/mock`, which renders header/children/footer even when closed; on device a closed sheet renders nothing (`shouldRenderNativeView` false). The tests verify mock fidelity — a mock or library change would need them recalibrated.
+- **Abort listener never removed from reused caller AbortControllers** — the per-request deadline interceptor attaches a `{once:true}` `abort` listener to every caller signal and doesn't remove it on settle; a long-lived controller reused across many requests would accumulate closures. Latent only: current call sites (e.g. `JobDetailScreen.load`) create a fresh controller per request.

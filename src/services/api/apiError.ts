@@ -43,6 +43,18 @@ export interface ApiError {
 export const FALLBACK_ERROR_MESSAGE = 'Something went wrong with that request.';
 
 /**
+ * Stamp `apiClient`'s per-request deadline puts on a config right before
+ * aborting it (see the abort-deadline interceptor in `apiClient.ts`). The
+ * rejection then arrives cancel-shaped (`ERR_CANCELED`), but it is a TIMEOUT,
+ * not a deliberate cancel: abort-filtering callers (e.g. `isAbort` in
+ * `JobDetailScreen`) silently ignore `CANCELLED` as "the app's own doing", so
+ * a deadline mislabeled as a cancel would strand a loading screen with no
+ * error and no Retry. Declared here rather than in `apiClient` so
+ * `toApiError` can read it without a circular import.
+ */
+export const DEADLINE_ABORTED = '__fenzitDeadlineAborted';
+
+/**
  * Converts any axios failure (network error, timeout, cancelled request, or
  * HTTP error response) into an `ApiError`. Called from the response
  * interceptor in `apiClient.ts` — nothing else should need to call this
@@ -60,8 +72,15 @@ export function toApiError(error: AxiosError, onUnauthorized?: () => void): ApiE
     // adapter internals implement that timeout via an AbortController too —
     // checking cancellation first could then mislabel a timeout as a
     // deliberate `CANCELLED` cancellation. Checking ECONNABORTED first keeps
-    // timeouts correctly classified either way.
-    const isTimeout = error.code === 'ECONNABORTED';
+    // timeouts correctly classified either way. The deadline stamp covers the
+    // third shape: apiClient's AbortController deadline also rejects as
+    // ERR_CANCELED, and without the marker check it would land in the
+    // CANCELLED branch below and be silently swallowed as an intentional
+    // cancel by abort-filtering callers.
+    const deadlineAborted = Boolean(
+      (error.config as Record<string, unknown> | undefined)?.[DEADLINE_ABORTED],
+    );
+    const isTimeout = error.code === 'ECONNABORTED' || deadlineAborted;
     if (isTimeout) {
       return {
         status: 0,
