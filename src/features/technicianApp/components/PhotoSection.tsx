@@ -59,9 +59,28 @@ type Props = {
   readOnly?: boolean;
   /** Fired per confirmed upload — the screen's silent detail refetch. */
   onConfirmed?: () => void;
+  /**
+   * 9-1 — fired when a loaded confirmed tile is tapped, with the photo's
+   * index in the VIEWER list (null-url photos are skipped, so the index
+   * matches the viewer's item numbering).
+   */
+  onViewPhoto?: (index: number) => void;
+  /**
+   * 9-1 — the full viewer list's length when the caller composes one that
+   * includes pages beyond photos (e.g. the signature). Falls back to the
+   * count of viewable photos.
+   */
+  viewerTotal?: number;
 };
 
-export function PhotoSection({ jobId, photos, readOnly = false, onConfirmed }: Props) {
+export function PhotoSection({
+  jobId,
+  photos,
+  readOnly = false,
+  onConfirmed,
+  onViewPhoto,
+  viewerTotal,
+}: Props) {
   const { entries, limitReached, start, retry } = useAttachmentUpload({
     jobId,
     attachmentType: 'photo',
@@ -97,10 +116,21 @@ export function PhotoSection({ jobId, photos, readOnly = false, onConfirmed }: P
     showPhotoSourceAlert(remaining, handlePicked);
   };
 
+  /** 9-1 — photos with a live URL, in display order; the photo pages. */
+  const viewable = photos.filter(p => p.url);
+
   /** Grid tiles, in display order: confirmed, in-flight, then the add tile. */
   const tiles = [
     ...photos.map(photo => (
-      <ConfirmedTile key={`c:${photo.id}`} attachment={photo} />
+      <ConfirmedTile
+        key={`c:${photo.id}`}
+        attachment={photo}
+        // Null-url photos are excluded from the viewer list, so their index
+        // is -1 (inert placeholder) and the numbering skips them.
+        viewIndex={photo.url ? viewable.indexOf(photo) : -1}
+        total={viewerTotal ?? viewable.length}
+        onView={onViewPhoto}
+      />
     )),
     ...entries.map(entry =>
       entry.phase === 'failed' ? (
@@ -157,8 +187,21 @@ function isInFlight(entry: UploadEntry): entry is UploadEntry & { phase: InFligh
   return entry.phase !== 'done' && entry.phase !== 'failed';
 }
 
-/** Confirmed photo — the server's presigned read URL, cover-fit. */
-function ConfirmedTile({ attachment }: { attachment: JobAttachment }) {
+/** Confirmed photo — the server's presigned read URL, cover-fit.
+ *  9-1: a loaded tile is tappable to open the full-screen viewer; the
+ *  placeholder (null url / load failure) stays inert. */
+function ConfirmedTile({
+  attachment,
+  viewIndex,
+  total,
+  onView,
+}: {
+  attachment: JobAttachment;
+  /** Index in the VIEWER list (-1 = not viewable → inert placeholder). */
+  viewIndex: number;
+  total: number;
+  onView?: (index: number) => void;
+}) {
   // An expired URL or a null one (transient signing failure) renders the
   // sunken placeholder — the refetch the confirm triggered is the retry.
   const [failed, setFailed] = useState(false);
@@ -167,7 +210,7 @@ function ConfirmedTile({ attachment }: { attachment: JobAttachment }) {
   useEffect(() => {
     setFailed(false);
   }, [attachment.url]);
-  if (!attachment.url || failed) {
+  if (!attachment.url || failed || viewIndex < 0) {
     return (
       <View style={styles.tile}>
         <View style={styles.placeholder}>
@@ -176,10 +219,16 @@ function ConfirmedTile({ attachment }: { attachment: JobAttachment }) {
       </View>
     );
   }
+  // Handler-gated (code review 2026-09-14): without `onView` the tile must
+  // not advertise itself as tappable (SignatureTile's pattern).
   return (
-    <View style={styles.tile}>
+    <Pressable
+      accessibilityRole={onView ? 'imagebutton' : undefined}
+      accessibilityLabel={onView ? `View photo ${viewIndex + 1} of ${total}` : undefined}
+      onPress={onView ? () => onView(viewIndex) : undefined}
+      style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}>
       <Image source={{ uri: attachment.url }} style={styles.image} resizeMode="cover" onError={() => setFailed(true)} />
-    </View>
+    </Pressable>
   );
 }
 
@@ -261,6 +310,10 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
+  },
+  // 9-1 press feedback: opacity dim (AC 6 allows scale or opacity).
+  tilePressed: {
+    opacity: 0.85,
   },
   placeholder: {
     flex: 1,

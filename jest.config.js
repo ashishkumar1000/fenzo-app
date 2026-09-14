@@ -16,7 +16,8 @@ module.exports = {
   // inside that ESM build, so it needs a transform too.
   // react-native-url-polyfill (Story 3.3, Hermes URL polyfill for supabase-js)
   // publishes raw ESM at "main".
+  // react-native-image-viewing (Story 9-1) publishes ESM under dist/.
   transformIgnorePatterns: [
-    'node_modules/(?!(react-native|@react-native|@react-navigation|react-native-safe-area-context|react-native-reanimated|react-native-worklets|@react-native-community/datetimepicker|react-native-image-picker|react-native-signature-canvas|react-native-webview|@lodev09|react-native-url-polyfill)/)',
+    'node_modules/(?!(react-native|@react-native|@react-navigation|react-native-safe-area-context|react-native-reanimated|react-native-worklets|@react-native-community/datetimepicker|react-native-image-picker|react-native-signature-canvas|react-native-webview|@lodev09|react-native-url-polyfill|react-native-image-viewing)/)',
   ],
 };

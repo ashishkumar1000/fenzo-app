@@ -18,6 +18,7 @@ jest.mock('../useAttachmentUpload', () => ({
 
 import ReactTestRenderer, { act, create } from 'react-test-renderer';
 import { Linking } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { TechJobDetailContent } from './TechJobDetailContent';
 import type { JobDetail, WorkflowTemplateStep } from '../../../services';
 
@@ -78,7 +79,13 @@ function detail(overrides: Partial<JobDetail> = {}): JobDetail {
 function render(props: Parameters<typeof TechJobDetailContent>[0]) {
   let renderer!: ReturnType<typeof create>;
   act(() => {
-    renderer = create(<TechJobDetailContent {...props} />);
+    // SafeAreaProvider: the viewer header reads the iOS safe-area inset.
+    renderer = create(
+      <SafeAreaProvider
+        initialMetrics={{ insets: { top: 0, bottom: 34, left: 0, right: 0 }, frame: { x: 0, y: 0, width: 0, height: 0 } }}>
+        <TechJobDetailContent {...props} />
+      </SafeAreaProvider>,
+    );
   });
   return renderer.root;
 }
@@ -187,6 +194,106 @@ describe('TechJobDetailContent — signature card gate', () => {
       }),
     });
     expect(textCount(root, 'Customer signature')).toBe(0);
+  });
+});
+
+describe('TechJobDetailContent — full-screen attachment viewer (Story 9-1)', () => {
+  beforeEach(() => {
+    useHook.mockReturnValue({
+      entries: [],
+      limitReached: false,
+      start: jest.fn(),
+      retry: jest.fn(),
+    });
+  });
+
+  function detailWithAttachments(attachments: JobDetail['attachments']) {
+    return detail({ attachments, workflowTemplate: baseTemplate });
+  }
+
+  function press(root: ReactTestRenderer.ReactTestInstance, label: string) {
+    const tile = root.find(
+      t => t.props.accessibilityLabel === label && t.props.accessibilityRole === 'imagebutton',
+    );
+    act(() => {
+      tile.props.onPress();
+    });
+  }
+
+  function texts(root: ReactTestRenderer.ReactTestInstance): string[] {
+    return root
+      .findAll(t => typeof t.props.children === 'string', { deep: true })
+      .map(t => t.props.children as string);
+  }
+
+  it('tapping a photo tile opens the viewer on that photo with the counter', () => {
+    const root = renderContent({
+      detail: detailWithAttachments([
+        { id: 'p1', type: 'photo', url: 'https://r2/p1', createdAt: '2026-09-05T00:01:00.000Z' },
+        { id: 'p2', type: 'photo', url: 'https://r2/p2', createdAt: '2026-09-05T00:02:00.000Z' },
+        { id: 'att-1', type: 'signature', url: 'https://r2/sig', createdAt: '2026-09-05T01:00:00.000Z' },
+      ]),
+    });
+    act(() => {
+      press(root, 'View photo 2 of 3');
+    });
+    expect(texts(root)).toContain('2 of 3');
+    // The signature page exists in the same pager, one swipe away.
+    expect(root.findAll(n => n.props?.source?.uri === 'https://r2/p2').length).toBeGreaterThan(0);
+  });
+
+  it('tapping the signature tile opens the viewer on the signature page', () => {
+    const root = renderContent({
+      detail: detailWithAttachments([
+        { id: 'p1', type: 'photo', url: 'https://r2/p1', createdAt: '2026-09-05T00:01:00.000Z' },
+        { id: 'att-1', type: 'signature', url: 'https://r2/sig', createdAt: '2026-09-05T01:00:00.000Z' },
+      ]),
+    });
+    act(() => {
+      press(root, 'View customer signature');
+    });
+    expect(texts(root)).toContain('Customer signature');
+    expect(texts(root)).not.toContain('2 of 2');
+  });
+
+  it('null-url photos are excluded from the viewer snapshot and its numbering', () => {
+    const root = renderContent({
+      detail: detailWithAttachments([
+        { id: 'p1', type: 'photo', url: null, createdAt: '2026-09-05T00:01:00.000Z' },
+        { id: 'p2', type: 'photo', url: 'https://r2/p2', createdAt: '2026-09-05T00:02:00.000Z' },
+      ]),
+    });
+    const viewerTiles = root.findAll(
+      t => t.props.accessibilityRole === 'imagebutton' && typeof t.props.onPress === 'function',
+    );
+    expect(viewerTiles.map(t => t.props.accessibilityLabel)).toEqual(['View photo 1 of 1']);
+  });
+
+  it('closing the viewer returns to the detail (viewer unmounts after the exit fade)', () => {
+    jest.useFakeTimers();
+    try {
+      const root = renderContent({
+        detail: detailWithAttachments([
+          { id: 'p1', type: 'photo', url: 'https://r2/p1', createdAt: '2026-09-05T00:01:00.000Z' },
+        ]),
+      });
+      act(() => {
+        press(root, 'View photo 1 of 1');
+      });
+      // The single-item viewer hides the counter — the Close button marks open.
+      const close = root.find(t => t.props.accessibilityLabel === 'Close');
+      expect(close).toBeTruthy();
+      act(() => {
+        close.props.onPress();
+      });
+      // The session is held through the Modal's exit fade before release.
+      act(() => {
+        jest.advanceTimersByTime(500);
+      });
+      expect(root.findAll(t => t.props.accessibilityLabel === 'Close').length).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
 

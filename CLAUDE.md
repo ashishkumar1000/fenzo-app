@@ -149,3 +149,20 @@ Available aliases: `@components`, `@screens`, `@navigation`, `@hooks`, `@utils`,
 - Don't commit or push unless explicitly asked.
 - When unsure about version-specific behavior or library APIs, search the web —
   don't guess from memory.
+
+## Library research — New Architecture first (MANDATORY)
+
+This app runs **React Native New Architecture (Fabric/TurboModules)** and uses
+**Nitro Modules** for native code. Whenever you research or pick a new library:
+
+1. **Search first for popular, well-maintained libraries that support the New
+   Architecture** — check the library's README/docs for Fabric/TurboModule or
+   "New Architecture ready" support, and prefer Nitro Modules (`nitro`-based,
+   margelo-style) over legacy TurboModules where available.
+2. Verify recent maintenance (last release, open issues) and React Native 0.86
+   compatibility before recommending or adding anything.
+3. **Avoid libraries that are legacy-architecture-only** (old NativeModule +
+   interop-layer-dependent) unless there is no New Architecture alternative —
+   and if one must be used, state the interop risk explicitly in the story.
+4. Pure-JS libraries (no native module) are always safe with the New
+   Architecture and need no rebuild — prefer them when the feature allows.

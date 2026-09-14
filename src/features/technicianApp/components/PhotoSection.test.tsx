@@ -234,4 +234,69 @@ describe('PhotoSection', () => {
   });
 });
 
+describe('PhotoSection — gallery-view tappable tiles (Story 9-1)', () => {
+  /** Host nodes with the imagebutton role. */
+  function imagebuttons(renderer: ReactTestRenderer) {
+    return renderer.root.findAll(
+      t => t.props.accessibilityRole === 'imagebutton' && typeof t.props.onPress === 'function',
+      { deep: true },
+    );
+  }
+
+  beforeEach(() => {
+    jest.resetAllMocks();
+    useHook.mockReturnValue(hookReturn({}));
+  });
+
+  it('a confirmed tile is an imagebutton labelled with its viewer position', async () => {
+    const renderer = await render({ photos: [photo('a'), photo('b')], onViewPhoto: jest.fn() });
+    const labels = imagebuttons(renderer).map(p => p.props.accessibilityLabel);
+    expect(labels).toEqual(['View photo 1 of 2', 'View photo 2 of 2']);
+  });
+
+  // Review patch (2026-09-14): the imagebutton role is gated on the handler —
+  // a tile without onViewPhoto must not advertise itself as tappable.
+  it('without onViewPhoto a confirmed tile is not an imagebutton', async () => {
+    const renderer = await render({ photos: [photo('a'), photo('b')] });
+    expect(imagebuttons(renderer)).toHaveLength(0);
+  });
+
+  it('pressing a confirmed tile fires onViewPhoto with the viewer index', async () => {
+    const onViewPhoto = jest.fn();
+    const renderer = await render({ photos: [photo('a'), photo('b')], onViewPhoto });
+    const second = imagebuttons(renderer).find(p => p.props.accessibilityLabel === 'View photo 2 of 2');
+    await act(async () => {
+      second!.props.onPress();
+    });
+    expect(onViewPhoto).toHaveBeenCalledWith(1);
+  });
+
+  it('a null-url photo tile is a placeholder, not an imagebutton', async () => {
+    const renderer = await render({ photos: [photo('a', null)] });
+    expect(imagebuttons(renderer)).toHaveLength(0);
+  });
+
+  it('in-flight, failed and add tiles never become imagebuttons (AC 1, AC 7)', async () => {
+    useHook.mockReturnValue(
+      hookReturn({
+        entries: [entry({ localId: 'e1', phase: 'uploading' }), entry({ localId: 'e2', phase: 'failed' })],
+      }),
+    );
+    const renderer = await render({ photos: [] });
+    expect(imagebuttons(renderer)).toHaveLength(0);
+  });
+
+  it('numbering skips null-url photos — the viewer index matches the viewer list', async () => {
+    const onViewPhoto = jest.fn();
+    const renderer = await render({ photos: [photo('a', null), photo('b'), photo('c')], onViewPhoto });
+    const labels = imagebuttons(renderer).map(p => p.props.accessibilityLabel);
+    expect(labels).toEqual(['View photo 1 of 2', 'View photo 2 of 2']);
+    const second = imagebuttons(renderer)[1];
+    await act(async () => {
+      second.props.onPress();
+    });
+    expect(onViewPhoto).toHaveBeenCalledWith(1);
+  });
+});
+
 const LIMIT_CAPTION_TEXT = 'Limit reached (5)';

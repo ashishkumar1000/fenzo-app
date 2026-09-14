@@ -9,10 +9,10 @@
  * fails to load (e.g. an expired presigned URL) renders a placeholder with a
  * retry hint; a refetch is the ONLY retry, never a persisted URL.
  */
-import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { Image } from 'react-native';
+import { useCallback, useState } from 'react';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ImageOff } from 'lucide-react-native';
+import { AttachmentViewer, type ViewerItem } from '../../../components/AttachmentViewer';
 import { Button } from '../../../components/ui';
 import { colors, radius, spacing, typography } from '../../../theme';
 import type { JobAttachment } from '../../../services';
@@ -22,6 +22,25 @@ type Props = {
   /** 3.5 re-capture affordance — a ghost button under the signature tile. */
   onRecapture?: () => void;
 };
+
+/**
+ * 9-1 — this grid's viewer list: viewable photos in grid order, then the
+ * captured signature page. Null URLs are excluded (nothing to show), so the
+ * tile numbering counts only what the viewer actually holds.
+ */
+function viewerListOf(attachments: JobAttachment[]): ViewerItem[] {
+  const items: ViewerItem[] = attachments
+    .filter(a => a.type === 'photo' && a.url)
+    .map(a => ({ id: a.id, kind: 'photo', url: a.url as string }));
+  // Server is last-write-wins on signatures (a re-capture appends) — display
+  // the LAST captured one, matching TechJobDetailContent (code review
+  // 2026-09-14: `.find` surfaced the stale first capture).
+  const signature = attachments.filter(a => a.type === 'signature' && a.url).slice(-1)[0];
+  if (signature?.url) {
+    items.push({ id: signature.id, kind: 'signature', url: signature.url });
+  }
+  return items;
+}
 
 /** Photos in their arrival order, chunked 3-up so tiles are exactly equal. */
 function inRowsOfThree(photos: JobAttachment[]): JobAttachment[][] {
@@ -42,11 +61,27 @@ function Placeholder() {
   );
 }
 
-function PhotoTile({ attachment }: { attachment: JobAttachment }) {
+/** Photo tile — the server's presigned read URL, cover-fit.
+ *  9-1: a loaded tile is tappable to open the full-screen viewer; the
+ *  placeholder (null url / load failure) stays inert. */
+function PhotoTile({
+  attachment,
+  viewIndex,
+  total,
+  onOpen,
+}: {
+  attachment: JobAttachment;
+  /** Index in the viewer list (-1 = not viewable → inert placeholder). */
+  viewIndex: number;
+  total: number;
+  onOpen?: (index: number) => void;
+}) {
   // An expired presigned URL renders a broken image client-side — treat the
   // image's own error the same as a null URL (the refetch above is the retry).
   const [failed, setFailed] = useState(false);
-  if (!attachment.url || failed) {
+  // Handler-gated (code review 2026-09-14): without `onOpen` the tile must
+  // not advertise itself as tappable (SignatureTile's pattern).
+  if (!attachment.url || failed || viewIndex < 0) {
     return (
       <View style={styles.tile}>
         <Placeholder />
@@ -54,36 +89,55 @@ function PhotoTile({ attachment }: { attachment: JobAttachment }) {
     );
   }
   return (
-    <View style={styles.tile}>
+    <Pressable
+      accessibilityRole={onOpen ? 'imagebutton' : undefined}
+      accessibilityLabel={onOpen ? `View photo ${viewIndex + 1} of ${total}` : undefined}
+      onPress={onOpen ? () => onOpen(viewIndex) : undefined}
+      style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}>
       <Image
         source={{ uri: attachment.url }}
         style={styles.image}
         resizeMode="cover"
         onError={() => setFailed(true)}
       />
-    </View>
+    </Pressable>
   );
 }
 
-/** The signature tile — same null/failed handling, full-width and `contain`. */
-function SignatureTile({ url }: { url: string | null }) {
+/** The signature tile — same null/failed handling, full-width and `contain`.
+ *  9-1: a captured signature is tappable to open the viewer on its page. */
+function SignatureTile({ url, onView }: { url: string | null; onView?: () => void }) {
   const [failed, setFailed] = useState(false);
+  const captured = Boolean(url) && !failed && Boolean(onView);
   if (!url || failed) {
     return <Placeholder />;
   }
   return (
-    <Image
-      source={{ uri: url }}
-      style={styles.signatureImage}
-      resizeMode="contain"
-      onError={() => setFailed(true)}
-    />
+    <Pressable
+      accessibilityRole="imagebutton"
+      accessibilityLabel="View customer signature"
+      onPress={captured ? onView : undefined}
+      style={({ pressed }) => [styles.signaturePressable, captured && pressed && styles.tilePressed]}>
+      <Image
+        source={{ uri: url }}
+        style={styles.signatureImage}
+        resizeMode="contain"
+        onError={() => setFailed(true)}
+      />
+    </Pressable>
   );
 }
 
 export function AttachmentGrid({ attachments, onRecapture }: Props) {
+  const [viewer, setViewer] = useState<{ items: ViewerItem[]; initialIndex: number } | null>(null);
+  // Stable close callback — a fresh arrow every render defeats
+  // memo(ActiveViewer) (code review 2026-09-14).
+  const closeViewer = useCallback(() => setViewer(null), []);
   const photos = attachments.filter(a => a.type === 'photo');
   const signature = attachments.find(a => a.type === 'signature');
+  // 9-1 — the viewer list and its total (photos + signature), computed from
+  // the same snapshot the tiles are numbered against.
+  const viewerItems = viewerListOf(attachments);
 
   return (
     <View>
@@ -97,6 +151,11 @@ export function AttachmentGrid({ attachments, onRecapture }: Props) {
             <PhotoTile
               key={`${attachment.id}:${attachment.url ?? 'none'}`}
               attachment={attachment}
+              viewIndex={
+                attachment.url ? viewerItems.findIndex(i => i.id === attachment.id) : -1
+              }
+              total={viewerItems.length}
+              onOpen={index => setViewer({ items: viewerItems, initialIndex: index })}
             />
           ))}
           {/* A trailing short row must not stretch its tiles — pad it with
@@ -118,7 +177,11 @@ export function AttachmentGrid({ attachments, onRecapture }: Props) {
         <View style={styles.signatureRow}>
           <Text style={styles.signatureLabel}>Customer signature</Text>
           <View style={styles.signatureTile}>
-            <SignatureTile key={signature.url ?? 'none'} url={signature.url} />
+            <SignatureTile
+              key={signature.url ?? 'none'}
+              url={signature.url}
+              onView={() => setViewer({ items: viewerItems, initialIndex: viewerItems.length - 1 })}
+            />
           </View>
           {onRecapture ? (
             <Button
@@ -131,6 +194,14 @@ export function AttachmentGrid({ attachments, onRecapture }: Props) {
           ) : null}
         </View>
       ) : null}
+
+      {/* 9-1 — the grid-owned full-screen gallery (Modal-hosted by the viewer). */}
+      <AttachmentViewer
+        visible={viewer !== null}
+        items={viewer?.items ?? []}
+        initialIndex={viewer?.initialIndex ?? 0}
+        onClose={closeViewer}
+      />
     </View>
   );
 }
@@ -185,6 +256,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceCard,
     overflow: 'hidden',
     padding: spacing.s2,
+  },
+  // 9-1 — the tappable signature image fills its card.
+  signaturePressable: {
+    flex: 1,
+  },
+  // 9-1 press feedback: opacity dim (AC 6 allows scale or opacity).
+  tilePressed: {
+    opacity: 0.85,
   },
   signatureImage: {
     width: '100%',

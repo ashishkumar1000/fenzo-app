@@ -1,0 +1,177 @@
+diff --git a/dist/ImageViewing.d.ts b/dist/ImageViewing.d.ts
+--- a/dist/ImageViewing.d.ts
++++ b/dist/ImageViewing.d.ts
+@@ -6,7 +6,7 @@
+  *
+  */
+ import { ComponentType } from "react";
+-import { ModalProps } from "react-native";
++import { ModalProps, ViewStyle } from "react-native";
+ import { ImageSource } from "./@types";
+ declare type Props = {
+     images: ImageSource[];
+@@ -28,6 +28,9 @@
+     FooterComponent?: ComponentType<{
+         imageIndex: number;
+     }>;
++    ImageErrorComponent?: ComponentType;
++    loadingColor?: string;
++    getPageStyle?: (imageIndex: number) => ViewStyle;
+ };
+ declare const EnhancedImageViewing: (props: Props) => JSX.Element;
+ export default EnhancedImageViewing;
+diff --git a/dist/ImageViewing.js b/dist/ImageViewing.js
+--- a/dist/ImageViewing.js
++++ b/dist/ImageViewing.js
+@@ -18,7 +18,7 @@
+ const DEFAULT_DELAY_LONG_PRESS = 800;
+ const SCREEN = Dimensions.get("screen");
+ const SCREEN_WIDTH = SCREEN.width;
+-function ImageViewing({ images, keyExtractor, imageIndex, visible, onRequestClose, onLongPress = () => { }, onImageIndexChange, animationType = DEFAULT_ANIMATION_TYPE, backgroundColor = DEFAULT_BG_COLOR, presentationStyle, swipeToCloseEnabled, doubleTapToZoomEnabled, delayLongPress = DEFAULT_DELAY_LONG_PRESS, HeaderComponent, FooterComponent, }) {
++function ImageViewing({ images, keyExtractor, imageIndex, visible, onRequestClose, onLongPress = () => { }, onImageIndexChange, animationType = DEFAULT_ANIMATION_TYPE, backgroundColor = DEFAULT_BG_COLOR, presentationStyle, swipeToCloseEnabled, doubleTapToZoomEnabled, delayLongPress = DEFAULT_DELAY_LONG_PRESS, HeaderComponent, FooterComponent, ImageErrorComponent, loadingColor, getPageStyle, }) {
+     const imageList = useRef(null);
+     const [opacity, onRequestCloseEnhanced] = useRequestClose(onRequestClose);
+     const [currentImageIndex, onScroll] = useImageIndexChange(imageIndex, SCREEN);
+@@ -34,9 +34,6 @@
+         (_b = (_a = imageList) === null || _a === void 0 ? void 0 : _a.current) === null || _b === void 0 ? void 0 : _b.setNativeProps({ scrollEnabled: !isScaled });
+         toggleBarsVisible(!isScaled);
+     }, [imageList]);
+-    if (!visible) {
+-        return null;
+-    }
+     return (<Modal transparent={presentationStyle === "overFullScreen"} visible={visible} presentationStyle={presentationStyle} animationType={animationType} onRequestClose={onRequestCloseEnhanced} supportedOrientations={["portrait"]} hardwareAccelerated>
+       <StatusBarManager presentationStyle={presentationStyle}/>
+       <View style={[styles.container, { opacity, backgroundColor }]}>
+@@ -49,7 +46,7 @@
+         length: SCREEN_WIDTH,
+         offset: SCREEN_WIDTH * index,
+         index,
+-    })} renderItem={({ item: imageSrc }) => (<ImageItem onZoom={onZoom} imageSrc={imageSrc} onRequestClose={onRequestCloseEnhanced} onLongPress={onLongPress} delayLongPress={delayLongPress} swipeToCloseEnabled={swipeToCloseEnabled} doubleTapToZoomEnabled={doubleTapToZoomEnabled}/>)} onMomentumScrollEnd={onScroll} 
++    })} renderItem={({ item: imageSrc, index }) => (<ImageItem onZoom={onZoom} imageSrc={imageSrc} onRequestClose={onRequestCloseEnhanced} onLongPress={onLongPress} delayLongPress={delayLongPress} swipeToCloseEnabled={swipeToCloseEnabled} doubleTapToZoomEnabled={doubleTapToZoomEnabled} ImageErrorComponent={ImageErrorComponent} loadingColor={loadingColor} pageStyle={getPageStyle ? getPageStyle(index) : undefined}/>)} onMomentumScrollEnd={onScroll}
+     //@ts-ignore
+     keyExtractor={(imageSrc, index) => keyExtractor
+         ? keyExtractor(imageSrc, index)
+diff --git a/dist/components/ImageItem/ImageItem.android.d.ts b/dist/components/ImageItem/ImageItem.android.d.ts
+--- a/dist/components/ImageItem/ImageItem.android.d.ts
++++ b/dist/components/ImageItem/ImageItem.android.d.ts
+@@ -7,6 +7,8 @@
+  */
+ import React from "react";
+ import { ImageSource } from "../../@types";
++import { ComponentType } from "react";
++import { ViewStyle } from "react-native";
+ declare type Props = {
+     imageSrc: ImageSource;
+     onRequestClose: () => void;
+@@ -15,6 +17,9 @@
+     delayLongPress: number;
+     swipeToCloseEnabled?: boolean;
+     doubleTapToZoomEnabled?: boolean;
++    loadingColor?: string;
++    pageStyle?: ViewStyle;
++    ImageErrorComponent?: ComponentType;
+ };
+-declare const _default: React.MemoExoticComponent<({ imageSrc, onZoom, onRequestClose, onLongPress, delayLongPress, swipeToCloseEnabled, doubleTapToZoomEnabled, }: Props) => JSX.Element>;
++declare const _default: React.MemoExoticComponent<({ imageSrc, onZoom, onRequestClose, onLongPress, delayLongPress, swipeToCloseEnabled, doubleTapToZoomEnabled, loadingColor, pageStyle, ImageErrorComponent, }: Props) => JSX.Element>;
+ export default _default;
+diff --git a/dist/components/ImageItem/ImageItem.android.js b/dist/components/ImageItem/ImageItem.android.js
+--- a/dist/components/ImageItem/ImageItem.android.js
++++ b/dist/components/ImageItem/ImageItem.android.js
+@@ -16,9 +16,10 @@
+ const SCREEN = Dimensions.get("window");
+ const SCREEN_WIDTH = SCREEN.width;
+ const SCREEN_HEIGHT = SCREEN.height;
+-const ImageItem = ({ imageSrc, onZoom, onRequestClose, onLongPress, delayLongPress, swipeToCloseEnabled = true, doubleTapToZoomEnabled = true, }) => {
++const ImageItem = ({ imageSrc, onZoom, onRequestClose, onLongPress, delayLongPress, swipeToCloseEnabled = true, doubleTapToZoomEnabled = true, loadingColor = "#FFF", pageStyle, ImageErrorComponent, }) => {
+     const imageContainer = useRef(null);
+     const imageDimensions = useImageDimensions(imageSrc);
++    const [failed, setFailed] = useState(false);
+     const [translate, scale] = getImageTransform(imageDimensions, SCREEN);
+     const scrollValueY = new Animated.Value(0);
+     const [isLoaded, setLoadEnd] = useState(false);
+@@ -64,12 +65,12 @@
+         const offsetY = (_c = (_b = (_a = nativeEvent) === null || _a === void 0 ? void 0 : _a.contentOffset) === null || _b === void 0 ? void 0 : _b.y, (_c !== null && _c !== void 0 ? _c : 0));
+         scrollValueY.setValue(offsetY);
+     };
+-    return (<ScrollView ref={imageContainer} style={styles.listItem} pagingEnabled nestedScrollEnabled showsHorizontalScrollIndicator={false} showsVerticalScrollIndicator={false} contentContainerStyle={styles.imageScrollContainer} scrollEnabled={swipeToCloseEnabled} {...(swipeToCloseEnabled && {
++    return (<ScrollView ref={imageContainer} style={[styles.listItem, pageStyle]} pagingEnabled nestedScrollEnabled showsHorizontalScrollIndicator={false} showsVerticalScrollIndicator={false} contentContainerStyle={styles.imageScrollContainer} scrollEnabled={swipeToCloseEnabled} {...(swipeToCloseEnabled && {
+         onScroll,
+         onScrollEndDrag,
+     })}>
+-      <Animated.Image {...panHandlers} source={imageSrc} style={imageStylesWithOpacity} onLoad={onLoaded}/>
+-      {(!isLoaded || !imageDimensions) && <ImageLoading />}
++      <Animated.Image {...panHandlers} source={imageSrc} style={imageStylesWithOpacity} onLoad={onLoaded} onError={() => setFailed(true)}/>
++      {failed ? (ImageErrorComponent ? (<ImageErrorComponent />) : (<ImageLoading />)) : (!isLoaded || !imageDimensions) ? (<ImageLoading color={loadingColor}/>) : null}
+     </ScrollView>);
+ };
+ const styles = StyleSheet.create({
+diff --git a/dist/components/ImageItem/ImageItem.ios.d.ts b/dist/components/ImageItem/ImageItem.ios.d.ts
+--- a/dist/components/ImageItem/ImageItem.ios.d.ts
++++ b/dist/components/ImageItem/ImageItem.ios.d.ts
+@@ -7,6 +7,8 @@
+  */
+ import React from "react";
+ import { ImageSource } from "../../@types";
++import { ComponentType } from "react";
++import { ViewStyle } from "react-native";
+ declare type Props = {
+     imageSrc: ImageSource;
+     onRequestClose: () => void;
+@@ -15,6 +17,9 @@
+     delayLongPress: number;
+     swipeToCloseEnabled?: boolean;
+     doubleTapToZoomEnabled?: boolean;
++    loadingColor?: string;
++    pageStyle?: ViewStyle;
++    ImageErrorComponent?: ComponentType;
+ };
+-declare const _default: React.MemoExoticComponent<({ imageSrc, onZoom, onRequestClose, onLongPress, delayLongPress, swipeToCloseEnabled, doubleTapToZoomEnabled, }: Props) => JSX.Element>;
++declare const _default: React.MemoExoticComponent<({ imageSrc, onZoom, onRequestClose, onLongPress, delayLongPress, swipeToCloseEnabled, doubleTapToZoomEnabled, loadingColor, pageStyle, ImageErrorComponent, }: Props) => JSX.Element>;
+ export default _default;
+diff --git a/dist/components/ImageItem/ImageItem.ios.js b/dist/components/ImageItem/ImageItem.ios.js
+--- a/dist/components/ImageItem/ImageItem.ios.js
++++ b/dist/components/ImageItem/ImageItem.ios.js
+@@ -16,9 +16,10 @@
+ const SCREEN = Dimensions.get("screen");
+ const SCREEN_WIDTH = SCREEN.width;
+ const SCREEN_HEIGHT = SCREEN.height;
+-const ImageItem = ({ imageSrc, onZoom, onRequestClose, onLongPress, delayLongPress, swipeToCloseEnabled = true, doubleTapToZoomEnabled = true, }) => {
++const ImageItem = ({ imageSrc, onZoom, onRequestClose, onLongPress, delayLongPress, swipeToCloseEnabled = true, doubleTapToZoomEnabled = true, loadingColor = "#FFF", pageStyle, ImageErrorComponent, }) => {
+     const scrollViewRef = useRef(null);
+     const [loaded, setLoaded] = useState(false);
++    const [failed, setFailed] = useState(false);
+     const [scaled, setScaled] = useState(false);
+     const imageDimensions = useImageDimensions(imageSrc);
+     const handleDoubleTap = useDoubleTapToZoom(scrollViewRef, scaled, SCREEN);
+@@ -56,13 +57,13 @@
+     const onLongPressHandler = useCallback((event) => {
+         onLongPress(imageSrc);
+     }, [imageSrc, onLongPress]);
+-    return (<View>
+-      <ScrollView ref={scrollViewRef} style={styles.listItem} pinchGestureEnabled showsHorizontalScrollIndicator={false} showsVerticalScrollIndicator={false} maximumZoomScale={maxScale} contentContainerStyle={styles.imageScrollContainer} scrollEnabled={swipeToCloseEnabled} onScrollEndDrag={onScrollEndDrag} scrollEventThrottle={1} {...(swipeToCloseEnabled && {
++    return (<View style={pageStyle}>
++      <ScrollView ref={scrollViewRef} style={[styles.listItem, pageStyle]} pinchGestureEnabled showsHorizontalScrollIndicator={false} showsVerticalScrollIndicator={false} maximumZoomScale={maxScale} contentContainerStyle={styles.imageScrollContainer} scrollEnabled={swipeToCloseEnabled} onScrollEndDrag={onScrollEndDrag} scrollEventThrottle={1} {...(swipeToCloseEnabled && {
+         onScroll,
+     })}>
+-        {(!loaded || !imageDimensions) && <ImageLoading />}
++        {failed ? (ImageErrorComponent ? (<ImageErrorComponent />) : (<ImageLoading />)) : (!loaded || !imageDimensions) ? (<ImageLoading color={loadingColor}/>) : null}
+         <TouchableWithoutFeedback onPress={doubleTapToZoomEnabled ? handleDoubleTap : undefined} onLongPress={onLongPressHandler} delayLongPress={delayLongPress}>
+-          <Animated.Image source={imageSrc} style={imageStylesWithOpacity} onLoad={() => setLoaded(true)}/>
++          <Animated.Image source={imageSrc} style={imageStylesWithOpacity} onLoad={() => setLoaded(true)} onError={() => setFailed(true)}/>
+         </TouchableWithoutFeedback>
+       </ScrollView>
+     </View>);
+diff --git a/dist/components/ImageItem/ImageLoading.js b/dist/components/ImageItem/ImageLoading.js
+--- a/dist/components/ImageItem/ImageLoading.js
++++ b/dist/components/ImageItem/ImageLoading.js
+@@ -10,8 +10,8 @@
+ const SCREEN = Dimensions.get("screen");
+ const SCREEN_WIDTH = SCREEN.width;
+ const SCREEN_HEIGHT = SCREEN.height;
+-export const ImageLoading = () => (<View style={styles.loading}>
+-    <ActivityIndicator size="small" color="#FFF"/>
++export const ImageLoading = ({ color = "#FFF" }) => (<View style={styles.loading}>
++    <ActivityIndicator size="small" color={color}/>
+   </View>);
+ const styles = StyleSheet.create({
+     listItem: {

@@ -6,7 +6,7 @@
  *
  * Purely presentational — the screen owns the fetch and the header.
  */
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   Calendar,
@@ -18,6 +18,7 @@ import {
   PenLine,
 } from 'lucide-react-native';
 import { Button, Card } from '../../../components/ui';
+import { AttachmentViewer, type ViewerItem } from '../../../components/AttachmentViewer';
 import { colors, radius, spacing, touch, typography } from '../../../theme';
 import type { JobDetail } from '../../../services';
 import { openMaps } from '../../../utils/linking';
@@ -67,6 +68,13 @@ export function TechJobDetailContent({
   onRecaptureSignature,
 }: Props) {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  // 9-1 — the open viewer session. Captured ONCE per open (items + the
+  // tapped index) so a refetch while open can't remount the pager mid-swipe;
+  // the flicker guard lives in AttachmentViewer itself.
+  const [viewer, setViewer] = useState<{ items: ViewerItem[]; initialIndex: number } | null>(null);
+  // Stable close callback — a fresh arrow every render defeats
+  // memo(ActiveViewer) (code review 2026-09-14).
+  const closeViewer = useCallback(() => setViewer(null), []);
 
   const isTerminal = detail.status === 'completed' || detail.status === 'cancelled';
   const steps = buildStepper(detail, detail.activityLog);
@@ -76,6 +84,26 @@ export function TechJobDetailContent({
   // signature is the newest — display the LAST one (server last-write-wins).
   const signature =
     detail.attachments.filter(a => a.type === 'signature').slice(-1)[0] ?? null;
+  const showSignature = Boolean(
+    detail.workflowTemplate?.steps?.some(s => s.requiresSignature) && !isTerminal,
+  );
+
+  // 9-1 — the viewer list: viewable photos (null URLs excluded — there is
+  // nothing to show) followed by the captured signature page, in tile order.
+  const viewerItems = useMemo<ViewerItem[]>(() => {
+    const items: ViewerItem[] = photos
+      .filter(p => p.url)
+      .map(p => ({ id: p.id, kind: 'photo', url: p.url as string }));
+    if (showSignature && signature?.url) {
+      items.push({ id: signature.id, kind: 'signature', url: signature.url });
+    }
+    return items;
+  }, [photos, signature, showSignature]);
+
+  /** Photo tile tap → open the viewer on that photo's page. */
+  const handleViewPhoto = (index: number) => {
+    setViewer({ items: viewerItems, initialIndex: index });
+  };
   const description = detail.description;
   const customerAddress = detail.customer.address;
   const customerCity = detail.customer.city;
@@ -173,6 +201,8 @@ export function TechJobDetailContent({
             photos={photos}
             readOnly={isTerminal}
             onConfirmed={onPhotosConfirmed}
+            onViewPhoto={handleViewPhoto}
+            viewerTotal={viewerItems.length}
           />
         </Card>
       ) : null}
@@ -182,14 +212,18 @@ export function TechJobDetailContent({
           show no signature card, and there is no voluntary capture). The
           captured tile offers Re-capture; the dashed placeholder stands until
           the signature step happens. */}
-      {detail.workflowTemplate?.steps?.some(s => s.requiresSignature) && !isTerminal ? (
+      {showSignature ? (
         <Card padding="md">
           <Text style={styles.sectionTitle}>Customer signature</Text>
           {signature ? (
             // Keyed by the presigned URL: a refetch that mints a new one
             // remounts the tile, clearing any failed state from the old URL.
             <>
-              <SignatureTile key={signature.url ?? 'none'} attachment={signature} />
+              <SignatureTile
+                key={signature.url ?? 'none'}
+                attachment={signature}
+                onView={() => setViewer({ items: viewerItems, initialIndex: viewerItems.length - 1 })}
+              />
               {onRecaptureSignature ? (
                 <Button
                   variant="ghost"
@@ -230,6 +264,15 @@ export function TechJobDetailContent({
         </Pressable>
         {isHistoryOpen ? <ActivityTimeline entries={detail.activityLog} workflowTemplate={detail.workflowTemplate} jobSite={jobSiteCoords(detail.customer)} /> : null}
       </Card>
+
+      {/* 9-1 — the full-screen gallery over everything above. Mounts only
+          while a session is open (Modal-hosted by the viewer itself). */}
+      <AttachmentViewer
+        visible={viewer !== null}
+        items={viewer?.items ?? []}
+        initialIndex={viewer?.initialIndex ?? 0}
+        onClose={closeViewer}
+      />
     </>
   );
 }

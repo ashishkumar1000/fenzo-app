@@ -91,6 +91,9 @@ export const colors = {
   // Scrim — modal / sheet backdrop overlay (gray900 @ 45% alpha).
   scrim: 'rgba(17, 24, 39, 0.45)',
 
+  // Full-screen image viewer backdrop — brand ink at 96%, essentially opaque.
+  backdropDark: 'rgba(17, 24, 39, 0.96)',
+
   // Text
   textStrong: palette.gray900,
   textBody: palette.gray700,

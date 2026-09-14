@@ -12,19 +12,26 @@
  * tile and clears any `failed` state from the old one.
  */
 import { useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ImageOff } from 'lucide-react-native';
 import { colors, radius, spacing, typography } from '../../../theme';
 import type { JobAttachment } from '../../../services';
 
 type Props = {
   attachment: JobAttachment;
+  /** 9-1 — fired when the captured signature is tapped to open the viewer. */
+  onView?: () => void;
 };
 
-export function SignatureTile({ attachment }: Props) {
+export function SignatureTile({ attachment, onView }: Props) {
   const [failed, setFailed] = useState(false);
+  const captured = Boolean(attachment.url) && !failed && Boolean(onView);
   return (
-    <View style={styles.tile}>
+    <Pressable
+      accessibilityRole={captured ? 'imagebutton' : undefined}
+      accessibilityLabel={captured ? 'View customer signature' : undefined}
+      onPress={captured ? onView : undefined}
+      style={({ pressed }) => [styles.tile, captured && pressed && styles.tilePressed]}>
       {!attachment.url || failed ? (
         <View style={styles.placeholder}>
           <ImageOff size={20} color={colors.textDisabled} strokeWidth={2} />
@@ -38,7 +45,7 @@ export function SignatureTile({ attachment }: Props) {
           onError={() => setFailed(true)}
         />
       )}
-    </View>
+    </Pressable>
   );
 }
 
@@ -68,5 +75,9 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
+  },
+  // 9-1 press feedback: opacity dim (AC 6 allows scale or opacity).
+  tilePressed: {
+    opacity: 0.85,
   },
 });
