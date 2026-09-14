@@ -30,13 +30,11 @@ development_status:
   1-5-jobs-timeline-scopes: done  # committed 37a92e2 (review: 3 decisions + 10 patches + 3 defers)
   1-6-job-requirement-toggles: done  # review closed 2026-09-05 (1 decision + 6 patches + 5 defers); deps: fenzit-be 3-8 (done)
   1-7-home-todays-jobs-section: done  # implemented 2026-09-05; tests 524/524 green, tsc clean; review closed by user 2026-09-11; design: fenzo-meta ux-Fenzo-2026-09-05-home-todays-jobs
-  epic-1-retrospective: optional
 
   # Epic 2: Customer Depth
   epic-2: done  # all stories done; closed 2026-09-08
   2-1-customer-detail-with-job-history: done
   2-2-single-customer-data-path: done  # review closed 2026-09-04 (type lie: CreatedCustomer claimed jobCount/lastJobDate the wire never sends — fixed)
-  epic-2-retrospective: optional
 
   # Epic 3: Technician Job Execution
   epic-3: done  # all stories 3-1..3-5 done; closed 2026-09-08
@@ -45,14 +43,12 @@ development_status:
   3-3-workflow-step-advancement: done  # committed aba7b75 (review: 1 decision + 20 patches)
   3-4-photo-capture-upload-r2: done  # committed e189daa (2 review rounds: 18 patches + second pass)
   3-5-signature-capture: done  # reviewed 2026-09-05: 15 patches applied, 450 tests green; on-device pad smoke test pending
-  epic-3-retrospective: optional
 
   # Epic 4: Offline-First Sync — DEFERRED 2026-09-11 (not doing; stories back to backlog)
   epic-4: backlog  # deferred 2026-09-11 by user decision — offline-first sync not being done
   4-1-delta-sync-hydration-store: backlog  # deferred 2026-09-11
   4-2-offline-action-queue-idempotent-replay: backlog  # deferred 2026-09-11
   4-3-connectivity-ux: backlog  # deferred 2026-09-11
-  epic-4-retrospective: optional
 
   # Epic 5: Account, Session & Polish — 5-1..5-3 ship BEFORE Epic 4 (plan reordered 2026-09-05); 5-4 stays last
   epic-5: in-progress
@@ -60,4 +56,3 @@ development_status:
   5-2-profile-edit: done  # review closed 2026-09-05 (1 decision + 7 patches: seq-bump race, draft-wipe, Button loading, users/wiring tests)
   5-3-session-expiry-global-401: done  # review closed 2026-09-05 (1 decision + 10 patches: logout → registry + clearAuthToken, App/registry/banner/race tests)
   5-4-error-envelope-consistency: ready-for-dev
-  epic-5-retrospective: optional
