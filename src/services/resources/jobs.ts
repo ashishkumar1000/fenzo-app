@@ -198,8 +198,6 @@ export interface ApiJob {
   notesForTechnician: string | null;
   createdAt: string;
   updatedAt: string;
-  /** Require location capture on step completion. */
-  captureLocationOnSteps: boolean;
 }
 
 /**
