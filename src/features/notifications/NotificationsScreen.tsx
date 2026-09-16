@@ -237,7 +237,7 @@ export default function NotificationsScreen({ navigation }: Props) {
                 <View style={styles.footerSpinner}>
                   <ActivityIndicator size="small" color={colors.primary} />
                 </View>
-              ) : null
+              ) : undefined // RN 0.87 list types reject `null` here
             }
             // When empty: flexGrow gives the empty state's `flex: 1` a height
             // to centre itself in.

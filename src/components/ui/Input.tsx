@@ -13,6 +13,7 @@ import {
   TextInput,
   View,
   type StyleProp,
+  type TextInputInstance,
   type TextInputProps,
   type ViewStyle,
 } from 'react-native';
@@ -42,8 +43,10 @@ export type InputProps = {
 >;
 
 /** Ref forwards to the underlying `TextInput` (e.g. to focus it
- *  programmatically when a native sheet finishes presenting). */
-export const Input = forwardRef<TextInput, InputProps>(function Input({
+ *  programmatically when a native sheet finishes presenting). RN 0.87 types
+ *  the instance as `TextInputInstance` (a ReactNativeElement — focus() lives
+ *  there), no longer the component's props type. */
+export const Input = forwardRef<TextInputInstance, InputProps>(function Input({
   label,
   value,
   onChangeText,

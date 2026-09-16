@@ -9,6 +9,33 @@ import {
   notificationStepLabel,
   notificationStepStatus,
 } from './notificationBannerModel';
+import type { WorkflowTemplateStep } from '../../services/resources/jobs';
+
+/** Story 4.5 dynamic template fixture — the label/status lookups read from
+ * template steps only; there are no hardcoded fallbacks any more. */
+function templateStep(
+  key: string,
+  label: string,
+  setsStatus: string | null,
+): WorkflowTemplateStep {
+  return {
+    key,
+    label,
+    requiresPhoto: false,
+    requiresSignature: false,
+    requiresLocation: false,
+    setsStatus,
+    advancesOn: null,
+  };
+}
+
+const TEMPLATE_STEPS: WorkflowTemplateStep[] = [
+  templateStep('on_my_way', 'On my way', null),
+  templateStep('arrived', 'Arrived', null),
+  templateStep('in_progress', 'In progress', 'in_progress'),
+  templateStep('signature_captured', 'Signature captured', null),
+  templateStep('completed', 'Completed', 'completed'),
+];
 
 describe('eventRowPayload', () => {
   it('unwraps both levels of the broadcast_changes envelope (verified live against realtime.messages)', () => {
@@ -74,24 +101,29 @@ describe('eventRowPayload', () => {
 });
 
 describe('notificationStepLabel', () => {
-  it('humanizes every known step value', () => {
-    expect(notificationStepLabel('completed')).toBe('Completed');
-    expect(notificationStepLabel('signature_captured')).toBe('Signature captured');
+  it('resolves the label from the job\'s template steps (Story 4.5 dynamic)', () => {
+    expect(notificationStepLabel('completed', TEMPLATE_STEPS)).toBe('Completed');
+    expect(notificationStepLabel('signature_captured', TEMPLATE_STEPS)).toBe('Signature captured');
   });
 
-  it('renders an unknown step value raw — never undefined, never a crash', () => {
+  it('without a template, renders the raw step key — never undefined, never a crash', () => {
+    expect(notificationStepLabel('completed')).toBe('completed');
     expect(notificationStepLabel('brand_new_step')).toBe('brand_new_step');
   });
 
+  it('a step missing from the template renders raw, too', () => {
+    expect(notificationStepLabel('brand_new_step', TEMPLATE_STEPS)).toBe('brand_new_step');
+  });
+
   it('does not resolve inherited prototype keys as step labels', () => {
-    // `STEPS[step]` alone would pick Object.prototype members up and
+    // A `STEPS[step]` lookup alone would pick Object.prototype members up and
     // interpolate a function's source into the banner.
-    expect(notificationStepLabel('toString')).toBe('toString');
-    expect(notificationStepLabel('constructor')).toBe('constructor');
+    expect(notificationStepLabel('toString', TEMPLATE_STEPS)).toBe('toString');
+    expect(notificationStepLabel('constructor', TEMPLATE_STEPS)).toBe('constructor');
   });
 
   it('returns the fallback copy for missing/empty/whitespace steps', () => {
-    expect(notificationStepLabel(null)).toBe(BANNER_FALLBACK_TEXT);
+    expect(notificationStepLabel(null, TEMPLATE_STEPS)).toBe(BANNER_FALLBACK_TEXT);
     expect(notificationStepLabel('')).toBe(BANNER_FALLBACK_TEXT);
     expect(notificationStepLabel('   ')).toBe(BANNER_FALLBACK_TEXT);
   });
@@ -105,7 +137,9 @@ describe('bannerPartsFromEvent', () => {
       technicianName: 'Priya',
       jobNumber: 'JOB-1042',
       step: 'arrived',
-      stepLabel: 'Arrived',
+      // bannerPartsFromEvent has no template lookup — the raw step key is the
+      // label at this layer (template-aware callers pass one to the model).
+      stepLabel: 'arrived',
     });
   });
 
@@ -114,7 +148,7 @@ describe('bannerPartsFromEvent', () => {
       technicianName: 'Priya',
       jobNumber: null,
       step: 'on_my_way',
-      stepLabel: 'On my way',
+      stepLabel: 'on_my_way',
     });
     expect(bannerPartsFromEvent({ job_number: 'J', step: 7 })).toEqual({
       technicianName: null,
@@ -208,18 +242,19 @@ describe('bannerTextFromParts', () => {
 });
 
 describe('notificationStepStatus', () => {
-  it('maps terminal-ish steps to done and the rest to progress', () => {
-    expect(notificationStepStatus('arrived')).toBe('done');
-    expect(notificationStepStatus('completed')).toBe('done');
-    expect(notificationStepStatus('on_my_way')).toBe('progress');
-    expect(notificationStepStatus('in_progress')).toBe('progress');
-    expect(notificationStepStatus('photos_uploaded')).toBe('progress');
-    expect(notificationStepStatus('signature_captured')).toBe('progress');
+  it('derives the status from the template step\'s setsStatus field', () => {
+    expect(notificationStepStatus('completed', TEMPLATE_STEPS)).toBe('done');
+    expect(notificationStepStatus('in_progress', TEMPLATE_STEPS)).toBe('progress');
+    // Intermediate steps set no status — the scheduled family.
+    expect(notificationStepStatus('on_my_way', TEMPLATE_STEPS)).toBe('scheduled');
+    expect(notificationStepStatus('arrived', TEMPLATE_STEPS)).toBe('scheduled');
+    expect(notificationStepStatus('signature_captured', TEMPLATE_STEPS)).toBe('scheduled');
   });
 
-  it('maps unknown and missing steps to neutral — never a crash', () => {
-    expect(notificationStepStatus('brand_new_step')).toBe('neutral');
-    expect(notificationStepStatus('toString')).toBe('neutral');
-    expect(notificationStepStatus(null)).toBe('neutral');
+  it('maps unknown, missing, and template-less steps to neutral — never a crash', () => {
+    expect(notificationStepStatus('brand_new_step', TEMPLATE_STEPS)).toBe('neutral');
+    expect(notificationStepStatus('toString', TEMPLATE_STEPS)).toBe('neutral');
+    expect(notificationStepStatus('completed')).toBe('neutral'); // no template
+    expect(notificationStepStatus(null, TEMPLATE_STEPS)).toBe('neutral');
   });
 });

@@ -13,7 +13,11 @@
  * Errors (422 validation, network) render inline and keep the sheet open.
  */
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput } from 'react-native';
+import {
+  StyleSheet,
+  Text,
+  type TextInputInstance,
+} from 'react-native';
 import { Button, Input, Sheet } from '../../../components/ui';
 import { colors, spacing, typography } from '../../../theme';
 import { usersApi } from '../../../services';
@@ -47,7 +51,8 @@ const MAX_NAME_LENGTH = 100;
 export function EditNameSheet({ visible, currentName, onClose }: Props) {
   // Focused on did-present — TrueSheet discourages `autoFocus` (the keyboard
   // would appear before the native sheet finishes presenting).
-  const inputRef = useRef<TextInput>(null);
+  // RN 0.87: the input's instance type (focus()/clear()/…), not the component's props type.
+  const inputRef = useRef<TextInputInstance>(null);
   const [name, setName] = useState(currentName ?? '');
   const [submitting, setSubmitting] = useState(false);
   // Same-frame double-tap guard: `submitting` (and the Button's `loading`)

@@ -354,7 +354,7 @@ export default function JobsScreen({ navigation, route }: Props) {
                 <View style={styles.footerSpinner}>
                   <ActivityIndicator size="small" color={colors.primary} />
                 </View>
-              ) : null
+              ) : undefined // RN 0.87 list types reject `null` here
             }
             // When empty: flexGrow gives EmptyState's `flex: 1` a height to
             // centre itself in, and the list padding drops away since

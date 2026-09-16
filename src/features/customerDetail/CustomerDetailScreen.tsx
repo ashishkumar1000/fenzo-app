@@ -320,7 +320,7 @@ export default function CustomerDetailScreen() {
               <View style={styles.footer}>
                 <ActivityIndicator size="small" color={colors.primary} />
               </View>
-            ) : null
+            ) : undefined // RN 0.87 list types reject `null` here
           }
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           contentContainerStyle={styles.content}

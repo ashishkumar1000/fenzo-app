@@ -29,7 +29,12 @@
  * coordinates, since a hand-typed address has none.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, StyleSheet, TextInput, View } from 'react-native';
+import {
+  AccessibilityInfo,
+  StyleSheet,
+  View,
+  type TextInputInstance,
+} from 'react-native';
 import { Search } from 'lucide-react-native';
 import { Input, Sheet } from '../../components/ui';
 import { colors, spacing } from '../../theme';
@@ -87,7 +92,8 @@ export default function AddressPickerSheet({
   // ever mounts once — a plain `autoFocus` prop would only fire the very
   // first time the sheet ever presents. Focusing from `onDidPresent`
   // instead re-fires on every open.
-  const inputRef = useRef<TextInput>(null);
+  // RN 0.87: the input's instance type (focus()/clear()/…), not the component's props type.
+  const inputRef = useRef<TextInputInstance>(null);
 
   const isInteractive = phase !== 'resolving';
 

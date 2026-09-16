@@ -64,7 +64,9 @@ export interface OwnerNotificationBanner {
  * without a device. iOS nuance: only `'active'` subscribes — `'inactive'`
  * (app switcher, notification-centre glance) counts as background.
  */
-export function shouldSubscribe(appState: string): boolean {
+export function shouldSubscribe(appState: string | null | undefined): boolean {
+  // RN 0.87 types AppState.currentState as string | null | undefined
+  // (transient states) — anything that isn't 'active' is not foreground.
   return appState === 'active';
 }
 

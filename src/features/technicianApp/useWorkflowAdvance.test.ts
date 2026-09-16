@@ -16,12 +16,12 @@ import type { JobDetail, WorkflowTemplateStep } from '../../services';
 const baseTemplate = {
   version: 1,
   steps: [
-    { key: 'on_my_way', label: 'On my way', requiresPhoto: false, requiresSignature: false, setsStatus: null, advancesOn: null },
-    { key: 'arrived', label: 'Arrived', requiresPhoto: false, requiresSignature: false, setsStatus: null, advancesOn: null },
-    { key: 'in_progress', label: 'Start work', requiresPhoto: false, requiresSignature: false, setsStatus: 'in_progress', advancesOn: null },
-    { key: 'photos_uploaded', label: 'Upload photos', requiresPhoto: true, requiresSignature: false, setsStatus: null, advancesOn: 'photo_confirm' },
-    { key: 'signature_captured', label: 'Capture signature', requiresPhoto: false, requiresSignature: true, setsStatus: null, advancesOn: null },
-    { key: 'completed', label: 'Mark complete', requiresPhoto: false, requiresSignature: false, setsStatus: 'completed', advancesOn: null },
+    { key: 'on_my_way', label: 'On my way', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: null, advancesOn: null },
+    { key: 'arrived', label: 'Arrived', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: null, advancesOn: null },
+    { key: 'in_progress', label: 'Start work', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: 'in_progress', advancesOn: null },
+    { key: 'photos_uploaded', label: 'Upload photos', requiresPhoto: true, requiresSignature: false, requiresLocation: false, setsStatus: null, advancesOn: 'photo_confirm' },
+    { key: 'signature_captured', label: 'Capture signature', requiresPhoto: false, requiresSignature: true, requiresLocation: false, setsStatus: null, advancesOn: null },
+    { key: 'completed', label: 'Mark complete', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: 'completed', advancesOn: null },
   ],
 };
 
@@ -82,8 +82,8 @@ describe('useWorkflowAdvance — signature-reroute detection', () => {
     const customTemplate = {
       version: 1,
       steps: [
-        { key: 'start', label: 'Start', requiresPhoto: false, requiresSignature: false, setsStatus: null, advancesOn: null },
-        { key: 'get_signature', label: 'Get signature', requiresPhoto: false, requiresSignature: true, setsStatus: null, advancesOn: null },
+        { key: 'start', label: 'Start', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: null, advancesOn: null },
+        { key: 'get_signature', label: 'Get signature', requiresPhoto: false, requiresSignature: true, requiresLocation: false, setsStatus: null, advancesOn: null },
       ],
     };
     const detail = detailWithTemplate(customTemplate);
@@ -140,8 +140,8 @@ describe('useWorkflowAdvance — reconcile membership check', () => {
     const customTemplate = {
       version: 1,
       steps: [
-        { key: 'custom_a', label: 'Custom A', requiresPhoto: false, requiresSignature: false, setsStatus: null, advancesOn: null },
-        { key: 'custom_b', label: 'Custom B', requiresPhoto: false, requiresSignature: false, setsStatus: null, advancesOn: null },
+        { key: 'custom_a', label: 'Custom A', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: null, advancesOn: null },
+        { key: 'custom_b', label: 'Custom B', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: null, advancesOn: null },
       ],
     };
     const detail = detailWithTemplate(customTemplate);
@@ -156,8 +156,8 @@ describe('useWorkflowAdvance — reconcile membership check', () => {
     const customTemplate = {
       version: 1,
       steps: [
-        { key: 'step_a', label: 'Step A', requiresPhoto: false, requiresSignature: false, setsStatus: null, advancesOn: null },
-        { key: 'step_b', label: 'Step B', requiresPhoto: false, requiresSignature: false, setsStatus: null, advancesOn: null },
+        { key: 'step_a', label: 'Step A', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: null, advancesOn: null },
+        { key: 'step_b', label: 'Step B', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: null, advancesOn: null },
       ],
     };
     const detail = detailWithTemplate(customTemplate);

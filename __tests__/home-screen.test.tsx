@@ -99,7 +99,6 @@ function makeProfileJob(overrides: Partial<ProfileJob> = {}): ProfileJob {
     customerId: 'c-1',
     technicianId: 'tech-1',
     serviceLocation: 'Chennai',
-    serviceType: 'plumbing',
     skill: { id: 's-1', name: 'Plumbing' },
     scheduledStart: '2026-09-05T04:00:00.000Z',
     scheduledEnd: null,
@@ -409,7 +408,6 @@ it("resolves a job card's names from the embed, falling back when the embed's na
     customerId: 'c-9',
     technicianId: 'tech-9',
     scheduledStart: '2026-09-05T05:00:00.000Z',
-    serviceType: 'electrical',
     skill: { id: 's-2', name: 'Electrical' },
     customer: { id: 'c-9', name: null, countryCode: '', phoneNumber: '', address: null, city: null },
     technician: { id: 'tech-9', name: null, countryCode: '', phoneNumber: '', skills: [] },
@@ -435,7 +433,6 @@ it("falls back for an empty-string embed name too, not just null", async () => {
   // must still fall through to the next name source rather than render blank.
   const job = makeProfileJob({
     id: 'j-empty-name',
-    serviceType: 'pest_control',
     skill: { id: 's-3', name: 'Pest control' },
     customer: { id: 'c-1', name: '', countryCode: '', phoneNumber: '', address: null, city: null },
     technician: { id: 'tech-1', name: '', countryCode: '', phoneNumber: '', skills: [] },

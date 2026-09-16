@@ -30,5 +30,14 @@ target 'FenzitApp' do
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        # RN 0.87's own floor (min_ios_version_supported) is 15.1 — pods must
+        # not sit below the framework. Raise (never lower) to silence warnings.
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
+        # Apple-Silicon-only: drops the x86_64 slice for Intel/CI simulators.
+        config.build_settings['ARCHS'] = 'arm64'
+      end
+    end
   end
 end

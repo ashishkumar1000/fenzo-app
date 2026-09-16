@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Calendar, Clock, MapPin } from 'lucide-react-native';
 import { Badge, Card } from '../../../components/ui';
-import { colors, palette, radius, spacing, typography } from '../../../theme';
+import { colors, palette, radius, spacing, typography, type StatusKey } from '../../../theme';
 import type { JobDetail } from '../../../services';
 import { formatTimeLabel } from '../../jobs/format';
 import { eventStatusKey, resolveEventLabel } from '../eventLabels';
@@ -9,7 +9,8 @@ import { eventStatusKey, resolveEventLabel } from '../eventLabels';
 type Props = {
   detail: JobDetail;
   urgent: boolean;
-  statusBadge: string | null;
+  /** `statusToBadge(detail.status)` — the Badge vocabulary minus neutral. */
+  statusBadge: Exclude<StatusKey, 'neutral'> | null;
 };
 
 const STATUS_LABEL = {

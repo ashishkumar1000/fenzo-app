@@ -97,7 +97,7 @@ it('update PATCHes /jobs/:id with the cancel payload verbatim', async () => {
     customerId: 'c1',
     technicianId: 't1',
     serviceLocation: '12 Anna Nagar, Chennai',
-    serviceType: 'plumbing',
+    skill: { id: 's-1', name: 'plumbing' },
     scheduledStart: '2026-09-03T10:00:00Z',
     scheduledEnd: null,
     status: 'cancelled',

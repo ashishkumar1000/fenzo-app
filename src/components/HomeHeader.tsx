@@ -89,8 +89,9 @@ export default function HomeHeader({
 
   return (
     <>
-      {/* iOS blue status bar */}
-      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+      {/* iOS light status bar; RN 0.87 removed StatusBar backgroundColor —
+          the blue strip is the header View itself. */}
+      <StatusBar barStyle="light-content" />
 
       {/* Plain View, not SafeAreaView: the blue header handles the notch with
           its own top margin (see headerContent.marginTop). It previously kept

@@ -19,3 +19,18 @@ buildscript {
 }
 
 apply plugin: "com.facebook.react.rootproject"
+
+// Pin every Android library to the same NDK the app uses. Libraries that
+// don't set their own ndkVersion get AGP's default (r28), whose clang emits
+// calls to __cxa_init_primary_exception — a symbol missing from the
+// r27-built libc++_shared.so bundled in the react-android AAR
+// (facebook/react-native#54886), which crashes with UnsatisfiedLinkError at
+// startup (seen with react-native-nitro-geolocation).
+subprojects { sub ->
+    sub.plugins.withId("com.android.library") {
+        def androidExt = sub.extensions.findByName("android")
+        if (androidExt != null) {
+            androidExt.ndkVersion = rootProject.ext.ndkVersion
+        }
+    }
+}

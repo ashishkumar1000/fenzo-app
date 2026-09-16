@@ -45,6 +45,24 @@ jest.mock('@lodev09/react-native-true-sheet', () =>
   require('@lodev09/react-native-true-sheet/mock'),
 );
 
+// react-native-nitro-geolocation boots NitroModules on import (a native
+// TurboModule jest cannot load) — the `/compat` entry and the main entry
+// (features/technicianApp/geolocation.ts imports both) crash every suite
+// that transitively reaches App. Stub just the methods the app calls;
+// suites needing to drive them override the mock locally.
+jest.mock('react-native-nitro-geolocation/compat', () => ({
+  __esModule: true,
+  default: {
+    requestAuthorization: jest.fn(),
+    getCurrentPosition: jest.fn(),
+  },
+}));
+
+jest.mock('react-native-nitro-geolocation', () => ({
+  __esModule: true,
+  requestPermission: jest.fn(async () => 'granted'),
+}));
+
 // Pin the test timezone: the screens format dates with toLocaleDateString
 // ('en-IN', …) on UTC timestamps, which shifts a day in behind-UTC timezones
 // — assertions like "12 Aug 2026" must not depend on the host TZ. IST is the

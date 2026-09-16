@@ -104,7 +104,7 @@ export default function HistoryScreen() {
               <View style={styles.footerSpinner}>
                 <ActivityIndicator size="small" color={colors.primary} />
               </View>
-            ) : null
+            ) : undefined // RN 0.87 list types reject `null` here
           }
           contentContainerStyle={[
             styles.listContent,

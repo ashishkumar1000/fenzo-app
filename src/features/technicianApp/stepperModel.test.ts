@@ -12,6 +12,7 @@ const photoStep: WorkflowTemplateStep = {
   label: 'Upload photos',
   requiresPhoto: true,
   requiresSignature: false,
+  requiresLocation: false,
   setsStatus: null,
   advancesOn: 'photo_confirm',
 };
@@ -21,6 +22,7 @@ const signatureStep: WorkflowTemplateStep = {
   label: 'Capture signature',
   requiresPhoto: false,
   requiresSignature: true,
+  requiresLocation: false,
   setsStatus: null,
   advancesOn: null,
 };
@@ -30,6 +32,7 @@ const completedStep: WorkflowTemplateStep = {
   label: 'Mark complete',
   requiresPhoto: false,
   requiresSignature: false,
+  requiresLocation: false,
   setsStatus: 'completed',
   advancesOn: null,
 };
@@ -37,9 +40,9 @@ const completedStep: WorkflowTemplateStep = {
 const template = {
   version: 1,
   steps: [
-    { key: 'on_my_way', label: 'On my way', requiresPhoto: false, requiresSignature: false, setsStatus: null, advancesOn: null },
-    { key: 'arrived', label: 'Arrived', requiresPhoto: false, requiresSignature: false, setsStatus: null, advancesOn: null },
-    { key: 'in_progress', label: 'Start work', requiresPhoto: false, requiresSignature: false, setsStatus: 'in_progress', advancesOn: null },
+    { key: 'on_my_way', label: 'On my way', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: null, advancesOn: null },
+    { key: 'arrived', label: 'Arrived', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: null, advancesOn: null },
+    { key: 'in_progress', label: 'Start work', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: 'in_progress', advancesOn: null },
     photoStep,
     signatureStep,
     completedStep,

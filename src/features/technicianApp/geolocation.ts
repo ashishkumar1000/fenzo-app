@@ -1,5 +1,6 @@
 import { PermissionsAndroid, Platform } from 'react-native';
 import Geolocation from 'react-native-nitro-geolocation/compat';
+import { requestPermission } from 'react-native-nitro-geolocation';
 
 export interface LocationPermissionOutcome {
   status: 'granted' | 'denied' | 'undetermined';
@@ -58,10 +59,13 @@ export async function requestLocationPermission(): Promise<LocationPermissionOut
   }
 
   try {
-    const result = await Geolocation.requestAuthorization('whenInUse');
+    // nitro-geolocation 1.4.x: the /compat `requestAuthorization` is
+    // callback-based (the old promise + 'whenInUse' call resolved to
+    // undefined and read as "denied"); use the main API instead.
+    const status = await requestPermission();
     return {
-      status: result === 'granted' ? 'granted' : 'denied',
-      ...(result !== 'granted' && { error: PLATFORM_MESSAGES.ios.denied }),
+      status: status === 'granted' ? 'granted' : 'denied',
+      ...(status !== 'granted' && { error: PLATFORM_MESSAGES.ios.denied }),
     };
   } catch (err) {
     console.error('[geolocation] authorization error:', err);

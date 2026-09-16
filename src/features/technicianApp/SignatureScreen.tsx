@@ -23,6 +23,7 @@ import SignatureView, {
   type SignatureViewRef,
 } from 'react-native-signature-canvas';
 import { Button, Card, IconButton } from '../../components/ui';
+import type { WorkflowTemplateStep } from '../../services/resources/jobs';
 import { ChevronLeft } from 'lucide-react-native';
 import { colors, fontSize, leading, spacing, typography } from '../../theme';
 import type { TechnicianRootStackParamList } from '../../navigation/types';

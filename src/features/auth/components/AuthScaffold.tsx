@@ -32,7 +32,8 @@ type Props = {
 export function AuthScaffold({ step, children }: Props) {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.surfacePage} />
+      {/* RN 0.87 removed StatusBar backgroundColor — the root View paints it. */}
+      <StatusBar barStyle="dark-content" />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

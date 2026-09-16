@@ -11,7 +11,7 @@
  */
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
-import { ActivityIndicator, Alert, RefreshControl, ScrollView } from 'react-native';
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, type AlertButton } from 'react-native';
 
 const mockGoBack = jest.fn();
 const mockNavigate = jest.fn();
@@ -57,21 +57,24 @@ function makeDetail(overrides: Partial<JobDetail> = {}): JobDetail {
     customerId: 'c1',
     technicianId: 't1',
     serviceLocation: '12 Anna Nagar, Chennai',
-    serviceType: 'plumbing',
     skill: { id: 'skill-plumbing', name: 'Plumbing' },
     scheduledStart: '2026-09-03T10:00:00Z',
     scheduledEnd: null,
     status: 'in_progress',
     currentStepIndex: 2,
+    currentStep: 'in_progress',
     priority: 'urgent',
+    requireCompletionPhoto: false,
+    requireCompletionSignature: false,
     workflowTemplate: {
+      version: 1,
       steps: [
-        { key: 'on_my_way', label: 'On my way', advancesOn: null, requiresPhoto: false, requiresSignature: false, setsStatus: null },
-        { key: 'arrived', label: 'Arrived at site', advancesOn: null, requiresPhoto: false, requiresSignature: false, setsStatus: null },
-        { key: 'in_progress', label: 'In progress', advancesOn: null, requiresPhoto: false, requiresSignature: false, setsStatus: null },
-        { key: 'photos_uploaded', label: 'Photos uploaded', advancesOn: 'photo_confirm', requiresPhoto: true, requiresSignature: false, setsStatus: null },
-        { key: 'signature_captured', label: 'Customer signature', advancesOn: null, requiresPhoto: false, requiresSignature: true, setsStatus: null },
-        { key: 'completed', label: 'Completed', advancesOn: null, requiresPhoto: false, requiresSignature: false, setsStatus: 'done' },
+        { key: 'on_my_way', label: 'On my way', advancesOn: null, requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: null },
+        { key: 'arrived', label: 'Arrived at site', advancesOn: null, requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: null },
+        { key: 'in_progress', label: 'In progress', advancesOn: null, requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: null },
+        { key: 'photos_uploaded', label: 'Photos uploaded', advancesOn: 'photo_confirm', requiresPhoto: true, requiresSignature: false, requiresLocation: false, setsStatus: null },
+        { key: 'signature_captured', label: 'Customer signature', advancesOn: null, requiresPhoto: false, requiresSignature: true, requiresLocation: false, setsStatus: null },
+        { key: 'completed', label: 'Completed', advancesOn: null, requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: 'done' },
       ],
     },
     description: 'Leaking tap in the kitchen',
@@ -180,14 +183,15 @@ function toApiJob(detail: JobDetail): ApiJob {
     customerId: detail.customerId,
     technicianId: detail.technicianId,
     serviceLocation: detail.serviceLocation,
-    serviceType: detail.serviceType,
     scheduledStart: detail.scheduledStart,
     scheduledEnd: detail.scheduledEnd,
     status: detail.status,
     currentStepIndex: detail.currentStepIndex,
+    currentStep: detail.currentStep,
     priority: detail.priority,
-    skillId: detail.skillId,
-    skillName: detail.skillName,
+    requireCompletionPhoto: detail.requireCompletionPhoto,
+    requireCompletionSignature: detail.requireCompletionSignature,
+    skill: detail.skill,
     description: detail.description,
     notesForTechnician: detail.notesForTechnician,
     createdAt: detail.createdAt,
@@ -200,9 +204,9 @@ function toApiJob(detail: JobDetail): ApiJob {
 function confirmDialogs(): jest.SpyInstance {
   return jest.spyOn(Alert, 'alert').mockImplementation(
     (
-      _title?: string,
-      _message?: string | { text: string },
-      buttons?: Array<{ style?: 'cancel' | 'destructive' | 'default'; onPress?: () => void }>,
+      _title?: string | null,
+      _message?: string | null | { text: string },
+      buttons?: AlertButton[],
     ) => {
       buttons?.find(b => b.style === 'destructive')?.onPress?.();
     },

@@ -41,7 +41,7 @@ function makeJob(id: string, overrides: Partial<ApiJob> = {}): ApiJob {
     customerId: `c-${id}`,
     technicianId: `tech-${id}`,
     serviceLocation: 'Chennai',
-    serviceType: 'plumbing',
+    skill: { id: 's-1', name: 'plumbing' },
     scheduledStart: scheduledTodayIst(),
     scheduledEnd: null,
     status: 'scheduled',

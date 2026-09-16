@@ -17,6 +17,11 @@ import {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import BootSplash from 'react-native-bootsplash';
+import manifest from '../../../assets/bootsplash/manifest.json';
+// Static `import logo from '*.png'` has no type declaration (no d.ts for
+// assets) — keep the require() form, which resolves at runtime via Metro.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const logo = require('../../../assets/bootsplash/logo.png');
 
 export function useSplashAnimation(onAnimationEnd: () => void) {
   const gradient = useSharedValue(0);
@@ -32,9 +37,9 @@ export function useSplashAnimation(onAnimationEnd: () => void) {
   const aurora1 = useSharedValue(0.5);
   const aurora2 = useSharedValue(0.5);
 
-  const { container, logo } = BootSplash.useHideAnimation({
-    manifest: require('../../../assets/bootsplash/manifest.json'),
-    logo: require('../../../assets/bootsplash/logo.png'),
+  const { container, logo: logoAnimated } = BootSplash.useHideAnimation({
+    manifest,
+    logo,
     statusBarTranslucent: true,
     navigationBarTranslucent: false,
     animate: () => {
@@ -99,7 +104,7 @@ export function useSplashAnimation(onAnimationEnd: () => void) {
 
   return {
     container,
-    logo,
+    logo: logoAnimated,
     gradient,
     cardScale,
     cardOpacity,

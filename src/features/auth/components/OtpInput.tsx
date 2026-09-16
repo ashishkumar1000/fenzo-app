@@ -16,6 +16,7 @@ import {
   Text,
   TextInput,
   View,
+  type TextInputInstance,
 } from 'react-native';
 import {colors, radius, spacing, typography} from '../../../theme';
 
@@ -39,7 +40,9 @@ export function OtpInput({
   error = false,
   onFilled,
 }: Props) {
-  const inputRef = useRef<TextInput>(null);
+  // RN 0.87: the input's instance type (focus()/clear()/…), not the
+  // component's props type.
+  const inputRef = useRef<TextInputInstance>(null);
   const [focused, setFocused] = useState(false);
   // Guards against re-firing onFilled when its identity changes (e.g. the
   // parent's callback is recreated mid-verification) while `value` hasn't.

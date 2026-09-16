@@ -344,15 +344,17 @@ describe('event handling', () => {
     // real, so the wiring is pinned on the (mocked) wire call it triggers.
     // Deleting the handler's loadUnreadCount line fails this assertion.
     expect(unreadCountMock).toHaveBeenCalled();
-    expect(probe?.banner?.text).toBe('Priya · JOB-1042 · On my way');
-    // The per-field wiring (which part lands in which field, and which
-    // status the raw step maps to) is what the toast's identity card
-    // renders — a wrong-field or wrong-status bug here paints every chip
-    // gray while the joined line still looks right.
+    // The banner composes from the event alone (no template lookup here) —
+    // the raw step key is the label and the chip stays neutral; the screen
+    // resolves labels against templates on the card surface instead.
+    expect(probe?.banner?.text).toBe('Priya · JOB-1042 · on_my_way');
+    // The per-field wiring (which part lands in which field) is what the
+    // toast's identity card renders — a wrong-field bug here paints every
+    // chip gray while the joined line still looks right.
     expect(probe?.banner?.technicianName).toBe('Priya');
     expect(probe?.banner?.jobNumber).toBe('JOB-1042');
-    expect(probe?.banner?.stepLabel).toBe('On my way');
-    expect(probe?.banner?.stepStatus).toBe('progress');
+    expect(probe?.banner?.stepLabel).toBe('on_my_way');
+    expect(probe?.banner?.stepStatus).toBe('neutral');
   });
 
   it('shows the drift-fallback copy on a malformed payload — refetch still happens', async () => {
@@ -424,8 +426,10 @@ describe('event handling', () => {
       });
       await Promise.resolve();
     });
-    expect(probe?.banner?.text).toBe('Sana · J2 · Completed');
-    expect(probe?.banner?.stepStatus).toBe('done'); // completed → Done-green
+    expect(probe?.banner?.text).toBe('Sana · J2 · completed');
+    // Raw-key banner composes without templates, so even the terminal step
+    // renders neutral here — template-backed cards carry the Done chip.
+    expect(probe?.banner?.stepStatus).toBe('neutral'); // no template lookup in the banner
 
     await ReactTestRenderer.act(async () => {
       jest.advanceTimersByTime(4000);

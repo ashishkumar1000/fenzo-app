@@ -20,7 +20,6 @@ function makeJob(overrides: Partial<ApiJob> = {}): ApiJob {
     customerId: 'c1',
     technicianId: 'tech-1',
     serviceLocation: 'Chennai',
-    serviceType: 'plumbing',
     skill: { id: 's-1', name: 'Plumbing' },
     scheduledStart: '2026-09-03T10:00:00Z',
     scheduledEnd: null,

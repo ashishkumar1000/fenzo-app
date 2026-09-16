@@ -5,11 +5,12 @@
  * the `&& isCompleted` guard in `isFinalCurrent` would ship the bug green
  * without this test (all model/screen tests would still pass).
  *
- * Fixtures come through `groupNotificationsByJob`, the exact path the screen
- * takes, so the stages/isCompleted pair is realistic. The signature_captured
- * job has three done columns and the Completed stage CURRENT — which must
- * render the outlined ring (3 checks), while a genuinely completed job
- * renders the final green check (4 checks).
+ * Fixtures come through `groupNotificationsByJob` with a template lookup, the
+ * exact path the screen takes, so the stages/isCompleted pair is realistic.
+ * Story 4.5 renders one stage per template step: the signature_captured job
+ * has three done columns and Signature captured CURRENT — which must render
+ * the outlined ring (3 checks), while a genuinely completed job renders the
+ * final green check (5 checks — four done columns plus the terminal one).
  */
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
@@ -19,6 +20,31 @@ import { StageStepper } from '../src/features/notifications/components/StageStep
 import { groupNotificationsByJob } from '../src/features/notifications/notificationCardModel';
 import { colors } from '../src/theme';
 import type { ApiNotification } from '../src/services';
+import type { WorkflowTemplateStep } from '../src/services/resources/jobs';
+
+function templateStep(
+  key: string,
+  label: string,
+  setsStatus: string | null,
+): WorkflowTemplateStep {
+  return {
+    key,
+    label,
+    requiresPhoto: false,
+    requiresSignature: false,
+    requiresLocation: false,
+    setsStatus,
+    advancesOn: null,
+  };
+}
+
+const TEMPLATE_STEPS: WorkflowTemplateStep[] = [
+  templateStep('on_my_way', 'On my way', null),
+  templateStep('arrived', 'Arrived', null),
+  templateStep('in_progress', 'In progress', 'in_progress'),
+  templateStep('signature_captured', 'Signature captured', null),
+  templateStep('completed', 'Completed', 'completed'),
+];
 
 function makeNotification(id: string, step: string, createdAt: string): ApiNotification {
   return {
@@ -32,7 +58,7 @@ function makeNotification(id: string, step: string, createdAt: string): ApiNotif
 }
 
 function stepperProps(events: ApiNotification[]) {
-  const card = groupNotificationsByJob(events)[0];
+  const card = groupNotificationsByJob(events, () => TEMPLATE_STEPS)[0];
   return { stages: card.stages, isCompleted: card.isCompleted };
 }
 
@@ -55,7 +81,7 @@ async function renderStepper(props: {
 }
 
 describe('StageStepper glyph states', () => {
-  it('a signature_captured job keeps the ring on Completed — no final done-check', async () => {
+  it('a signature_captured job keeps the ring on its current column — no final done-check', async () => {
     const props = stepperProps([
       makeNotification('n1', 'on_my_way', '2026-09-09T12:10:00Z'),
       makeNotification('n2', 'arrived', '2026-09-09T12:20:00Z'),
@@ -68,8 +94,8 @@ describe('StageStepper glyph states', () => {
       currentColor: colors.status.progress.fg,
     });
     // Three done columns (On my way / Arrived / In progress) — the current
-    // Completed column is mid-completion-flow and renders the ring, which
-    // carries no Check glyph.
+    // Signature captured column is mid-completion-flow and renders the ring,
+    // which carries no Check glyph.
     expect(renderer.root.findAllByType(Check)).toHaveLength(3);
   });
 
@@ -78,13 +104,14 @@ describe('StageStepper glyph states', () => {
       makeNotification('n1', 'on_my_way', '2026-09-09T12:10:00Z'),
       makeNotification('n2', 'arrived', '2026-09-09T12:20:00Z'),
       makeNotification('n3', 'in_progress', '2026-09-09T12:30:00Z'),
-      makeNotification('n4', 'completed', '2026-09-09T12:40:00Z'),
+      makeNotification('n4', 'signature_captured', '2026-09-09T12:35:00Z'),
+      makeNotification('n5', 'completed', '2026-09-09T12:40:00Z'),
     ]);
     expect(props.isCompleted).toBe(true);
     const renderer = await renderStepper({
       ...props,
       currentColor: colors.status.done.fg,
     });
-    expect(renderer.root.findAllByType(Check)).toHaveLength(4);
+    expect(renderer.root.findAllByType(Check)).toHaveLength(5);
   });
 });

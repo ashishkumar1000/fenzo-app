@@ -100,12 +100,12 @@ const list = jobService.list as jest.Mock;
 const defaultTemplate = {
   version: 1,
   steps: [
-    { key: 'on_my_way', label: 'On my way', requiresPhoto: false, requiresSignature: false, setsStatus: null, advancesOn: null },
-    { key: 'arrived', label: 'Arrived', requiresPhoto: false, requiresSignature: false, setsStatus: null, advancesOn: null },
-    { key: 'in_progress', label: 'Start work', requiresPhoto: false, requiresSignature: false, setsStatus: 'in_progress', advancesOn: null },
-    { key: 'photos_uploaded', label: 'Upload photos', requiresPhoto: true, requiresSignature: false, setsStatus: null, advancesOn: 'photo_confirm' },
-    { key: 'signature_captured', label: 'Capture signature', requiresPhoto: false, requiresSignature: true, setsStatus: null, advancesOn: null },
-    { key: 'completed', label: 'Mark complete', requiresPhoto: false, requiresSignature: false, setsStatus: 'completed', advancesOn: null },
+    { key: 'on_my_way', label: 'On my way', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: null, advancesOn: null },
+    { key: 'arrived', label: 'Arrived', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: null, advancesOn: null },
+    { key: 'in_progress', label: 'Start work', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: 'in_progress', advancesOn: null },
+    { key: 'photos_uploaded', label: 'Upload photos', requiresPhoto: true, requiresSignature: false, requiresLocation: false, setsStatus: null, advancesOn: 'photo_confirm' },
+    { key: 'signature_captured', label: 'Capture signature', requiresPhoto: false, requiresSignature: true, requiresLocation: false, setsStatus: null, advancesOn: null },
+    { key: 'completed', label: 'Mark complete', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: 'completed', advancesOn: null },
   ],
 };
 
@@ -123,7 +123,7 @@ function makeDetail(overrides: Partial<JobDetail> = {}): JobDetail {
     customerId: 'c-1',
     technicianId: 'tech-1',
     serviceLocation: '12 Anna Nagar',
-    serviceType: 'plumbing',
+    skill: { id: 's-1', name: 'plumbing' },
     scheduledStart: '2026-09-04T10:00:00Z',
     scheduledEnd: '2026-09-04T11:00:00Z',
     status: 'scheduled',
@@ -169,7 +169,7 @@ const listRow: ApiJob = {
   customerId: 'c-1',
   technicianId: 'tech-1',
   serviceLocation: '12 Anna Nagar',
-  serviceType: 'plumbing',
+  skill: { id: 's-1', name: 'plumbing' },
   scheduledStart: '2026-09-04T10:00:00Z',
   scheduledEnd: '2026-09-04T11:00:00Z',
   status: 'scheduled',

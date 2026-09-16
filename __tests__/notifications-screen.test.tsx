@@ -54,6 +54,23 @@ jest.mock('../src/features/notifications/useNotifications', () => ({
   markAllNotificationsRead: (...args: unknown[]) => mockMarkAllNotificationsRead(...args),
 }));
 
+jest.mock('../src/features/notifications/useJobTemplateCache', () => ({
+  // Story 4.5: cards derive stages/labels from the job's workflow template.
+  // The real hook fetches jobService.getById per job — stub it so the screen
+  // gets a template without any network. The fixture mirrors the standard
+  // five-step template (terminal step = setsStatus 'completed').
+  useJobTemplateCache: () => ({
+    getTemplate: () => [
+      { key: 'on_my_way', label: 'On my way', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: null, advancesOn: null },
+      { key: 'arrived', label: 'Arrived', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: null, advancesOn: null },
+      { key: 'in_progress', label: 'In progress', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: 'in_progress', advancesOn: null },
+      { key: 'signature_captured', label: 'Signature captured', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: null, advancesOn: null },
+      { key: 'completed', label: 'Completed', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: 'completed', advancesOn: null },
+    ],
+    updateTrigger: 0,
+  }),
+}));
+
 import NotificationsScreen from '../src/features/notifications/NotificationsScreen';
 import { NotificationCard } from '../src/features/notifications/components/NotificationCard';
 import { NotificationFilterBar } from '../src/features/notifications/components/NotificationFilterBar';

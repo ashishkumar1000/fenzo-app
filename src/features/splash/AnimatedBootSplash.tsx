@@ -38,7 +38,9 @@ function AnimatedBootSplash({ onAnimationEnd }: Props) {
 
   return (
     <Animated.View {...s.container} style={[s.container.style, styles.scene, sceneStyle]}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      {/* RN 0.87 removed translucent/backgroundColor — the boot scene fills
+          edge-to-edge on its own. */}
+      <StatusBar barStyle="light-content" />
 
       <BrandBackdrop gradient={s.gradient} />
       <GlowHalo pulse={s.pulse} cardOpacity={s.cardOpacity} />

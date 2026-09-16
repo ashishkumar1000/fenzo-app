@@ -3,12 +3,12 @@ import {
   ActivityIndicator,
   Platform,
   Pressable,
-  SafeAreaView,
   StatusBar,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ArrowLeft } from 'lucide-react-native';
 import { Button } from '../../components/ui';
@@ -16,9 +16,9 @@ import { colors, spacing, touch, typography } from '../../theme';
 import { jobService, type ApiError } from '../../services';
 import { getCurrentPosition, requestLocationPermission, type GeolocationCoordinates } from './geolocation';
 import { generateIdempotencyKey } from '../../utils/idempotency';
-import type { RootStackParamList } from '../../navigation/types';
+import type { TechnicianRootStackParamList } from '../../navigation/types';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'LocationCapture'>;
+type Props = NativeStackScreenProps<TechnicianRootStackParamList, 'LocationCapture'>;
 
 export function LocationCaptureScreen({ navigation, route }: Props) {
   const { jobId, stepKey } = route.params;

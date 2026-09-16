@@ -43,7 +43,6 @@ export type {
   ListJobsQuery,
   UpdateJobEditFields,
   UpdateJobRequest,
-  WorkflowStepApi,
   WorkflowTemplate,
   WorkflowTemplateStep,
 } from './jobs';
