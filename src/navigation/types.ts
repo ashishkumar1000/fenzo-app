@@ -56,6 +56,8 @@ export type RootStackParamList = {
    * `AddCustomerScreen`'s file doc.
    */
   AddCustomer: { returnRouteName: AddCustomerReturnRouteName };
+  /** API server switch (prod vs local dev backend) — opened from More → Settings. */
+  ApiSettings: undefined;
 };
 
 /** Screens that can push `AddCustomer` and be returned to. */

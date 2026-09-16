@@ -90,13 +90,17 @@ export default function MoreScreen() {
           />
         </View>
 
-        <Card padding="none" interactive style={styles.row}>
+        <Card
+          padding="none"
+          interactive
+          style={styles.row}
+          onPress={() => navigation.navigate('ApiSettings')}>
           <View style={[styles.rowIconBox, { backgroundColor: colors.surfaceSunken }]}>
             <Settings size={20} color={colors.textBody} strokeWidth={1.75} />
           </View>
           <View style={styles.rowInfo}>
             <Text style={styles.rowTitle}>Settings</Text>
-            <Text style={styles.rowSubtitle}>Business &amp; plan</Text>
+            <Text style={styles.rowSubtitle}>API server</Text>
           </View>
           <ChevronRight size={20} color={colors.textMuted} strokeWidth={2} />
         </Card>

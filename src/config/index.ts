@@ -8,28 +8,29 @@
  */
 
 /**
- * Base URL for the Fenzit backend (NestJS).
+ * Base URLs for the Fenzit backend (NestJS).
  *
- * `localhost` only reaches your dev machine from an iOS simulator. It does
- * NOT work on:
- *   - Android emulator → needs `10.0.2.2` (emulator's alias for host machine)
- *   - A physical device (either platform) → needs your machine's LAN IP,
- *     e.g. `192.168.x.x`, with the phone on the same network
+ * Prod and local share the SAME path shape — `…/api/v1` — on purpose:
+ * `setGlobalPrefix('api/v1')` in fenzit-be's main.ts, and the Cloudflare
+ * worker fronting api.fenzit.com (`fenzit-api-proxy`) forwards `/api/v1/*`
+ * transparently to Render with the path unchanged. Which endpoint is ACTIVE
+ * is decided at runtime, from Settings — see `src/services/apiEndpoint.ts`
+ * (it picks between these constants and applies the choice to `apiClient`
+ * per request). This file only owns the constants.
  *
- * Update `DEV_API_HOST` below when testing on Android or a physical device.
- *
- * TEMPORARY (2026-09-05): hardcoded to the dev machine's LAN IP so a physical
- * device on the same network reaches the localhost backend (the user asked to
- * keep it for now). Revert to the Platform split before shipping.
- * Override per build without editing: `DEV_API_HOST=<ip> bun run android:standalone`
- * (Metro inlines process.env at bundle time).
+ * Both defaults are overridable per build without editing (Metro inlines
+ * process.env at bundle time):
+ *   `API_BASE_URL=<url> bun run android:standalone`  (prod)
+ *   `DEV_API_URL=<url> bun run android:standalone`   (local default)
+ * The local URL is also editable at runtime on the Settings screen.
  */
-const DEV_API_HOST = process.env.DEV_API_HOST ?? '192.168.1.218';
+export const PROD_API_URL = process.env.API_BASE_URL ?? 'https://api.fenzit.com/api/v1';
+export const DEFAULT_LOCAL_API_URL =
+  process.env.DEV_API_URL ?? 'http://192.168.1.218:3000/api/v1';
 
-export const API_BASE_URL = __DEV__
-  ? `http://${DEV_API_HOST}:3000/api/v1`
-  : 'https://api.fenzit.com/api/v1';
-
+/** Production base URL — the app's default endpoint (kept for call sites
+ * and tests that want the "normal" URL without engaging the runtime switch). */
+export const API_BASE_URL = PROD_API_URL;
 
 /** Default request timeout, in milliseconds. */
 export const API_TIMEOUT = 15000;

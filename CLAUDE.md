@@ -17,8 +17,11 @@ writing any code.
   `./gradlew assembleMetroDebug`.
 - **metroDebug limitations:** no Metro means no Reload, Fast Refresh, or remote
   debugging — rebuild to pick up JS changes. It has the same applicationId as
-  `debug`, so installing one replaces the other. Override the dev API host per
-  build with `DEV_API_HOST=<ip> bun run android:standalone`.
+  `debug`, so installing one replaces the other. Prod and local share the
+  same path shape (`…/api/v1`); the active endpoint is runtime-switchable
+  from More → Settings (see `src/services/apiEndpoint.ts`); the local-dev
+  default is overridable per build with
+  `DEV_API_URL=<url> bun run android:standalone`.
 
 ## Project layout (all RN code lives in `src/`)
 ```
