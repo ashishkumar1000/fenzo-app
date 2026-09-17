@@ -1,0 +1,54 @@
+#!/bin/sh
+# Auto-fix, then verify, the app version across package.json, build.gradle
+# and the pbxproj — see scripts/sync-version.js, scripts/verify-version-sync.js
+# and scripts/check-store-downgrade.js (installed via `git config
+# core.hooksPath .githooks` in the prepare script).
+
+# 1. Never run during history rewrites — rebase and cherry-pick replay each
+#    historical commit through this hook, and syncing would rewrite old
+#    commits' version content to today's values. Skip silently instead.
+git_dir=$(git rev-parse --git-dir 2>/dev/null) || exit 0
+if [ -d "$git_dir/rebase-merge" ] || [ -d "$git_dir/rebase-apply" ] ||
+  [ -f "$git_dir/CHERRY_PICK_HEAD" ]; then
+  exit 0
+fi
+
+# 2. GUI git clients and minimal shells often miss ~/.bun/bin.
+PATH="$PATH:$HOME/.bun/bin"
+command -v bun >/dev/null 2>&1 || {
+  echo "pre-commit: bun not found on PATH — install bun or add it to PATH" >&2
+  exit 1
+}
+
+# 3. The commit takes the index, but sync reads the worktree — if package.json
+#    differs between the two, the commit could pair a staged version with
+#    native files synced from the worktree version. Refuse and let the user
+#    decide which copy is right.
+if ! git diff --quiet -- package.json; then
+  echo "pre-commit: package.json has unstaged changes — stage them (git add package.json) or discard them, then commit again" >&2
+  exit 1
+fi
+
+# 4. Never let a build number regress below one already uploaded to the
+#    stores (recorded as store-v* tags — see scripts/check-store-downgrade.js).
+#    Runs before sync so a doomed commit never rewrites the worktree.
+bun scripts/check-store-downgrade.js || exit 1
+
+# 5. Sync + verify.
+sync_out=$(bun scripts/sync-version.js) || exit 1
+echo "$sync_out"
+bun scripts/verify-version-sync.js || exit 1
+
+# 6. Re-stage exactly the files sync rewrote — never a blanket `git add` of the
+# native files, which would sweep in unrelated unstaged edits (or clobber
+# partial staging via `git add -p`). Note: if sync rewrote a file the user
+# also edited by hand, `git add` stages that file whole, edits included.
+# Kept in lockstep with sync-version.js's "rewrote <file>" output line.
+rewritten=$(
+  printf '%s\n' "$sync_out" |
+    sed -n 's/^sync-version: rewrote \(.*\) → .*$/\1/p'
+)
+if [ -n "$rewritten" ]; then
+  # shellcheck disable=SC2086 — the two synced paths never contain spaces
+  git add $rewritten
+fi

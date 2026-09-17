@@ -109,8 +109,15 @@ android {
         applicationId "com.fenzitapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Version scheme: SemVer for versionName; deterministic versionCode =
+        // 10000*major + 100*minor + patch (1.0.0 → 10000). minor/patch stay < 100.
+        // Store policy: every upload is a SemVer bump — RCs are the next patch
+        // sent to TestFlight first; a rejected upload bumps the patch again.
+        // Synced with package.json "version" and the iOS MARKETING_VERSION/
+        // CURRENT_PROJECT_VERSION — validated by `bun run verify:version`
+        // (scripts/verify-version-sync.js) and on every commit via .githooks.
+        versionCode 10000
+        versionName "1.0.0"
     }
     signingConfigs {
         debug {
