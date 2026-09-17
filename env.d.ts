@@ -1,16 +1,13 @@
 /**
- * Minimal ambient typing for `process.env`.
+ * Minimal ambient typing for `process`.
  *
- * Metro inlines `process.env.X` at bundle time (see src/config/index.ts),
- * so the app never needs Node's full process typings — just the shape the
- * config reads. Kept out of `tsconfig` `types` on purpose: adding full
- * @types/node would drag Node-only globals into RN code.
+ * src/config no longer reads env vars (the API URL is a plain constant), so
+ * no ProcessEnv shape is declared — the index signature only keeps stray
+ * `process.env` references from hard-failing if one ever reappears. Kept out
+ * of `tsconfig` `types` on purpose: adding full @types/node would drag
+ * Node-only globals into RN code.
  */
 interface ProcessEnv {
-  /** Overrides the production API base URL (see PROD_API_URL). */
-  readonly API_BASE_URL?: string;
-  /** Overrides the default local dev API URL (see DEFAULT_LOCAL_API_URL). */
-  readonly DEV_API_URL?: string;
   [key: string]: string | undefined;
 }
 

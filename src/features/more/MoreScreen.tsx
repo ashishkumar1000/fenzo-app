@@ -1,7 +1,7 @@
 /**
  * MoreScreen — the account/settings tab. Header is a plain "Account &
- * settings"; below it, Technicians + Notifications tiles, a Settings row, the
- * account card, and Log out. Logging out runs the same forced-logout flow as
+ * settings"; below it, Technicians + Notifications tiles, the account card,
+ * and Log out. Logging out runs the same forced-logout flow as
  * a 401 expiry (story 5.3): the reset registry wipes every store, the token
  * is cleared, and `useAuth().reset()` sends the user back to login.
  */
@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { Alert, ActivityIndicator, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { Bell, ChevronRight, HardHat, LogOut, Pencil, Phone, Settings, ShieldCheck } from 'lucide-react-native';
+import { Bell, HardHat, LogOut, Pencil, Phone, ShieldCheck } from 'lucide-react-native';
 import { Avatar, Card, IconButton } from '../../components/ui';
 import { colors, radius, spacing, typography } from '../../theme';
 import { runAllResets } from '../../services';
@@ -89,21 +89,6 @@ export default function MoreScreen() {
             size={tileSize}
           />
         </View>
-
-        <Card
-          padding="none"
-          interactive
-          style={styles.row}
-          onPress={() => navigation.navigate('ApiSettings')}>
-          <View style={[styles.rowIconBox, { backgroundColor: colors.surfaceSunken }]}>
-            <Settings size={20} color={colors.textBody} strokeWidth={1.75} />
-          </View>
-          <View style={styles.rowInfo}>
-            <Text style={styles.rowTitle}>Settings</Text>
-            <Text style={styles.rowSubtitle}>API server</Text>
-          </View>
-          <ChevronRight size={20} color={colors.textMuted} strokeWidth={2} />
-        </Card>
 
         <Card padding="none" style={styles.accountCard}>
           <View style={styles.accountRow}>
@@ -188,12 +173,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.s3,
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.s3,
-    padding: spacing.s4,
-  },
   rowIconBox: {
     width: 44,
     height: 44,
@@ -234,7 +213,7 @@ const styles = StyleSheet.create({
   logoutRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    // s3 to match the Settings row's icon-box-to-label spacing.
+    // s3 to match the account card rows' icon-box-to-label spacing.
     gap: spacing.s3,
     borderRadius: 0,
   },

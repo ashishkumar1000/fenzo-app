@@ -1,16 +1,10 @@
 /**
- * Verify the metroDebug JS bundle has the dev API URL baked in.
+ * Verify the metroDebug JS bundle has the API URL baked in.
  *
  * The RN gradle plugin defaults to devEnabled=false for variants outside
  * debuggableVariants; android/app/build.gradle overrides it in afterEvaluate
  * (and throws there if the bundle task disappears). This check is the second
- * line of defence that the expected local URL made it into the bundle.
- *
- * NOTE (runtime-switchable endpoint): since src/services/apiEndpoint.ts, the
- * dev URL is an unconditional module constant — Metro bakes it in regardless
- * of __DEV__, so "URL present" no longer PROVES __DEV__=true (it also passes
- * for a prod-flavoured bundle that kept the constant). It still catches the
- * common failure of the bundle carrying only the prod URL.
+ * line of defence that the expected API URL made it into the bundle.
  *
  * Run automatically by `bun run android:standalone` after the build.
  */
@@ -30,20 +24,19 @@ const BUNDLE_PATH = path.join(
   'index.android.bundle',
 );
 
-// Same fallback as src/config/index.ts (Metro inlines process.env at bundle
-// time, so a build run with DEV_API_URL set bakes that value instead).
+// Resolve the URL from src/config/index.ts (the single source of truth)
+// rather than hardcoding a copy here. API_BASE_URL is a template literal
+// over two parts, so extract the pieces and join them.
 const CONFIG_PATH = path.join(__dirname, '..', 'src', 'config', 'index.ts');
-const devUrl =
-  process.env.DEV_API_URL ||
-  fs
-    .readFileSync(CONFIG_PATH, 'utf8')
-    // Bounded window (≤200 chars) from the assignment — the value sits on
-    // a continuation line, but a lazy unbounded [\s\S]*? would reach across
-    // the whole file and grab a quote from some later constant.
-    .match(/DEFAULT_LOCAL_API_URL[\s\S]{0,200}?'([^']+)'/)?.[1];
+const config = fs.readFileSync(CONFIG_PATH, 'utf8');
+const host = config.match(/API_HOST\s*=\s*'([^']+)'/)?.[1];
+const versionPrefix = config.match(/API_VERSION_PREFIX\s*=\s*'([^']+)'/)?.[1];
+const apiUrl = host && versionPrefix ? `${host}${versionPrefix}` : undefined;
 
-if (!devUrl) {
-  console.error('verify-metro-debug-bundle: could not resolve DEV_API_URL');
+if (!apiUrl) {
+  console.error(
+    'verify-metro-debug-bundle: could not resolve API_BASE_URL from src/config/index.ts',
+  );
   process.exit(1);
 }
 
@@ -56,13 +49,12 @@ if (!fs.existsSync(BUNDLE_PATH)) {
 }
 
 const bundle = fs.readFileSync(BUNDLE_PATH);
-if (!bundle.includes(devUrl)) {
+if (!bundle.includes(apiUrl)) {
   console.error(
-    `verify-metro-debug-bundle: FAILED — dev URL ${devUrl} is missing from ` +
-      'the metroDebug bundle. The bundle was likely built with __DEV__=false ' +
-      '(prod API URL). Check the devEnabled override in android/app/build.gradle.',
+    `verify-metro-debug-bundle: FAILED — API URL ${apiUrl} is missing from ` +
+      'the metroDebug bundle. Check the devEnabled override in android/app/build.gradle.',
   );
   process.exit(1);
 }
 
-console.log(`verify-metro-debug-bundle: OK — dev URL ${devUrl} present in bundle`);
+console.log(`verify-metro-debug-bundle: OK — API URL ${apiUrl} present in bundle`);

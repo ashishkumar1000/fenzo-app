@@ -1,14 +1,43 @@
 /**
- * Pins the shared axios instance's wire seams: the query-string output (the
- * jobs status filter needs repeat-style arrays — axios's default bracket
- * style is silently ignored by the backend's parser, proven live 2026-09-03)
- * and the per-request abort deadline (RN doesn't reliably honor axios's
+ * Pins the shared axios instance's wire seams: the hardcoded API base URL
+ * (the endpoint is a plain config constant — no runtime switch may creep
+ * back in as a per-request override), the query-string output (the jobs
+ * status filter needs repeat-style arrays — axios's default bracket style
+ * is silently ignored by the backend's parser, proven live 2026-09-03) and
+ * the per-request abort deadline (RN doesn't reliably honor axios's
  * `timeout` on a stalled connection, proven live 2026-09-14; the deadline
  * must abort at API_TIMEOUT and classify as TIMEOUT, not CANCELLED — an
  * abort-filtering caller would otherwise spin a loading screen forever).
  */
+import type { InternalAxiosRequestConfig } from 'axios';
 import { API_BASE_URL, API_TIMEOUT } from '../src/config';
 import { apiClient } from '../src/services/api/apiClient';
+
+describe('hardcoded API base URL', () => {
+  it('pins the production endpoint, exactly', () => {
+    expect(API_BASE_URL).toBe('https://api.fenzit.com/api/v1');
+    expect(apiClient.defaults.baseURL).toBe(API_BASE_URL);
+  });
+
+  it('no request interceptor stamps a per-request base URL override', () => {
+    jest.useFakeTimers();
+    try {
+      let config = { headers: {} } as InternalAxiosRequestConfig;
+      for (const handler of apiClient.interceptors.request.handlers ?? []) {
+        // The registered interceptors are all sync (config in, config out —
+        // a Promise would carry a `then`). If one ever turns async this
+        // assertion fails first: the loop below only consumes sync returns,
+        // and an await would belong in a rewritten test, not patched here.
+        const returned = handler.fulfilled(config) as unknown;
+        expect(returned).not.toHaveProperty('then');
+        config = returned as InternalAxiosRequestConfig;
+      }
+      expect(config.baseURL).toBeUndefined();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
 
 it('serializes array params repeat-style, not bracket-style', () => {
   expect(

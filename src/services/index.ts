@@ -21,17 +21,6 @@ export { ApiService, createCancelSignal } from './api/ApiService';
 export type { ListParams } from './api/ApiService';
 export type { Paginated } from './api/pagination';
 export { getAuthToken, setAuthToken, clearAuthToken } from './authToken';
-export {
-  getApiEndpointMode,
-  setApiEndpointMode,
-  getLocalApiUrl,
-  setLocalApiUrl,
-  getEffectiveApiBaseUrl,
-  getApiEndpointSnapshot,
-  subscribeApiEndpoint,
-  normalizeApiUrl,
-} from './apiEndpoint';
-export type { ApiEndpointMode, ApiEndpointState } from './apiEndpoint';
 export { getRealtimeToken, clearRealtimeToken } from './realtimeToken';
 export {
   supabaseRealtime,

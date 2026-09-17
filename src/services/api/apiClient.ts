@@ -24,7 +24,6 @@
 import axios from 'axios';
 import type { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { API_BASE_URL, API_TIMEOUT } from '../../config';
-import { getEffectiveApiBaseUrl } from '../apiEndpoint';
 import { clearAuthToken, getAuthToken } from '../authToken';
 import { DEADLINE_ABORTED, toApiError } from './apiError';
 
@@ -48,12 +47,7 @@ export function setOnUnauthorized(handler: (() => void) | null): void {
   onUnauthorized = handler;
 }
 
-/** The configured axios instance. Prefer `ApiService` over calling this directly.
- *
- * `baseURL` is the production URL (kept so `getUri` and anything reading
- * `defaults` resolve absolute URLs); real requests get the active endpoint
- * stamped per request by the first interceptor below — that's what makes
- * the Settings switch work without a reload. */
+/** The configured axios instance. Prefer `ApiService` over calling this directly. */
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: API_TIMEOUT,
@@ -67,17 +61,6 @@ export const apiClient = axios.create({
   // mode; it also drops null/undefined/empty-array params and serializes Date
   // values as ISO strings, so nothing needs to be hand-rolled here.
   paramsSerializer: { indexes: null },
-});
-
-// --- Request interceptor: resolve the active endpoint -----------------------
-// The base URL is runtime-switchable from Settings (apiEndpoint.ts) — applied
-// per request rather than baked in at instance creation, so a prod/local
-// switch takes effect on the next request with no reload. This must be the
-// FIRST interceptor: later ones (auth token, abort deadline) must observe the
-// request that will actually be sent.
-apiClient.interceptors.request.use(config => {
-  config.baseURL = getEffectiveApiBaseUrl();
-  return config;
 });
 
 // --- Request interceptor: attach auth token --------------------------------

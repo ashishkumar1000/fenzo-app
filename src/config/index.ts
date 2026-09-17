@@ -8,29 +8,20 @@
  */
 
 /**
- * Base URLs for the Fenzit backend (NestJS).
+ * API server coordinates, split into origin and versioned path prefix.
  *
- * Prod and local share the SAME path shape — `…/api/v1` — on purpose:
- * `setGlobalPrefix('api/v1')` in fenzit-be's main.ts, and the Cloudflare
- * worker fronting api.fenzit.com (`fenzit-api-proxy`) forwards `/api/v1/*`
- * transparently to Render with the path unchanged. Which endpoint is ACTIVE
- * is decided at runtime, from Settings — see `src/services/apiEndpoint.ts`
- * (it picks between these constants and applies the choice to `apiClient`
- * per request). This file only owns the constants.
+ * The path prefix matches `setGlobalPrefix('api/v1')` in fenzit-be's
+ * main.ts; the Cloudflare worker fronting api.fenzit.com
+ * (`fenzit-api-proxy`) forwards `/api/v1/*` transparently to Render with the
+ * path unchanged.
  *
- * Both defaults are overridable per build without editing (Metro inlines
- * process.env at bundle time):
- *   `API_BASE_URL=<url> bun run android:standalone`  (prod)
- *   `DEV_API_URL=<url> bun run android:standalone`   (local default)
- * The local URL is also editable at runtime on the Settings screen.
+ * `API_BASE_URL` is what apiClient and the resource services consume. The
+ * pieces are kept separate so other consumers (e.g. a websocket or a
+ * media/asset URL builder) can reuse the origin without re-hardcoding it.
  */
-export const PROD_API_URL = process.env.API_BASE_URL ?? 'https://api.fenzit.com/api/v1';
-export const DEFAULT_LOCAL_API_URL =
-  process.env.DEV_API_URL ?? 'http://192.168.1.218:3000/api/v1';
-
-/** Production base URL — the app's default endpoint (kept for call sites
- * and tests that want the "normal" URL without engaging the runtime switch). */
-export const API_BASE_URL = PROD_API_URL;
+export const API_HOST = 'https://api.fenzit.com';
+export const API_VERSION_PREFIX = '/api/v1';
+export const API_BASE_URL = `${API_HOST}${API_VERSION_PREFIX}`;
 
 /** Default request timeout, in milliseconds. */
 export const API_TIMEOUT = 15000;

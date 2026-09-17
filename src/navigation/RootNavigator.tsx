@@ -6,7 +6,6 @@ import { JobDetailScreen } from '../features/jobDetail';
 import { NotificationsScreen } from '../features/notifications';
 import { CustomerDetailScreen } from '../features/customerDetail';
 import { AddCustomerScreen } from '../features/customers';
-import { ApiSettingsScreen } from '../features/settings';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -53,11 +52,6 @@ export default function RootNavigator() {
       <Stack.Screen
         name="AddCustomer"
         component={AddCustomerScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="ApiSettings"
-        component={ApiSettingsScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

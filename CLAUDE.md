@@ -18,10 +18,8 @@ writing any code.
 - **metroDebug limitations:** no Metro means no Reload, Fast Refresh, or remote
   debugging — rebuild to pick up JS changes. It has the same applicationId as
   `debug`, so installing one replaces the other. Prod and local share the
-  same path shape (`…/api/v1`); the active endpoint is runtime-switchable
-  from More → Settings (see `src/services/apiEndpoint.ts`); the local-dev
-  default is overridable per build with
-  `DEV_API_URL=<url> bun run android:standalone`.
+  same path shape (`…/api/v1`); the endpoint is hardcoded to
+  `https://api.fenzit.com/api/v1` in `src/config/index.ts`.
 
 ## Project layout (all RN code lives in `src/`)
 ```
