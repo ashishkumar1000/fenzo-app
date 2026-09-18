@@ -119,12 +119,70 @@ android {
         versionCode 10000
         versionName "1.0.0"
     }
+    // Split the APK per CPU architecture — each ABI APK carries only its own
+    // native libs (Hermes etc.), roughly a quarter of the universal size.
+    // arm64-v8a covers all common phones; armeabi-v7a is kept for very old
+    // 32-bit devices; x86/x86_64 are for emulators. AABs (bundleRelease)
+    // ignore this — splits are APK-only. NOTE: this applies to ALL build
+    // types, so debug/metroDebug outputs are also per-ABI
+    // (app-<abi>-<variant>.apk); there is no universal APK.
+    splits {
+        abi {
+            reset()
+            enable true
+            universalApk false
+            include "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+        }
+    }
     signingConfigs {
         debug {
             storeFile file('debug.keystore')
             storePassword 'android'
             keyAlias 'androiddebugkey'
             keyPassword 'android'
+        }
+        release {
+            // Credentials come from android/keystore.properties and the
+            // keystore itself (both tracked in the repo intentionally for
+            // now — rotate before any public release; see CLAUDE.md).
+            def ksPropsFile = rootProject.file("keystore.properties")
+            if (ksPropsFile.exists()) {
+                def ksProps = new Properties()
+                ksPropsFile.withInputStream { ksProps.load(it) }
+                def requiredKeys = ['FENZIT_UPLOAD_STORE_FILE',
+                                    'FENZIT_UPLOAD_STORE_PASSWORD',
+                                    'FENZIT_UPLOAD_KEY_ALIAS',
+                                    'FENZIT_UPLOAD_KEY_PASSWORD']
+                requiredKeys.each { key ->
+                    if (!ksProps[key]) {
+                        throw new GradleException(
+                            "android/keystore.properties: missing or empty value " +
+                            "for ${key}. Release builds cannot be signed.")
+                    }
+                }
+                def ksResolved = file(ksProps['FENZIT_UPLOAD_STORE_FILE'])
+                if (!ksResolved.exists()) {
+                    throw new GradleException(
+                        "Release keystore not found: ${ksResolved}. " +
+                        "Check FENZIT_UPLOAD_STORE_FILE in android/keystore.properties.")
+                }
+                storeFile ksResolved
+                storePassword ksProps['FENZIT_UPLOAD_STORE_PASSWORD']
+                keyAlias ksProps['FENZIT_UPLOAD_KEY_ALIAS']
+                keyPassword ksProps['FENZIT_UPLOAD_KEY_PASSWORD']
+            } else {
+                // Deliberate escape hatch for local smoke tests, but it must
+                // never pass silently — a debug-signed "release" APK is
+                // indistinguishable from a real one by name alone.
+                // scripts/verify-release-signing.js is the second line of
+                // defence: it fails if release output is debug-signed.
+                logger.warn('*** android/keystore.properties missing — ' +
+                    'release build will be DEBUG-SIGNED. DO NOT DISTRIBUTE. ***')
+                storeFile file('debug.keystore')
+                storePassword 'android'
+                keyAlias 'androiddebugkey'
+                keyPassword 'android'
+            }
         }
     }
     buildTypes {
@@ -147,7 +205,7 @@ android {
             // Caution! In production, you need to generate your own keystore file.
             // see https://reactnative.dev/docs/signed-apk-android.
             manifestPlaceholders.usesCleartextTraffic = false
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }

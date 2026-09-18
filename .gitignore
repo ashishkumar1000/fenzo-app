@@ -41,6 +41,8 @@ android/local.properties
 .cxx/
 *.keystore
 !debug.keystore
+# Keystore tracked intentionally for now (solo dev, pre-launch); rotate before launch
+!fenzit-release.keystore
 
 # Node
 node_modules/

@@ -20,6 +20,58 @@ writing any code.
   `debug`, so installing one replaces the other. Prod and local share the
   same path shape (`…/api/v1`); the endpoint is hardcoded to
   `https://api.fenzit.com/api/v1` in `src/config/index.ts`.
+- **Build scripts** (all run from the repo root via the RN CLI, no manual
+  `cd android` — the CLI locates `android/` and invokes gradlew itself):
+  - `bun run android:standalone` — build **and install** metroDebug on the
+    connected device/emulator, then verify the baked bundle (`--no-packager`
+    keeps Metro from starting). Use when a device is connected and you want
+    to test now.
+  - `bun run android:build:standalone` — build metroDebug **only**, no
+    install/launch/verification. NOTE: ABI splits apply to ALL build types,
+    so the output is per-ABI —
+    `android/app/build/outputs/apk/metroDebug/app-<abi>-metroDebug.apk`
+    (e.g. `app-arm64-v8a-metroDebug.apk`); there is no universal
+    `app-metroDebug.apk`.
+  - `bun run android:build:debug` — build the dev APK (needs Metro).
+  - `bun run android:build:release` — build the release-signed APKs for
+    sharing testers. ABI splits are enabled, so output is one APK per CPU
+    architecture in `android/app/build/outputs/apk/release/` — share
+    `app-arm64-v8a-release.apk` (≈40 MB, varies per build; arm64 covers all
+    common phones, x86/x86_64 are for emulators, armeabi-v7a for very old
+    32-bit devices). Signed with `fenzit-release.keystore` via credentials
+    in `android/keystore.properties` (both tracked in the repo intentionally
+    for now). The build then runs `scripts/verify-release-signing.js`,
+    which fails if any APK is debug-signed (the Gradle config deliberately
+    falls back to the debug keystore when `keystore.properties` is missing,
+    with a loud Gradle warning). NOTE: a release APK has a different
+    signature than debug builds — Android refuses to install it over a
+    debug install; uninstall the debug app first.
+  - `bun run android:build:aab` — release `.aab` bundle for Play Store
+    (`android/app/build/outputs/bundle/release/app-release.aab`). Not for
+    direct sharing.
+
+- **versionCode for tester builds:** same versionCode (10000) reinstalls
+  fine over the same signature, so ad-hoc tester builds need no bump.
+  Bump versionCode (and versionName) before any Play Store upload —
+  `bun run sync:version` then `bun run verify:version` keeps them in sync.
+- **Sharing a release APK to testers** (no Play Store needed):
+  1. Send the arm64 APK file itself (WhatsApp/Drive/email work).
+  2. Tester allows "Install unknown apps" for that sender app; Play
+     Protect may warn — "Install anyway".
+  3. If they previously had a debug or metroDebug build, they must
+     uninstall it first (signature conflict). Same-signature release
+     updates install over each other cleanly.
+- **Keystore rotation rules** (when you replace
+  `fenzit-release.keystore`/`keystore.properties`):
+  - Rotate **before the first Play Store upload**, not just "before
+    launch" — after Play App Signing enrolment and a first upload, the
+    upload key cannot be casually changed.
+  - The current password lives in git history once committed — rotating
+    the file alone does not un-leak it. Treat the committed password as
+    burned: new keystore + new password, and either purge git history or
+    accept it was private-repo-only.
+  - Every tester must uninstall the app before installing a build signed
+    with a different key (signature conflict).
 
 ## Project layout (all RN code lives in `src/`)
 ```
