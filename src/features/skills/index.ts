@@ -6,3 +6,4 @@ export {
   loadSkills,
   clearSkills,
 } from './useSkills';
+export { SkillIcon } from './SkillIcon';

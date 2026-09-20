@@ -23,8 +23,9 @@
  *   quick-action entry; the list the user sees next reads the same store.)
  * - `'NewJob'`: the caller needs to *select* the new customer, so it travels
  *   back as `createdCustomerId` (this screen is a sibling of `NewJob` on the
- *   root stack, so the flat `navigate({ name, params, merge: true })` form
- *   works — unlike `Customers`, which is nested inside `MainTabs`).
+ *   root stack, so `popTo('NewJob', …, { merge: true })` pops back to it —
+ *   plain `navigate` pushes a duplicate in React Navigation 7; `Customers`
+ *   is nested inside `MainTabs` and just takes the store update).
  */
 import { useState } from 'react';
 import {

@@ -108,6 +108,22 @@ export default function NewJobScreen({ navigation, route }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route.params?.createdCustomerId, navigation]);
 
+  // `SelectSkillsScreen` returns here with the picked skill on Apply — a
+  // string picks it (clearing any technician who doesn't carry it), `null`
+  // after "Clear" drops the skill and re-collapses the form. `undefined`
+  // (param absent) means nothing to apply.
+  useEffect(() => {
+    const picked = route.params?.selectedSkillId;
+    if (picked === undefined) return;
+    if (picked === null) {
+      setDraft(current => ({ ...current, skillId: null, technicianId: null }));
+    } else {
+      handleSkillChange(picked);
+    }
+    navigation.setParams({ selectedSkillId: undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route.params?.selectedSkillId, navigation]);
+
   // The tile grid needs the catalog. The store auto-loads on its subscribers'
   // mount too — this explicit call makes the screen self-sufficient on a cold
   // start regardless (loadSkills joins any in-flight request, so no double
@@ -407,6 +423,11 @@ export default function NewJobScreen({ navigation, route }: Props) {
         options={skills}
         value={draft.skillId}
         onChange={handleSkillChange}
+        onBrowseAll={() =>
+          navigation.navigate('SelectSkills', {
+            selectedSkillId: draft.skillId,
+          })
+        }
       />
     );
   };
@@ -498,7 +519,6 @@ export default function NewJobScreen({ navigation, route }: Props) {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Skill</Text>
             {renderSkills()}
           </View>
 

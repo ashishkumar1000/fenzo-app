@@ -43,6 +43,7 @@ const noopNavigation = {
   navigate: jest.fn(),
   goBack: jest.fn(),
   setParams: jest.fn(),
+  popTo: jest.fn(),
   addListener: jest.fn(() => jest.fn()),
 };
 
@@ -54,7 +55,12 @@ const noopNavigation = {
 const mountedRenderers: ReactTestRenderer.ReactTestRenderer[] = [];
 
 function renderScreen(returnRouteName: 'Customers' | 'NewJob' = 'Customers') {
-  const navigation = { ...noopNavigation, navigate: jest.fn(), goBack: jest.fn() };
+  const navigation = {
+    ...noopNavigation,
+    navigate: jest.fn(),
+    goBack: jest.fn(),
+    popTo: jest.fn(),
+  };
   const route = { params: { returnRouteName } };
   let renderer!: ReactTestRenderer.ReactTestRenderer;
   act(() => {
@@ -360,11 +366,14 @@ describe('submitting with returnRouteName: NewJob', () => {
       submit(root);
     });
 
-    expect(navigation.navigate).toHaveBeenCalledWith({
-      name: 'NewJob',
-      params: { createdCustomerId: 'cust-2' },
-      merge: true,
-    });
+    // popTo, not navigate — React Navigation 7's plain `navigate` pushes a
+    // duplicate NewJob instead of going back to the one beneath this screen.
+    expect(navigation.popTo).toHaveBeenCalledWith(
+      'NewJob',
+      { createdCustomerId: 'cust-2' },
+      { merge: true },
+    );
+    expect(navigation.navigate).not.toHaveBeenCalled();
     expect(navigation.goBack).not.toHaveBeenCalled();
   });
 });

@@ -49,7 +49,14 @@ export type RootStackParamList = {
    * param — its list reads from the shared `useCustomers` store, which
    * `AddCustomerScreen` already updates directly via `upsertCustomer`.
    */
-  NewJob: { createdCustomerId?: string } | undefined;
+  NewJob: { createdCustomerId?: string; selectedSkillId?: string | null } | undefined;
+  /**
+   * Full-screen skill browser behind New Job's "Browse all" link. Opens with
+   * the currently picked skill (if any); Apply navigates back to `NewJob`
+   * with `selectedSkillId` — a string to pick it, `null` after "Clear", and
+   * `undefined` (param absent) when the caller should change nothing.
+   */
+  SelectSkills: { selectedSkillId?: string | null } | undefined;
   /** Owner/technician job detail — opened with the job's uuid. */
   JobDetail: { jobId: string };
   /** Owner-only notification history (bell tap) — no params. */

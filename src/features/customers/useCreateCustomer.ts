@@ -104,14 +104,16 @@ export function useCreateCustomer({ navigation, returnRouteName }: Props) {
         // (see its comment above).
         bypassBackGuardRef.current = true;
         if (returnRouteName === 'NewJob') {
-          // Flat object form — React Navigation only honours `merge` there
-          // (see AddCustomerScreen.tsx's header comment); the three-arg
-          // navigate(name, params, options) form silently drops it.
-          navigation.navigate({
-            name: 'NewJob',
-            params: { createdCustomerId: created.id },
-            merge: true,
-          });
+          // popTo pops this screen off the stack and merges the param onto
+          // the NewJob entry beneath it. React Navigation 7's plain `navigate`
+          // no longer goes back to an existing screen — it PUSHES a new one,
+          // which left AddCustomer stranded in the stack (it resurfaced after
+          // New Job's post-create goBack).
+          navigation.popTo(
+            'NewJob',
+            { createdCustomerId: created.id },
+            { merge: true },
+          );
         } else {
           navigation.goBack();
         }

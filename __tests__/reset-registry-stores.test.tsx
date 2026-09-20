@@ -81,6 +81,8 @@ const makeProfile = (overrides: Partial<MyProfile> = {}): MyProfile => ({
 const makeSkill = (overrides: Partial<Skill> = {}): Skill => ({
   id: 'sk-1',
   name: 'Drilling',
+  description: 'Drilling work',
+  icon: 'wrench',
   ...overrides,
 });
 

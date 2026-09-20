@@ -17,10 +17,18 @@
  */
 import { ApiService } from '../api/ApiService';
 
-/** A catalog skill — exactly what `GET /skills` returns (id + name; the name is the display label). */
+/**
+ * A catalog skill — exactly what `GET /skills` returns. `name` is the display
+ * label; `description` is the one-liner the pickers render under it; `icon`
+ * is a lucide icon NAME (kebab-case, e.g. 'droplets') resolved app-side by
+ * `SkillIcon` — the catalog is data-driven end to end, so the FE never
+ * hardcodes skill rows.
+ */
 export interface Skill {
   id: string;
   name: string;
+  description: string;
+  icon: string;
 }
 
 /** Shape captured when creating a new skill. `name` is trimmed, non-empty, max 100 chars, unique per tenant (case-insensitive) — enforced server-side. */
@@ -31,22 +39,27 @@ export interface NewSkillInput {
 /**
  * The user-facing copy the store's error banner shows when `GET /skills`
  * comes back in a shape this client cannot trust — the backend contract is
- * `{ skills: [{ id, name }] }`, so an envelope missing that nesting (or a row
- * without a usable id/name) means the payload is unusable for the pickers
- * and must be surfaced as a fetch failure, never rendered as data.
+ * `{ skills: [{ id, name, description, icon }] }`, so an envelope missing
+ * that nesting (or a row without usable string fields) means the payload is
+ * unusable for the pickers and must be surfaced as a fetch failure, never
+ * rendered as data.
  */
 const SKILLS_SHAPE_ERROR = "Couldn't load the job types. Please try again.";
 
-/** `skills` must be an array of rows, each carrying a string id and name. */
+/** `skills` must be an array of rows, each carrying string id/name/description/icon. */
 function isSkillRows(value: unknown): value is Skill[] {
+  const hasString = (row: Record<string, unknown>, key: string) =>
+    typeof row[key] === 'string';
   return (
     Array.isArray(value) &&
     value.every(
       row =>
         typeof row === 'object' &&
         row !== null &&
-        typeof (row as { id?: unknown }).id === 'string' &&
-        typeof (row as { name?: unknown }).name === 'string',
+        hasString(row as Record<string, unknown>, 'id') &&
+        hasString(row as Record<string, unknown>, 'name') &&
+        hasString(row as Record<string, unknown>, 'description') &&
+        hasString(row as Record<string, unknown>, 'icon'),
     )
   );
 }

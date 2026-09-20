@@ -27,7 +27,7 @@ function apiError(status: number, code: string, message: string) {
 }
 
 function skill(id: string, name: string): Skill {
-  return { id, name };
+  return { id, name, description: `${name} work`, icon: 'wrench' };
 }
 
 // The hook is the only public reader of the store state, so tests probe it
@@ -77,6 +77,22 @@ describe('loadSkills', () => {
     });
     expect(probe.error).toBeTruthy();
     expect(probe.hasLoaded).toBe(true);
+    expect(probe.skills).toEqual([]);
+  });
+
+  it('surfaces a row missing description/icon (old shape) as a fetch error, not as data', async () => {
+    // A payload shaped like the pre-2026-09-20 contract must never reach the
+    // store: both pickers dereference `description` in their search filters,
+    // so an old-shape row accepted as data would crash the New Job screen on
+    // the first keystroke instead of showing the error banner.
+    get.mockResolvedValueOnce({
+      data: { skills: [{ id: 's1', name: 'Drilling' }] },
+    });
+    renderProbe();
+    await act(async () => {
+      await loadSkills();
+    });
+    expect(probe.error).toBeTruthy();
     expect(probe.skills).toEqual([]);
   });
 

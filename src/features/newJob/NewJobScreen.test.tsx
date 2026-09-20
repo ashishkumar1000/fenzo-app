@@ -18,6 +18,12 @@
  *    skill, matched by trimmed phone number; a failed invite refreshes
  *    nothing, so the sheet's stay-open-with-error contract still holds.
  *
+ * 4. Select Skills round trip (product feedback 2026-09-20) — "Browse all"
+ *    pushes the full-screen page carrying the current selection; a picked id
+ *    or `null` (Clear) returned in route params is applied to the draft and
+ *    the param is cleared so it can't re-fire. `undefined` (param absent)
+ *    means nothing to apply.
+ *
  * `AddTechnicianSheet` is stubbed — its open/close/error contract is covered
  * by its own suite; only the screen's reaction to its outcome matters here.
  */
@@ -71,6 +77,9 @@ jest.mock('../skills', () => ({
     refresh: jest.fn(),
   })),
   loadSkills: jest.fn().mockResolvedValue(undefined),
+  // SkillPicker renders this per tile; a null glyph keeps the render tree
+  // minimal without pulling the real lucide namespace in.
+  SkillIcon: () => null,
 }));
 
 const mockAddTechnician = jest.fn<Promise<void>, [unknown]>(() =>
@@ -129,14 +138,20 @@ const BASE_TECHNICIANS = [
   },
 ];
 
-function renderScreen(createdCustomerId?: string) {
+function renderScreen(
+  createdCustomerId?: string,
+  extraParams?: Record<string, unknown>,
+) {
   const navigation = {
     navigate: jest.fn(),
     goBack: jest.fn(),
     setParams: jest.fn(),
   };
   const route = {
-    params: createdCustomerId !== undefined ? { createdCustomerId } : undefined,
+    params: {
+      ...(createdCustomerId !== undefined ? { createdCustomerId } : {}),
+      ...extraParams,
+    },
   };
   let renderer!: ReactTestRenderer.ReactTestRenderer;
   act(() => {
@@ -371,4 +386,57 @@ it('degrades silently when the fresh roster does not carry the newcomer', async 
   expect(mockLoadMyProfile).toHaveBeenCalledWith({ force: true });
   // Nobody selected — the pre-invite roster is untouched.
   expect(root.findAllByProps({ selectedId: 'tech-1' })).toEqual([]);
+});
+
+// --- Select Skills round trip ------------------------------------------------
+
+it('"Browse all" pushes SelectSkills carrying the current selection', () => {
+  const { root, navigation } = renderScreen();
+  pickFirstSkill(root);
+
+  act(() => {
+    root.findAllByProps({ accessibilityLabel: 'Browse all skills' })[0].props
+      .onPress();
+  });
+
+  expect(navigation.navigate).toHaveBeenCalledWith('SelectSkills', {
+    selectedSkillId: 'skill-1',
+  });
+});
+
+it('applies the skill returned by SelectSkills and clears the param', () => {
+  const { root, navigation } = renderScreen(undefined, {
+    selectedSkillId: 'skill-2',
+  });
+
+  // The returned pick gates the rest of the form and marks its tile.
+  expect(
+    root
+      .findAllByProps({ accessibilityLabel: 'Electrical' })
+      .filter(t => t.props.accessibilityState !== undefined)[0]?.props
+      .accessibilityState,
+  ).toEqual({ selected: true });
+  // Cleared immediately so a later re-render can't re-apply it.
+  expect(navigation.setParams).toHaveBeenCalledWith({
+    selectedSkillId: undefined,
+  });
+});
+
+it('collapses the form when SelectSkills returns an empty selection (Clear)', () => {
+  const { root, navigation } = renderScreen(undefined, {
+    selectedSkillId: null,
+  });
+
+  // `null` is a decision — the skill (and any technician needing it) is
+  // dropped and the form re-collapses to just the Skill section.
+  expect(root.findAllByProps({ label: 'Customer' })).toEqual([]);
+  expect(root.findAllByProps({ label: 'Notes for technician' })).toEqual([]);
+  expect(navigation.setParams).toHaveBeenCalledWith({
+    selectedSkillId: undefined,
+  });
+});
+
+it('does nothing when no SelectSkills result is in the route params', () => {
+  const { navigation } = renderScreen();
+  expect(navigation.setParams).not.toHaveBeenCalled();
 });
