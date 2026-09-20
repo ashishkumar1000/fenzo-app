@@ -48,6 +48,16 @@ export interface ReportsState {
   retryingId: string | null;
   /** Failure of the last retry, safe to render above the history list. */
   retryError: string | null;
+  /** True while loading the next page (Load more button spinner). */
+  isLoadingMore: boolean;
+  /** Cursor for the next page of results, null when no more pages. */
+  nextCursor: string | null;
+  /** True when more pages are available. */
+  hasMore: boolean;
+  /** True when currently polling (5s interval) while rows are queued/generating (AC 5). */
+  isPolling: boolean;
+  /** True when polling has failed 3+ consecutive times and is paused (AC 5: "Sync paused"). */
+  syncPaused: boolean;
 }
 
 const INITIAL: ReportsState = {
@@ -60,6 +70,11 @@ const INITIAL: ReportsState = {
   submitError: null,
   retryingId: null,
   retryError: null,
+  isLoadingMore: false,
+  nextCursor: null,
+  hasMore: false,
+  isPolling: false,
+  syncPaused: false,
 };
 
 // --- Shared store: one list, any number of subscribers ----------------------
@@ -67,6 +82,7 @@ const subscribers = new Set<() => void>();
 let state: ReportsState = INITIAL;
 let inFlight: Promise<void> | null = null;
 let requestSeq = 0;
+let pollFailureCount = 0;
 
 function setState(next: Partial<ReportsState>) {
   state = { ...state, ...next };
@@ -82,28 +98,49 @@ function getSnapshot() {
   return state;
 }
 
-async function fetchReports(): Promise<void> {
+async function fetchReports(cursor?: string, isPolling = false): Promise<void> {
   const seq = ++requestSeq;
-  setState({ isLoading: state.reports.length === 0, error: null });
+  const isLoadMore = cursor !== undefined;
+  setState({
+    isLoading: !isLoadMore && state.reports.length === 0,
+    isLoadingMore: isLoadMore,
+    isPolling: isPolling,
+    error: isLoadMore ? null : state.error,
+  });
   try {
-    const page = await reportService.listReports();
+    const page = await reportService.listReports(cursor);
     if (seq !== requestSeq) return;
+    const newReports = isLoadMore ? [...state.reports, ...page.data] : page.data;
+    pollFailureCount = 0; // Reset on success
     setState({
-      reports: page.data,
+      reports: newReports,
       isLoading: false,
+      isLoadingMore: false,
+      isPolling: false,
       error: null,
       hasLoaded: true,
       lastLoadedAt: Date.now(),
+      nextCursor: page.nextCursor,
+      hasMore: page.hasMore,
+      syncPaused: false,
     });
   } catch (error) {
     console.warn('[useReports] GET /reports failed →', error);
     if (seq !== requestSeq) return;
+    // Track consecutive polling failures for the "Sync paused" banner (AC 5)
+    if (isPolling) {
+      pollFailureCount++;
+    }
+    const syncPaused = isPolling && pollFailureCount >= 3;
     // Retain stale rows on a failed refresh (useCustomers rule) — the banner
     // explains why they may be out of date.
     setState({
       isLoading: false,
+      isLoadingMore: false,
+      isPolling: false,
       error: (error as ApiError)?.message || 'Something went wrong',
       hasLoaded: true,
+      syncPaused,
     });
   }
 }
@@ -211,20 +248,27 @@ export function useReports() {
   // FR20's 5 s list-polling: only while a row is queued/generating, and only
   // while a Reports surface is mounted (this hook runs there). Polls are
   // forced — the throttle exists for focus refreshes, and a 5 s poll IS the
-  // intended cadence.
+  // intended cadence. Resume polling when syncPaused is manually cleared.
   const hasPending = snapshot.reports.some(
     r => r.status === 'queued' || r.status === 'generating',
   );
   useEffect(() => {
-    if (!hasPending) return undefined;
+    if (!hasPending || snapshot.syncPaused) return undefined;
     const id = setInterval(() => {
-      void loadReports({ force: true });
+      void fetchReports(undefined, true);
     }, REPORTS_POLL_MS);
     return () => clearInterval(id);
-  }, [hasPending]);
+  }, [hasPending, snapshot.syncPaused]);
 
   /** Re-fetch — pull-to-refresh and screen focus. Always intentional. */
   const refresh = useCallback(() => loadReports({ force: true }), []);
+
+  /** Load the next page of results (AC 4: pagination button). */
+  const loadMore = useCallback(() => {
+    if (snapshot.nextCursor && !snapshot.isLoadingMore) {
+      void fetchReports(snapshot.nextCursor);
+    }
+  }, [snapshot.nextCursor, snapshot.isLoadingMore]);
 
   const clear = useCallback(() => {
     clearReports();
@@ -239,8 +283,13 @@ export function useReports() {
     submitError: snapshot.submitError,
     retryingId: snapshot.retryingId,
     retryError: snapshot.retryError,
+    isLoadingMore: snapshot.isLoadingMore,
+    hasMore: snapshot.hasMore,
+    isPolling: snapshot.isPolling,
+    syncPaused: snapshot.syncPaused,
     hasPending,
     refresh,
+    loadMore,
     clear,
   };
 }

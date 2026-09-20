@@ -51,8 +51,8 @@ export function isoToPickerDate(dateString: string): Date {
 export function rangeDays(startDate: string, endDate: string): number {
   const start = Date.parse(`${startDate}T00:00:00Z`);
   const end = Date.parse(`${endDate}T00:00:00Z`);
-  if (Number.isNaN(start) || Number.isNaN(end)) return NaN;
-  return Math.round((end - start) / 86_400_000) + 1;
+  if (Number.isNaN(start) || Number.isNaN(end)) return 0;
+  return Math.max(0, Math.round((end - start) / 86_400_000) + 1);
 }
 
 /**
