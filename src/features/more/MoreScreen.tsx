@@ -1,16 +1,16 @@
 /**
  * MoreScreen — the account/settings tab. Header is a plain "Account &
- * settings"; below it, the Technicians / Notifications / Customers tiles,
- * the account card, and Log out. Logging out runs the same forced-logout
- * flow as a 401 expiry (story 5.3): the reset registry wipes every store,
- * the token is cleared, and `useAuth().reset()` sends the user back to
- * login.
+ * settings"; below it, the account card (avatar, name + role badge, phone,
+ * edit), the Technicians / Notifications tiles, and full-width rows for
+ * Customers and Log out. Logging out runs the same forced-logout flow as a
+ * 401 expiry (story 5.3): the reset registry wipes every store, the token
+ * is cleared, and `useAuth().reset()` sends the user back to login.
  *
- * Tile counts read the shared stores — `technicianCount` is server truth on
- * the profile; the customers tile mirrors the Customers tab's own store and
- * the notifications tile mirrors the bells' unread count. Both loaders are
- * focus-throttled in their stores, so a focus refresh here costs at most
- * one request per window.
+ * Tile/row counts read the shared stores — `technicianCount` is server
+ * truth on the profile; the customers row mirrors the Customers tab's own
+ * store and the notifications tile mirrors the bells' unread count. Both
+ * loaders are focus-throttled in their stores, so a focus refresh here
+ * costs at most one request per window.
  */
 import { useCallback, useState } from 'react';
 import { Alert, ActivityIndicator, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
@@ -20,7 +20,7 @@ import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Bell, HardHat, LogOut, Pencil, Phone, ShieldCheck, Users } from 'lucide-react-native';
-import { Avatar, Card, IconButton } from '../../components/ui';
+import { Avatar, Badge, Card, IconButton } from '../../components/ui';
 import { colors, radius, spacing, typography } from '../../theme';
 import { runAllResets } from '../../services';
 import { clearAuthToken } from '../../services/authToken';
@@ -29,6 +29,7 @@ import { EditNameSheet, formatPhone, formatRole, useMyProfile } from '../profile
 import { loadUnreadCount, useNotifications } from '../notifications';
 import { loadCustomers, useCustomers } from '../customers';
 import { MoreTile } from './components/MoreTile';
+import { MoreRow } from './components/MoreRow';
 import type { MainTabParamList, RootStackParamList } from '../../navigation/types';
 
 /**
@@ -120,6 +121,40 @@ export default function MoreScreen({ navigation }: Props) {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <Card padding="none" style={styles.accountCard}>
+          <View style={styles.accountRow}>
+            <Avatar name={profile.name ?? undefined} size="lg" style={styles.avatar} />
+            <View style={styles.rowInfo}>
+              <View style={styles.nameRow}>
+                <Text style={styles.rowTitle} numberOfLines={1}>
+                  {profile.name}
+                </Text>
+                <View style={styles.badgeWrap}>
+                  <Badge
+                    status="neutral"
+                    size="sm"
+                    icon={<ShieldCheck size={12} color={colors.textMuted} strokeWidth={2} />}>
+                    {formatRole(profile.role)}
+                  </Badge>
+                </View>
+              </View>
+
+              <View style={styles.metaRow}>
+                <Phone size={14} color={colors.textMuted} strokeWidth={2} />
+                <Text style={styles.rowSubtitle}>{formatPhone(profile)}</Text>
+              </View>
+            </View>
+
+            <IconButton
+              label="Edit name"
+              size="md"
+              style={styles.editButton}
+              onPress={() => setEditNameOpen(true)}>
+              <Pencil size={18} color={colors.textMuted} strokeWidth={2} />
+            </IconButton>
+          </View>
+        </Card>
+
         <View style={styles.tileRow}>
           <MoreTile
             icon={<HardHat size={22} color={colors.status.progress.solid} strokeWidth={1.5} />}
@@ -139,56 +174,21 @@ export default function MoreScreen({ navigation }: Props) {
           />
         </View>
 
-        <View style={styles.tileRow}>
-          <MoreTile
-            icon={<Users size={22} color={colors.status.done.solid} strokeWidth={1.5} />}
-            iconBg={colors.status.done.bg}
-            title="Customers"
-            subtitle={customersSubtitle}
-            size={tileSize}
-            onPress={() => navigation.navigate('Customers')}
-          />
-        </View>
+        <MoreRow
+          icon={<Users size={20} color={colors.status.done.solid} strokeWidth={1.5} />}
+          iconBg={colors.status.done.bg}
+          title="Customers"
+          subtitle={customersSubtitle}
+          onPress={() => navigation.navigate('Customers')}
+        />
 
-        <Card padding="none" style={styles.accountCard}>
-          <View style={styles.accountRow}>
-            <Avatar name={profile.name ?? undefined} size="lg" />
-            <View style={styles.rowInfo}>
-              <Text style={styles.rowTitle}>{profile.name}</Text>
-
-              <View style={styles.metaRow}>
-                <ShieldCheck size={14} color={colors.textMuted} strokeWidth={2} />
-                <Text style={styles.rowSubtitle}>{formatRole(profile.role)}</Text>
-              </View>
-
-              <View style={styles.metaRow}>
-                <Phone size={14} color={colors.textMuted} strokeWidth={2} />
-                <Text style={styles.rowSubtitle}>{formatPhone(profile)}</Text>
-              </View>
-            </View>
-
-            <IconButton
-              label="Edit name"
-              size="md"
-              onPress={() => setEditNameOpen(true)}>
-              <Pencil size={18} color={colors.textMuted} strokeWidth={2} />
-            </IconButton>
-          </View>
-
-          <View style={styles.divider} />
-
-          <Card
-            padding="md"
-            interactive
-            elevated={false}
-            onPress={handleLogOut}
-            style={styles.logoutRow}>
-            <View style={[styles.rowIconBox, styles.logoutIconBox]}>
-              <LogOut size={20} color={colors.danger} strokeWidth={2} />
-            </View>
-            <Text style={styles.logoutText}>Log out</Text>
-          </Card>
-        </Card>
+        <MoreRow
+          danger
+          icon={<LogOut size={20} color={colors.danger} strokeWidth={2} />}
+          iconBg={colors.status.cancelled.bg}
+          title="Log out"
+          onPress={handleLogOut}
+        />
       </ScrollView>
 
       <EditNameSheet
@@ -233,12 +233,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.s3,
   },
-  rowIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+  accountCard: {
+    gap: 0,
+  },
+  accountRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: spacing.s3,
+    padding: spacing.s4,
+  },
+  // Squircle avatar per the More layout (mock): the token-rounded square,
+  // not the default pill.
+  avatar: {
+    borderRadius: radius.lg,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s2,
+    flexWrap: 'wrap',
   },
   rowInfo: {
     flex: 1,
@@ -247,6 +260,14 @@ const styles = StyleSheet.create({
   rowTitle: {
     ...typography.heading,
     color: colors.textStrong,
+    // Truncate instead of pushing the role badge to a second line, where the
+    // badge's negative top margin would collide with the name above.
+    flexShrink: 1,
+  },
+  // The role badge rides slightly high on the cap-height of the name beside
+  // it (visual baseline alignment against the taller heading text).
+  badgeWrap: {
+    marginTop: -spacing.s2,
   },
   rowSubtitle: {
     ...typography.bodySm,
@@ -257,32 +278,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.s2,
   },
-  accountCard: {
-    gap: 0,
-  },
-  accountRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.s3,
-    padding: spacing.s4,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.borderSubtle,
-  },
-  logoutRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    // s3 to match the account card rows' icon-box-to-label spacing.
-    gap: spacing.s3,
-    borderRadius: 0,
-  },
-  logoutIconBox: {
-    backgroundColor: colors.status.cancelled.bg,
-  },
-  logoutText: {
-    ...typography.body,
-    color: colors.danger,
-    fontWeight: '600',
+  editButton: {
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    // radius['2xl'] (28) >= half the 44px button, so the border renders as a
+    // true circle — radius.pill is only 5px in this theme (a badge rounding).
+    borderRadius: radius['2xl'],
   },
 });

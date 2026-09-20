@@ -1,7 +1,8 @@
 /**
- * MoreTile — square stat tile used in the 2-up grid at the top of More
- * (Technicians, Notifications, Customers). Composes Card. Pass `onPress` to
- * make it tappable (the Card then gets press feedback).
+ * MoreTile — square stat tile used in the 2-up grid on More
+ * (Technicians, Notifications). Composes Card. Pass `onPress` to
+ * make it tappable (the Card then gets press feedback and a chevron
+ * shows top-right).
  *
  * Every tile here backs a live screen, so there is no `inactive` state —
  * if a future tile fronts a not-yet-available feature, reintroduce the
@@ -9,6 +10,7 @@
  */
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { ChevronRight } from 'lucide-react-native';
 import { Card } from '../../../components/ui';
 import { colors, radius, spacing, typography } from '../../../theme';
 
@@ -36,7 +38,10 @@ export function MoreTile({
       interactive={Boolean(onPress)}
       onPress={onPress}
       style={[styles.tile, { width: size, height: size }]}>
-      <View style={[styles.iconBox, { backgroundColor: iconBg }]}>{icon}</View>
+      <View style={styles.iconRow}>
+        <View style={[styles.iconBox, { backgroundColor: iconBg }]}>{icon}</View>
+        {onPress ? <ChevronRight size={18} color={colors.textMuted} strokeWidth={2} /> : null}
+      </View>
       <Text style={styles.title} numberOfLines={1}>
         {title}
       </Text>
@@ -53,6 +58,11 @@ const styles = StyleSheet.create({
   tile: {
     gap: spacing.s2,
     justifyContent: 'center',
+  },
+  iconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   iconBox: {
     width: 40,

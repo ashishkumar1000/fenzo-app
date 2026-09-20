@@ -52,12 +52,15 @@ jest.mock('../../services/authToken', () => ({
 
 import type ReactTestRenderer from 'react-test-renderer';
 import React from 'react';
-import { Text } from 'react-native';
+import { Alert, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import { useFocusEffect } from '@react-navigation/native';
 import { loadCustomers, useCustomers } from '../customers';
 import { loadUnreadCount, useNotifications } from '../notifications';
+import { runAllResets } from '../../services';
+import { clearAuthToken } from '../../services/authToken';
 import MoreScreen from './MoreScreen';
+import { MoreRow } from './components/MoreRow';
 import { MoreTile } from './components/MoreTile';
 
 const useNotificationsMock = useNotifications as jest.Mock;
@@ -139,9 +142,9 @@ describe('MoreScreen wiring', () => {
     expect(loadCustomers).toHaveBeenCalled();
   });
 
-  it('navigates each tile to its own route', () => {
+  it('navigates each tile and row to its own route', () => {
     const root = renderScreen();
-    for (const route of ['Technicians', 'Notifications', 'Customers']) {
+    for (const route of ['Technicians', 'Notifications']) {
       const tile = root
         .findAllByType(MoreTile)
         .find(t => t.props.title === route);
@@ -150,5 +153,40 @@ describe('MoreScreen wiring', () => {
       });
       expect(mockNavigate).toHaveBeenCalledWith(route);
     }
+
+    const customersRow = root
+      .findAllByType(MoreRow)
+      .find(t => t.props.title === 'Customers');
+    act(() => {
+      customersRow?.props.onPress();
+    });
+    expect(mockNavigate).toHaveBeenCalledWith('Customers');
+  });
+
+  it('logs out only through the confirm dialog, running the forced-logout flow', () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const root = renderScreen();
+    const logoutRow = root.findAllByType(MoreRow).find(t => t.props.title === 'Log out');
+
+    // Pressing the row shows the confirm dialog — nothing resets yet.
+    act(() => {
+      logoutRow?.props.onPress();
+    });
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Log out',
+      expect.any(String),
+      expect.any(Array),
+    );
+    expect(clearAuthToken).not.toHaveBeenCalled();
+    expect(runAllResets).not.toHaveBeenCalled();
+
+    // Confirming the dialog runs the same forced-logout flow as a 401.
+    const confirm = alertSpy.mock.calls[0][2]!.find(b => b.text === 'Log out')!;
+    act(() => {
+      confirm.onPress?.();
+    });
+    expect(clearAuthToken).toHaveBeenCalled();
+    expect(runAllResets).toHaveBeenCalled();
+    alertSpy.mockRestore();
   });
 });
