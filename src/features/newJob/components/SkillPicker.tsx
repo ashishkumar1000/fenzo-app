@@ -9,10 +9,11 @@
  * - a 3-column tile grid: the first five catalog skills (seed order) plus a
  *   "+N More skills" tile that opens the same full-screen page.
  *
- * Selection styling follows the design: gray when unselected, blue when
- * selected, with a small check badge on the selected tile. Icons come from
- * the catalog itself (`skills.icon`, resolved by `SkillIcon`) — this
- * component hardcodes no skill data.
+ * Selection styling follows the design: the selected tile keeps a light
+ * primary tint with a primary border, its icon sits in a light-blue chip
+ * with a primary glyph, the label turns primary, and a solid primary check
+ * badge marks the corner. Icons come from the catalog itself (`skills.icon`,
+ * resolved by `SkillIcon`) — this component hardcodes no skill data.
  *
  * Presentational: the parent owns the option list and the selection.
  */
@@ -20,7 +21,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Check, ChevronRight, Search } from 'lucide-react-native';
 import { Input } from '../../../components/ui';
-import { colors, radius, spacing, typography } from '../../../theme';
+import {colors, palette, radius, spacing, typography} from '../../../theme';
 import { SkillIcon } from '../../skills';
 import type { Skill } from '../../../services';
 
@@ -117,12 +118,18 @@ export function SkillPicker({ options, value, onChange, onBrowseAll }: Props) {
                 tileWidth ? { width: tileWidth } : null,
                 isSelected && styles.tileSelected,
               ]}>
-              <SkillIcon
-                name={option.icon}
-                size={22}
-                strokeWidth={1.75}
-                color={isSelected ? colors.onPrimary : colors.textStrong}
-              />
+              <View
+                style={[
+                  styles.iconChip,
+                  isSelected ? styles.iconChipSelected : null,
+                ]}>
+                <SkillIcon
+                  name={option.icon}
+                  size={22}
+                  strokeWidth={1.75}
+                  color={isSelected ? colors.primary : colors.textStrong}
+                />
+              </View>
               <Text
                 numberOfLines={2}
                 style={[styles.label, isSelected && styles.labelSelected]}>
@@ -208,8 +215,22 @@ const styles = StyleSheet.create({
     borderColor: colors.surfaceSunken,
   },
   tileSelected: {
+    // Selected = light primary tint + primary border, per the design mock —
+    // NOT a solid primary fill (that drowned the icon and label).
+    backgroundColor: colors.primarySoft,
     borderColor: colors.primary,
-    backgroundColor: colors.primary,
+    borderWidth: 1.5,
+  },
+  iconChip: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSunken,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconChipSelected: {
+    backgroundColor: palette.blue100,
   },
   checkBadge: {
     position: 'absolute',
@@ -229,7 +250,7 @@ const styles = StyleSheet.create({
   },
   labelSelected: {
     ...typography.labelStrong,
-    color: colors.onPrimary,
+    color: colors.primary,
   },
   moreCount: {
     ...typography.heading,
