@@ -14,7 +14,7 @@ export type MainTabParamList = {
   Home: undefined;
   /**
    * One-shot scope pre-selection for the Jobs tab — Home's stat tiles
-   * navigate here with `scope` (e.g. the Overdue tile → `overdue`). JobsScreen
+   * navigate here with `scope` (e.g. the overdue strip → `overdue`). JobsScreen
    * consumes the param and clears it (`setParams({ scope: undefined })`):
    * tab params persist across navigations, so an uncleared param would
    * re-apply on every later tab-bar focus and fight a manually picked scope.
@@ -35,7 +35,13 @@ export type TechnicianTabParamList = {
 
 export type RootStackParamList = {
   MainTabs: undefined;
-  Technicians: undefined;
+  /**
+   * `autoOpenAdd` — Home's "Add technician" quick action pushes this route
+   * with the Add sheet already open, mirroring the one-tap intent (a plain
+   * push would land on the list and force a second tap on "Add"). Params are
+   * read once on mount, so the sheet never re-opens on later visits.
+   */
+  Technicians: { autoOpenAdd?: boolean } | undefined;
   /**
    * `createdCustomerId` is set by `AddCustomerScreen` on a successful save
    * when opened from here (`returnRouteName: 'NewJob'`), so this screen can
@@ -58,8 +64,12 @@ export type RootStackParamList = {
   AddCustomer: { returnRouteName: AddCustomerReturnRouteName };
 };
 
-/** Screens that can push `AddCustomer` and be returned to. */
-export type AddCustomerReturnRouteName = 'Customers' | 'NewJob';
+/**
+ * Screens that can push `AddCustomer` and be returned to. `Home` is the
+ * quick-action entry — its post-save behaviour is the same plain `goBack()`
+ * as `Customers` (the shared store already has the new row).
+ */
+export type AddCustomerReturnRouteName = 'Customers' | 'NewJob' | 'Home';
 
 /**
  * Technician full-screen routes pushed over `TechnicianTabs` by

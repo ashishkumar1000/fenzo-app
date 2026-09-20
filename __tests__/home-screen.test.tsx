@@ -34,7 +34,7 @@ jest.mock('../src/features/profile', () => ({
 }));
 
 jest.mock('../src/features/home', () => ({
-  QuickActions: () => null,
+  QuickActions: jest.fn(() => null),
   hasAnyJobCount: jest.requireActual('../src/features/home').hasAnyJobCount,
   // Real implementation — Story 1.7's filtering/strip/empty-state behaviour
   // is exactly what these tests pin.
@@ -55,6 +55,7 @@ jest.mock('../src/features/notifications', () => ({
 
 import HomeScreen from '../src/screens/HomeScreen';
 import { loadMyProfile, useMyProfile } from '../src/features/profile';
+import { QuickActions } from '../src/features/home';
 import { JobCard } from '../src/features/jobs/components/JobCard';
 import { OverdueStrip } from '../src/features/home/components/OverdueStrip';
 import { TodaysJobsSection } from '../src/features/home/components/TodaysJobsSection';
@@ -83,6 +84,7 @@ function makeProfile(overrides: Partial<MyProfile> = {}): MyProfile {
     },
     technicians: [],
     technicianCount: 2,
+    customerCount: 7,
     customers: { data: [], nextCursor: null, hasMore: false },
     jobs: { data: [], nextCursor: null, hasMore: false },
     jobCounts: { today: 1, upcoming: 2, overdue: 0, completed: 3, cancelled: 1 },
@@ -176,13 +178,15 @@ it('renders the greeting and header stats from the jobCounts buckets', async () 
   const text = allText(renderer);
   expect(text).toContain('Good morning,');
   expect(text).toContain('Fenzit Services');
-  // Story 1.5: the tiles show the jobCounts buckets directly (Today 1,
-  // Upcoming 2, Overdue 0) — there is no all-time total row any more.
+  // The tiles show the jobCounts buckets directly (Today 1, Upcoming 2) —
+  // there is no all-time total row, and Overdue/Technicians were removed as
+  // tiles on product feedback 2026-09-20 (overdue lives in the strip below,
+  // technicians in the Account tab).
   expect(text).toContain('Today');
   expect(text).toContain('Upcoming');
-  expect(text).toContain('Overdue');
-  expect(text).toContain('Technicians');
-  expect(text).toContain('2');
+  expect(text).not.toContain('Overdue');
+  expect(text).not.toContain('Technicians');
+  expect(text).toContain('Upcoming 2');
 });
 
 it('treats a zero-count profile as first-run (no jobs yet)', async () => {
@@ -269,8 +273,6 @@ it('each job tile carries its count in the accessibility label (subtitle first)'
 
   expect(tileFor(renderer, 'Today').props.accessibilityLabel).toBe('Today 1');
   expect(tileFor(renderer, 'Upcoming').props.accessibilityLabel).toBe('Upcoming 2');
-  expect(tileFor(renderer, 'Overdue').props.accessibilityLabel).toBe('Overdue 0');
-  expect(tileFor(renderer, 'Technicians').props.accessibilityLabel).toBe('Technicians 2');
 });
 
 it('pressing a job tile lands on the Jobs tab pre-set to that scope', async () => {
@@ -285,22 +287,45 @@ it('pressing a job tile lands on the Jobs tab pre-set to that scope', async () =
     tileFor(renderer, 'Upcoming').props.onPress();
   });
   expect(mockNavigation.navigate).toHaveBeenCalledWith('Jobs', { scope: 'upcoming' });
-
-  await act(async () => {
-    tileFor(renderer, 'Overdue').props.onPress();
-  });
-  expect(mockNavigation.navigate).toHaveBeenCalledWith('Jobs', { scope: 'overdue' });
 });
 
-it('the Technicians tile is inert (disabled, no Jobs navigation)', async () => {
-  const renderer = await mountWithProfile();
+// --- Quick actions wiring (product feedback 2026-09-20) ----------------------
 
-  const tile = tileFor(renderer, 'Technicians');
-  expect(tile.props.disabled).toBe(true);
+it('passes the tenant counts from the profile into QuickActions', async () => {
+  await mountWithProfile({ customerCount: 24, technicianCount: 3 });
+
+  const props = (QuickActions as jest.Mock).mock.calls.at(-1)![0];
+  expect(props.customerCount).toBe(24);
+  expect(props.technicianCount).toBe(3);
+  expect(props.canCreateJob).toBe(true);
+});
+
+it('gates New job via canCreateJob when the account has no technicians yet', async () => {
+  // technicianCount 0 lands on first-run Home — the tiles still render there,
+  // with the New job tile gated and Add technician as the row's primary.
+  await mountWithProfile({ technicianCount: 0 });
+
+  const props = (QuickActions as jest.Mock).mock.calls.at(-1)![0];
+  expect(props.canCreateJob).toBe(false);
+});
+
+it('quick action presses open AddCustomer (returning Home) and Technicians with the sheet pre-opened', async () => {
+  const renderer = await mountWithProfile();
+  const props = (QuickActions as jest.Mock).mock.calls.at(-1)![0];
+
   await act(async () => {
-    tile.props.onPress?.(); // no-op even if invoked
+    props.onAddCustomer();
   });
-  expect(mockNavigation.navigate).not.toHaveBeenCalled();
+  expect(mockNavigation.navigate).toHaveBeenCalledWith('AddCustomer', {
+    returnRouteName: 'Home',
+  });
+
+  await act(async () => {
+    props.onAddTechnician();
+  });
+  expect(mockNavigation.navigate).toHaveBeenCalledWith('Technicians', {
+    autoOpenAdd: true,
+  });
 });
 
 // --- Today & needs attention section (Story 1.7) ----------------------------
@@ -373,7 +398,7 @@ it('shows the empty state (with CTA) when there are no today jobs and overdue is
 
   const text = allText(renderer);
   expect(text).toContain('Nothing scheduled today');
-  expect(text).toContain("You're all clear. Overdue or upcoming work shows in the tiles above.");
+  expect(text).toContain("You're all clear. Upcoming work shows in the tiles above.");
   const cta = renderer.root.findAllByType(Button).find(b => b.props.children === 'Create a job');
   expect(cta).toBeDefined();
 });

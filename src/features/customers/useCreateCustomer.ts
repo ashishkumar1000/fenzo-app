@@ -14,7 +14,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { customerService } from '../../services';
 import type { ApiError, CreateCustomerRequest } from '../../services';
 import { currentResetEpoch } from '../../services/resetRegistry';
-import type { RootStackParamList } from '../../navigation/types';
+import type { AddCustomerReturnRouteName, RootStackParamList } from '../../navigation/types';
 import { loadCustomers, upsertCustomer } from './useCustomers';
 
 type Navigation = NativeStackNavigationProp<RootStackParamList, 'AddCustomer'>;
@@ -41,9 +41,9 @@ function createErrorMessage(err: ApiError): string {
 
 type Props = {
   navigation: Navigation;
-  /** The post-save destination (`'Customers'` → plain goBack, `'NewJob'` →
-   *  the created id travels as a navigation param). */
-  returnRouteName: 'Customers' | 'NewJob';
+  /** The post-save destination (`'NewJob'` → the created id travels as a
+   *  navigation param; `'Customers'`/`'Home'` → plain goBack). */
+  returnRouteName: AddCustomerReturnRouteName;
 };
 
 export function useCreateCustomer({ navigation, returnRouteName }: Props) {

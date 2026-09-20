@@ -29,6 +29,10 @@
  *
  * padding:     none | sm | md | lg (default md) — inner padding around content.
  * interactive: adds press feedback (scale 0.99) and makes the card tappable.
+ * disabled:    blocks press and press feedback on an interactive card (same
+ *              semantics as Pressable's `disabled`; the 0.5-opacity dimming
+ *              stays the caller's job, matching Button). No effect without
+ *              `interactive`.
  * elevated:    soft shadow on white (default true).
  * style:       extend container styles (backgroundColor, border, etc.).
  *
@@ -43,6 +47,7 @@ import {
   Pressable,
   StyleSheet,
   View,
+  type AccessibilityRole,
   type AccessibilityState,
   type PressableProps,
   type StyleProp,
@@ -59,6 +64,10 @@ export type CardProps = {
   view?: ReactNode;
   padding?: Padding;
   interactive?: boolean;
+  /** Blocks press and press feedback on an interactive card (same semantics
+   * as Pressable's `disabled`; Button renders this state at opacity 0.5 —
+   * match that visually in the caller's style). No effect without `interactive`. */
+  disabled?: boolean;
   elevated?: boolean;
   onPress?: PressableProps['onPress'];
   style?: StyleProp<ViewStyle>;
@@ -66,6 +75,13 @@ export type CardProps = {
   accessibilityHint?: string;
   /** e.g. `{ disabled: true }` for a card representing a not-yet-available feature. */
   accessibilityState?: AccessibilityState;
+  /**
+   * Forwarded to the underlying View/Pressable. Pressable sets no default
+   * role, so interactive cards should pass `"button"` — without it, screen
+   * readers announce an unlabelled control (and any `accessibilityState`
+   * hangs off nothing meaningful).
+   */
+  accessibilityRole?: AccessibilityRole;
 };
 
 const padMap: Record<Padding, number> = {
@@ -80,12 +96,14 @@ export function Card({
   view,
   padding = 'md',
   interactive = false,
+  disabled = false,
   elevated = true,
   onPress,
   style,
   accessibilityLabel,
   accessibilityHint,
   accessibilityState,
+  accessibilityRole,
 }: CardProps) {
   // `children` takes precedence; `view` is the explicit-holder alias.
   const content = children ?? view;
@@ -112,7 +130,8 @@ export function Card({
         style={containerStyle}
         accessibilityLabel={accessibilityLabel}
         accessibilityHint={accessibilityHint}
-        accessibilityState={accessibilityState}>
+        accessibilityState={accessibilityState}
+        accessibilityRole={accessibilityRole}>
         {content}
       </View>
     );
@@ -122,12 +141,14 @@ export function Card({
     <Animated.View style={{ transform: [{ scale }] }}>
       <Pressable
         onPress={onPress}
+        disabled={disabled}
         onPressIn={() => animateTo(0.99)}
         onPressOut={() => animateTo(1)}
         android_ripple={{ color: 'transparent' }}
         accessibilityLabel={accessibilityLabel}
         accessibilityHint={accessibilityHint}
         accessibilityState={accessibilityState}
+        accessibilityRole={accessibilityRole}
         style={containerStyle}>
         {content}
       </Pressable>

@@ -2,7 +2,8 @@
  * TechniciansScreen — full-screen route (pushed over the tabs). Shows the
  * zero-data empty state for a new account, or the technician list once the
  * owner has invited their team. The header "Add" button opens the
- * AddTechnicianSheet.
+ * AddTechnicianSheet; Home's "Add technician" quick action lands here with
+ * that sheet already open (`autoOpenAdd` param).
  */
 import { useState } from 'react';
 import { FlatList, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
@@ -19,9 +20,15 @@ import type { NewTechnicianInput } from './types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Technicians'>;
 
-export default function TechniciansScreen({ navigation }: Props) {
+export default function TechniciansScreen({ navigation, route }: Props) {
   const { technicians, hasTechnicians, add } = useTechnicians();
-  const [sheetVisible, setSheetVisible] = useState(false);
+  // Home's "Add technician" quick action pushes us with `autoOpenAdd` — read
+  // once as the initial state, so the sheet never re-opens on later visits
+  // (stack params are per-push, but a re-render must not reset a user-closed
+  // sheet either).
+  const [sheetVisible, setSheetVisible] = useState(
+    route.params?.autoOpenAdd ?? false,
+  );
 
   const handleSubmit = async (input: NewTechnicianInput) => {
     // Deliberately not caught here: rejects with `ApiError`, and

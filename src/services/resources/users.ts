@@ -148,6 +148,11 @@ export interface MyProfile {
    */
   technicians: ProfileTechnician[];
   technicianCount: number;
+  /**
+   * Exact tenant-wide customer total (`customers` itself is just one page).
+   * Optional: the backend only issues it on owner-role profiles.
+   */
+  customerCount?: number;
   customers: Paginated<unknown>;
   jobs: Paginated<ProfileJob>;
   jobCounts: JobCounts;

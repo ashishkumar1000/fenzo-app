@@ -38,6 +38,11 @@ export default function HomeScreen({ navigation }: Props) {
   // in the store, and driven live by the 3.3 socket's own refetch.
   const { unreadCount, loadUnreadCount } = useNotifications();
 
+  // Setup gate for the quick actions (and the first-run branch below).
+  // Optional-chained because `quickActions` is built before the loading and
+  // error early returns — during those renders profile is still null.
+  const hasTechnicians = (profile?.technicianCount ?? 0) > 0;
+
   // Every tab focus asks for fresh counts so the tiles are never a snapshot
   // from login. The store's 15s throttle makes rapid tab switching cheap:
   // at most one request per window, and a focus within the window is a no-op.
@@ -81,11 +86,22 @@ export default function HomeScreen({ navigation }: Props) {
   const quickActions = (
     <QuickActions
       onNewJob={handleNewJob}
-      // The scope param is load-bearing: the jobs store remembers the last
-      // scope viewed (it's module-level state), so a bare navigate('Jobs')
-      // would land under "Today's jobs" showing e.g. Overdue.
-      onTodayJobs={() => navigation.navigate('Jobs', { scope: 'today' })}
-      onCustomers={() => navigation.navigate('Customers')}
+      // A job must be assigned to someone — with no technicians yet the New
+      // job tile disables and Add technician takes the primary slot.
+      canCreateJob={hasTechnicians}
+      // returnRouteName 'Home' → plain goBack after save; the list the user
+      // returns to reads the shared useCustomers store, so no params needed.
+      onAddCustomer={() =>
+        navigation.navigate('AddCustomer', { returnRouteName: 'Home' })
+      }
+      // The param opens the Add sheet on arrival — the tile's promise is
+      // "add a technician", not "look at the list".
+      onAddTechnician={() => navigation.navigate('Technicians', { autoOpenAdd: true })}
+      // Tenant-wide totals for the tiles' count lines — server-issued with
+      // the profile, so they survive the 15s focus throttle like every other
+      // tile on this screen.
+      customerCount={profile?.customerCount ?? 0}
+      technicianCount={profile?.technicianCount ?? 0}
     />
   );
 
@@ -147,7 +163,6 @@ export default function HomeScreen({ navigation }: Props) {
   const ownerFirstName = firstName(profile.name);
   const businessName = profile.tenant.companyName;
   const { jobCounts, technicianCount } = profile;
-  const hasTechnicians = technicianCount > 0;
 
   // First-run: simplified Home until the account has a team and a job. Both
   // facts come from the server, so an account set up on another device shows
@@ -197,7 +212,6 @@ export default function HomeScreen({ navigation }: Props) {
       <HomeHeader
         ownerName={ownerFirstName ?? ''}
         businessName={businessName}
-        technicianCount={technicianCount}
         jobCounts={jobCounts}
         onTilePress={handleTilePress}
         unreadCount={unreadCount}

@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, Pressable, StatusBar, useWindowDimensions } from 'react-native';
-import { Bell, Calendar, CalendarClock, CircleAlert, HardHat } from 'lucide-react-native';
+import { Bell, Calendar, CalendarClock } from 'lucide-react-native';
 import { Card } from './ui';
 import { colors, palette, radius, spacing, typography } from '../theme';
 import type { JobCounts, JobScope } from '../services';
@@ -20,8 +20,10 @@ interface StatCardProps {
  * content, and `statsRow`'s default stretch keeps both tiles in a row the
  * same height without either one padding itself out with dead space.
  *
- * Job tiles are pressable (Today/Upcoming/Overdue each jump to the Jobs tab
- * pre-set to their scope) — Technicians has no destination and stays inert.
+ * Job tiles are pressable (Today/Upcoming each jump to the Jobs tab
+ * pre-set to their scope). The Overdue and Technicians tiles were removed on
+ * product feedback 2026-09-20: overdue already surfaces in the "Today &
+ * needs attention" section's strip, and the technician count had no action.
  */
 function StatCard({ icon, bgColor, title, subtitle, size, onPress }: StatCardProps) {
   return (
@@ -58,8 +60,6 @@ export interface HomeHeaderProps {
   ownerName: string;
   /** Company name, from the profile's `tenant.companyName`. */
   businessName: string;
-  /** From the profile's `technicianCount`. */
-  technicianCount: number;
   /** From the profile's `jobCounts` (the `/users/me` dashboard counts). */
   jobCounts: JobCounts;
   /** Pressing a job tile navigates to the Jobs tab pre-set to that scope. */
@@ -76,7 +76,6 @@ export interface HomeHeaderProps {
 export default function HomeHeader({
   ownerName,
   businessName,
-  technicianCount,
   jobCounts,
   onTilePress,
   unreadCount,
@@ -135,9 +134,10 @@ export default function HomeHeader({
           </View>
         </View>
 
-        {/* Stat Grid — two rows of two half-width tiles each. The three job
-            tiles are the actionable counts (`jobCounts`) and each deep-links
-            the Jobs tab to its scope; Technicians has no destination. */}
+        {/* Stat Grid — one row of two half-width tiles. Both job tiles are
+            actionable counts (`jobCounts`) and deep-link the Jobs tab to
+            their scope. (Overdue/Technicians removed 2026-09-20 — see the
+            StatCard doc above.) */}
         <View style={styles.statsGrid}>
           <Card padding="none" elevated={false} style={styles.statsRow}>
             <StatCard
@@ -156,29 +156,6 @@ export default function HomeHeader({
                 subtitle="Upcoming"
                 size={cardSize}
                 onPress={() => onTilePress('upcoming')}
-            />
-          </Card>
-          <Card padding="none" elevated={false} style={styles.statsRow}>
-            {/* Overdue uses the neutral palette, matching JobCard's overdue
-                badge — the DS forbids a new status colour for overdue
-                (Cancelled's red must stay unambiguous). */}
-            <StatCard
-                icon={<CircleAlert color={colors.status.neutral.solid} size={16} strokeWidth={1.75} />}
-                bgColor={colors.status.neutral.bg}
-                title={String(jobCounts.overdue)}
-                subtitle="Overdue"
-                size={cardSize}
-                onPress={() => onTilePress('overdue')}
-            />
-
-            {/* No active/offline split: the API returns a count only, so the
-                tile shows the count only. */}
-            <StatCard
-                icon={<HardHat color={colors.status.neutral.solid} size={16} strokeWidth={1.75} />}
-                bgColor={colors.status.neutral.bg}
-                title={String(technicianCount)}
-                subtitle="Technicians"
-                size={cardSize}
             />
           </Card>
         </View>

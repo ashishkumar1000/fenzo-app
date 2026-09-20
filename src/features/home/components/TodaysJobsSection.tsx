@@ -67,8 +67,11 @@ export function TodaysJobsSection({
             <Calendar size={24} color={colors.primary} strokeWidth={1.5} />
           </View>
           <Text style={styles.emptyTitle}>Nothing scheduled today</Text>
+          {/* Overdue isn't a header tile any more (removed 2026-09-20) — and
+              in this branch overdue is 0 anyway, so the copy only points at
+              what the tiles actually show. */}
           <Text style={styles.emptyBody}>
-            You're all clear. Overdue or upcoming work shows in the tiles above.
+            You're all clear. Upcoming work shows in the tiles above.
           </Text>
           {technicianCount > 0 ? (
             <Button variant="secondary" size="md" onPress={onPressCreate} style={styles.emptyCta}>

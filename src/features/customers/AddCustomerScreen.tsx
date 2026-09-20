@@ -17,9 +17,10 @@
  * form state, the payload assembly, and the post-save navigation contract:
  *
  * `returnRouteName` decides what happens after a successful save:
- * - `'Customers'`: the shared `useCustomers` store already reflects the new
- *   row (via `upsertCustomer`), so a plain `goBack()` is enough — no data
- *   needs to travel back through navigation params.
+ * - `'Customers'`/`'Home'`: the shared `useCustomers` store already reflects
+ *   the new row (via `upsertCustomer`), so a plain `goBack()` is enough — no
+ *   data needs to travel back through navigation params. (`Home` is the
+ *   quick-action entry; the list the user sees next reads the same store.)
  * - `'NewJob'`: the caller needs to *select* the new customer, so it travels
  *   back as `createdCustomerId` (this screen is a sibling of `NewJob` on the
  *   root stack, so the flat `navigate({ name, params, merge: true })` form
