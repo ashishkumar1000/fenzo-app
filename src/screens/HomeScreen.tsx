@@ -228,7 +228,7 @@ export default function HomeScreen({ navigation }: Props) {
           jobs={profile.jobs.data}
           overdueCount={jobCounts.overdue}
           technicianCount={technicianCount}
-          technicians={profile.technicians}
+          technicians={profile.technicians ?? []}
           onPressJob={handlePressJob}
           onPressStrip={() => handleTilePress('overdue')}
           onPressCreate={handleNewJob}

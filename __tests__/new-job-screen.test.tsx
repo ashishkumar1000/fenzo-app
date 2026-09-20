@@ -94,7 +94,7 @@ const SKILLS = [
   { id: 'sk-elec', name: 'Electrical' },
 ];
 
-function makeProfile(technicians: MyProfile['technicians']): MyProfile {
+function makeProfile(technicians: NonNullable<MyProfile['technicians']>): MyProfile {
   return {
     id: 'u-1',
     name: 'Kumar Selvan',
@@ -122,7 +122,7 @@ function technician(
   id: string,
   skillIds: string[],
   overrides: Record<string, unknown> = {},
-): MyProfile['technicians'][number] {
+): NonNullable<MyProfile['technicians']>[number] {
   return {
     id,
     name: `Tech ${id}`,

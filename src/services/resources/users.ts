@@ -61,10 +61,13 @@ export interface JobCounts {
 /**
  * A technician on the owner's roster, as embedded in `/users/me`.
  *
- * These carry the *server's* technician ids — unlike the local
- * `useTechnicians` MMKV store, which fabricates `invite_<inviteId>` values.
- * Anything that sends a technician id to the backend (assigning a job) must
- * come from here.
+ * These carry the *server's* technician ids. The local `useTechnicians`
+ * store fabricates `invite_<inviteId>` values for invites made on-device,
+ * but every profile load hydrates that store from THIS roster (see
+ * `hydrateTechnicianRoster`), swapping the placeholders for these real
+ * records — so ids read from the store are server ids in practice. Anything
+ * that sends a technician id to the backend (assigning a job) must still
+ * treat this shape as the source of truth.
  *
  * `skills` are the tenant's skill *names* (free text, created via
  * `POST /skills`), and `skillIds` the matching ids. The two arrays are
@@ -143,10 +146,12 @@ export interface MyProfile {
   tenant: ProfileTenant;
   role: UserRole;
   /**
-   * The tenant's technician roster, with server-issued ids. `customers`/`jobs`
-   * stay `unknown` until their shapes here are confirmed.
+   * The tenant's technician roster, with server-issued ids. Present only on
+   * owner-role profiles — the backend omits the field entirely for
+   * technician-role users (hence optional). `customers`/`jobs` stay
+   * `unknown` until their shapes here are confirmed.
    */
-  technicians: ProfileTechnician[];
+  technicians?: ProfileTechnician[];
   technicianCount: number;
   /**
    * Exact tenant-wide customer total (`customers` itself is just one page).

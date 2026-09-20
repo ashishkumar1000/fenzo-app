@@ -23,6 +23,7 @@ import { usersApi } from '../../services';
 import { registerReset } from '../../services/resetRegistry';
 import type { ApiError, MyProfile } from '../../services';
 import { FOCUS_REFRESH_TTL_MS } from '../../constants';
+import { hydrateTechnicianRoster } from '../technicians/useTechnicians';
 
 export interface MyProfileState {
   profile: MyProfile | null;
@@ -68,6 +69,20 @@ function setState(next: Partial<MyProfileState>) {
   subscribers.forEach(notify => notify());
 }
 
+/**
+ * Feeds the owner profile's technician roster into the technicians store
+ * (`hydrateTechnicianRoster`). The roster rides along on every profile
+ * payload, so this costs no extra request — and it is what makes invites
+ * survive a reinstall or logout, since the technicians store's own copy is
+ * device-local MMKV. Technician-role profiles carry no roster (the field is
+ * owner-only on the backend), so non-owners are skipped.
+ */
+function syncTechnicianRoster(profile: MyProfile): void {
+  if (profile.role === 'owner' && Array.isArray(profile.technicians)) {
+    hydrateTechnicianRoster(profile.technicians);
+  }
+}
+
 function subscribe(callback: () => void) {
   subscribers.add(callback);
   return () => subscribers.delete(callback);
@@ -98,6 +113,7 @@ async function fetchProfile(): Promise<void> {
     // throttle window based on the data actually on screen, so the next
     // focus (or pull-to-refresh) can retry immediately if it wants to.
     setState({ profile, isLoading: false, error: null, lastLoadedAt: Date.now() });
+    syncTechnicianRoster(profile);
   } catch (error) {
     console.warn('[useMyProfile] GET /users/me failed →', error);
     if (seq !== requestSeq) return;
@@ -138,6 +154,8 @@ export function setProfileFromServer(profile: MyProfile) {
   requestSeq += 1;
   const jobs = state.profile?.jobs ?? profile.jobs;
   setState({ profile: { ...profile, jobs }, error: null, isLoading: false, lastLoadedAt: Date.now() });
+  // A PATCH response carries the same roster as a GET — treat it like one.
+  syncTechnicianRoster(profile);
 }
 
 /**

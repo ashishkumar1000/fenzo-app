@@ -9,6 +9,13 @@ export type TechnicianStatus = 'active' | 'offline';
 export interface Technician {
   id: string;
   name: string;
+  /**
+   * Dial code with `+`, e.g. `+91`. Optional because rows persisted before
+   * hydration existed don't carry it — display still assumes the app-wide
+   * `DIAL_CODE`; this field exists so a future multi-dial-code roster renders
+   * correctly without another store migration.
+   */
+  countryCode?: string;
   /** Phone number used for the SMS invite. Stored as the user typed it. */
   phone: string;
   status: TechnicianStatus;

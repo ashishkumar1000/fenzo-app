@@ -349,7 +349,7 @@ export default function NewJobScreen({ navigation, route }: Props) {
   const handleAddTechnicianSubmit = async (input: NewTechnicianInput) => {
     await addTechnician(input);
     await loadMyProfile({ force: true });
-    const added = getMyProfileSnapshot()?.technicians.find(
+    const added = getMyProfileSnapshot()?.technicians?.find(
       t => t.phoneNumber === input.phone.trim(),
     );
     if (
