@@ -1,7 +1,12 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import MainTabs from './MainTabs';
 import { TechniciansScreen } from '../features/technicians';
-import { NewJobScreen, SelectCustomersScreen, SelectSkillsScreen } from '../features/newJob';
+import {
+  NewJobScreen,
+  SelectCustomersScreen,
+  SelectSkillsScreen,
+  SelectTechniciansScreen,
+} from '../features/newJob';
 import { JobDetailScreen } from '../features/jobDetail';
 import { NotificationsScreen } from '../features/notifications';
 import { CustomerDetailScreen } from '../features/customerDetail';
@@ -42,6 +47,11 @@ export default function RootNavigator() {
       <Stack.Screen
         name="SelectCustomers"
         component={SelectCustomersScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="SelectTechnicians"
+        component={SelectTechniciansScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen

@@ -66,7 +66,7 @@ jest.mock('../src/features/newJob/components/SkillPicker', () => ({
 jest.mock('../src/features/newJob/components/CustomerPicker', () => ({
   CustomerPicker: () => null,
 }));
-jest.mock('../src/components/TechnicianPicker', () => ({
+jest.mock('../src/features/newJob/components/TechnicianPicker', () => ({
   TechnicianPicker: () => null,
 }));
 
@@ -79,7 +79,7 @@ import { upsertJob } from '../src/features/jobs';
 import { useSkills, loadSkills } from '../src/features/skills';
 import { SkillPicker } from '../src/features/newJob/components/SkillPicker';
 import { CustomerPicker } from '../src/features/newJob/components/CustomerPicker';
-import { TechnicianPicker } from '../src/components/TechnicianPicker';
+import { TechnicianPicker } from '../src/features/newJob/components/TechnicianPicker';
 import type { MyProfile } from '../src/services';
 
 const create = jobService.create as jest.Mock;
@@ -172,7 +172,7 @@ async function submitSuccessfulJob(
     renderer.root.findByType(CustomerPicker).props.onChange('c-1');
   });
   await ReactTestRenderer.act(async () => {
-    renderer.root.findByType(TechnicianPicker).props.onSelect('tech-1');
+    renderer.root.findByType(TechnicianPicker).props.onChange('tech-1');
   });
 
   if (beforeSubmit) await beforeSubmit(renderer);
@@ -286,7 +286,7 @@ it('the technician picker shows only technicians whose skillIds carry the select
     renderer.root.findByType(SkillPicker).props.onChange('sk-plumb');
   });
 
-  const offered = renderer.root.findByType(TechnicianPicker).props.technicians;
+  const offered = renderer.root.findByType(TechnicianPicker).props.options;
   expect(offered.map((t: { id: string }) => t.id)).toEqual(['tech-plumb']);
 
   await ReactTestRenderer.act(async () => {
@@ -320,7 +320,7 @@ it('a zero-match roster degrades to the full roster behind the existing notice',
   });
 
   // Full roster offered (advisory fallback — never an empty list)…
-  const offered = renderer.root.findByType(TechnicianPicker).props.technicians;
+  const offered = renderer.root.findByType(TechnicianPicker).props.options;
   expect(offered.map((t: { id: string }) => t.id)).toEqual(['tech-1', 'tech-2']);
   // …behind the existing notice.
   const texts = renderer.root.findAllByType(Text);
@@ -396,15 +396,15 @@ it('a technician who does not carry the newly selected skill is cleared', async 
     renderer.root.findByType(SkillPicker).props.onChange('sk-plumb');
   });
   await ReactTestRenderer.act(async () => {
-    renderer.root.findByType(TechnicianPicker).props.onSelect('tech-1');
+    renderer.root.findByType(TechnicianPicker).props.onChange('tech-1');
   });
-  expect(renderer.root.findByType(TechnicianPicker).props.selectedId).toBe('tech-1');
+  expect(renderer.root.findByType(TechnicianPicker).props.value).toBe('tech-1');
 
   // Switch to Electrical — tech-1 doesn't carry it, so the pairing must go.
   await ReactTestRenderer.act(async () => {
     renderer.root.findByType(SkillPicker).props.onChange('sk-elec');
   });
-  expect(renderer.root.findByType(TechnicianPicker).props.selectedId).toBeNull();
+  expect(renderer.root.findByType(TechnicianPicker).props.value).toBeNull();
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();

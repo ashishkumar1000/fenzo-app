@@ -53,6 +53,7 @@ export type RootStackParamList = {
     createdCustomerId?: string;
     selectedSkillId?: string | null;
     selectedCustomerId?: string | null;
+    selectedTechnicianId?: string | null;
   } | undefined;
   /**
    * Full-screen skill browser behind New Job's "Browse all" link. Opens with
@@ -69,6 +70,18 @@ export type RootStackParamList = {
    * caller should change nothing.
    */
   SelectCustomers: { selectedCustomerId?: string | null } | undefined;
+  /**
+   * Full-screen technician browser behind New Job's "Browse all" link — the
+   * customer picker's twin. Opens with the currently assigned technician (if
+   * any) plus the job's `skillId` (read-only: it marks rows whose `skillIds`
+   * include it, it never filters). Apply navigates back to `NewJob` with
+   * `selectedTechnicianId` — a string to pick it, `null` after "Clear", and
+   * `undefined` (param absent) when the caller should change nothing.
+   */
+  SelectTechnicians: {
+    selectedTechnicianId?: string | null;
+    skillId?: string;
+  } | undefined;
   /** Owner/technician job detail — opened with the job's uuid. */
   JobDetail: { jobId: string };
   /** Owner-only notification history (bell tap) — no params. */

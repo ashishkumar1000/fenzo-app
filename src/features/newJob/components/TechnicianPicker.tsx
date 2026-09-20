@@ -1,46 +1,68 @@
 /**
- * SkillPicker — the New Job skill section, redesigned per the 2026-09-20
- * product-feedback mock:
+ * TechnicianPicker — the New Job technician section, mirroring the
+ * CustomerPicker pattern (story 11-8): a header row — count chip ("N
+ * technicians") and a "Browse all" link to the full-screen Select
+ * Technicians page; a search field that filters the offered roster
+ * client-side; a 3-column tile grid.
  *
- * - a header row — the optional section title inline before the catalog
- *   count chip ("N available"), and a "Browse all" link to the full-screen
- *   Select Skills page;
- * - a search field — non-empty, it searches the WHOLE catalog (the full
- *   screen is one tap away, so this stays a quick filter, not a duplicate);
- * - a 3-column tile grid: the first two catalog skills (seed order) plus a
- *   "+N More skills" tile that opens the same full-screen page.
+ * The idle grid shows the first two offered technicians (the caller already
+ * skill-filters the roster and keeps the profile's order — this picker
+ * reorders nothing) plus a "+N More technicians" tile that opens the same
+ * full-screen page. A selection made outside those two (via "Browse all" or
+ * an invite) is pinned to the front — otherwise the chosen tile would be
+ * invisible on the default surface, leaving the section with no visible
+ * answer to "who is this job for?".
  *
- * Selection styling follows the design: the selected tile keeps a light
- * primary tint with a primary border, its icon sits in a light-blue chip
- * with a primary glyph, the label turns primary, and a solid primary check
- * badge marks the corner. Icons come from the catalog itself (`skills.icon`,
- * resolved by `SkillIcon`) — this component hardcodes no skill data.
+ * Single-select with toggle-to-clear (carried over from the sheet-variant
+ * picker): tapping the selected tile again hands back `null`, because the
+ * draft allows an unassigned state — unlike customers, where the tap simply
+ * replaces the pick.
  *
- * Presentational: the parent owns the option list and the selection.
+ * Selected styling follows the customer tiles: light primary tint with a
+ * primary border, primary label, and a solid primary check badge. The
+ * technician's avatar (initials on a name-derived tint, via the DS `Avatar`)
+ * keeps its own tint when selected — the badge and border already mark the
+ * state. A technician still waiting on the app install shows the "Invited"
+ * caption rather than vanishing — someone just added shouldn't disappear.
+ *
+ * The section name ("Technician") renders inline in the header before
+ * the count chip — one line, exactly like the SkillPicker/CustomerPicker
+ * headers.
+ *
+ * Not the same component as `src/components/TechnicianPicker.tsx` (the
+ * EditJobSheet rows variant) — that one is untouched by this story; New Job
+ * reads this feature-local twin. Presentational: the parent owns the option
+ * list and the selection.
  */
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Check, ChevronRight, Search } from 'lucide-react-native';
-import { Input } from '../../../components/ui';
+import { Avatar, Input } from '../../../components/ui';
 import { colors, palette, radius, spacing, typography } from '../../../theme';
-import { SkillIcon } from '../../skills';
-import type { Skill } from '../../../services';
+import { filterTechnicians } from '../../technicians';
+import type { ProfileTechnician } from '../../../services';
 
 const COLUMNS = 3;
 const GAP = spacing.s3;
-/** Tiles on screen before the "+N more" tile takes over (2 tiles + the more tile = 1 full row). */
+/**
+ * Tiles on screen before the "+N more" tile takes over — 2, matching the
+ * SkillPicker/CustomerPicker, so 2 tiles + the more tile fill exactly one
+ * complete row (COLUMNS divides VISIBLE_TILES + 1); any other count leaves
+ * the "+N more" tile dangling on a row of its own.
+ */
 const VISIBLE_TILES = 2;
 
 type Props = {
-  /** Section name rendered inline before the count chip (e.g. "Skill"). */
+  /** Section name rendered inline before the count chip (e.g. "Technician"). */
   title?: string;
-  options: Skill[];
+  options: ProfileTechnician[];
   value: string | null;
-  onChange: (id: string) => void;
+  /** The tapped id, or `null` when the selected tile is tapped again. */
+  onChange: (id: string | null) => void;
   onBrowseAll: () => void;
 };
 
-export function SkillPicker({ title, options, value, onChange, onBrowseAll }: Props) {
+export function TechnicianPicker({ title, options, value, onChange, onBrowseAll }: Props) {
   const [rowWidth, setRowWidth] = useState(0);
   const [query, setQuery] = useState('');
 
@@ -49,30 +71,19 @@ export function SkillPicker({ title, options, value, onChange, onBrowseAll }: Pr
   const tileWidth =
     rowWidth > 0 ? (rowWidth - GAP * (COLUMNS - 1)) / COLUMNS : undefined;
 
-  const trimmedQuery = query.trim().toLowerCase();
+  const trimmedQuery = query.trim();
 
   /**
-   * Empty query → the mock's default surface: the first two catalog rows
-   * (seed order) plus the "+N more" tile. Non-empty → every match across the
-   * whole catalog, so a search like "leak" finds rows beyond the idle tiles
-   * without leaving the screen.
-   *
-   * A selection made outside the first two (via "Browse all" or a search)
-   * is pinned to the front of the idle grid — otherwise the chosen tile would
-   * be invisible on the default surface, leaving the section with no visible
-   * answer to "what skill is this job?".
+   * Empty query → the default surface: the first two offered technicians
+   * plus the "+N more" tile. Non-empty → every match across the offered
+   * roster (same name-or-phone semantics as the customers picker), so a
+   * search finds rows beyond the idle tiles without leaving the screen.
    */
-  const visibleSkills = useMemo(() => {
-    if (trimmedQuery) {
-      return options.filter(
-        skill =>
-          skill.name.toLowerCase().includes(trimmedQuery) ||
-          skill.description.toLowerCase().includes(trimmedQuery),
-      );
-    }
+  const visibleTechnicians = useMemo(() => {
+    if (trimmedQuery) return filterTechnicians(options, trimmedQuery);
     const base = options.slice(0, VISIBLE_TILES);
-    if (value && !base.some(skill => skill.id === value)) {
-      const selected = options.find(skill => skill.id === value);
+    if (value && !base.some(technician => technician.id === value)) {
+      const selected = options.find(technician => technician.id === value);
       if (selected) return [selected, ...base].slice(0, VISIBLE_TILES);
     }
     return base;
@@ -86,12 +97,15 @@ export function SkillPicker({ title, options, value, onChange, onBrowseAll }: Pr
         <View style={styles.headerLeft}>
           {title ? <Text style={styles.title}>{title}</Text> : null}
           <View style={styles.countChip}>
-            <Text style={styles.countChipText}>{options.length} available</Text>
+            <Text style={styles.countChipText}>
+              {options.length}{' '}
+              {options.length === 1 ? 'technician' : 'technicians'}
+            </Text>
           </View>
         </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Browse all skills"
+          accessibilityLabel="Browse all technicians"
           onPress={onBrowseAll}
           style={styles.browseRow}>
           <Text style={styles.browseText}>Browse all</Text>
@@ -102,45 +116,44 @@ export function SkillPicker({ title, options, value, onChange, onBrowseAll }: Pr
       <Input
         value={query}
         onChangeText={setQuery}
-        placeholder="Search skills"
+        placeholder="Search technicians"
+        accessibilityLabel="Search technicians"
         leadingIcon={<Search size={18} color={colors.textMuted} strokeWidth={2} />}
       />
 
       <View
         style={styles.grid}
         onLayout={e => setRowWidth(e.nativeEvent.layout.width)}>
-        {visibleSkills.map(option => {
-          const isSelected = option.id === value;
+        {visibleTechnicians.map(technician => {
+          const isSelected = technician.id === value;
 
           return (
             <Pressable
-              key={option.id}
+              key={technician.id}
               accessibilityRole="button"
               accessibilityState={{ selected: isSelected }}
-              accessibilityLabel={option.name}
-              onPress={() => onChange(option.id)}
+              // The "Invited" caption is visual-only — name it for screen
+              // readers too, so a just-invited technician isn't silent.
+              accessibilityLabel={
+                technician.status === 'invited'
+                  ? `${technician.name}. Invited`
+                  : technician.name
+              }
+              onPress={() => onChange(isSelected ? null : technician.id)}
               style={[
                 styles.tile,
                 tileWidth ? { width: tileWidth } : null,
                 isSelected && styles.tileSelected,
               ]}>
-              <View
-                style={[
-                  styles.iconChip,
-                  isSelected ? styles.iconChipSelected : null,
-                ]}>
-                <SkillIcon
-                  name={option.icon}
-                  size={22}
-                  strokeWidth={1.75}
-                  color={isSelected ? colors.primary : colors.textStrong}
-                />
-              </View>
+              <Avatar name={technician.name} size="md" />
               <Text
                 numberOfLines={2}
                 style={[styles.label, isSelected && styles.labelSelected]}>
-                {option.name}
+                {technician.name}
               </Text>
+              {technician.status === 'invited' ? (
+                <Text style={styles.invited}>Invited</Text>
+              ) : null}
               {isSelected ? (
                 <View style={styles.checkBadge}>
                   <Check size={12} strokeWidth={3} color={colors.onPrimary} />
@@ -153,19 +166,19 @@ export function SkillPicker({ title, options, value, onChange, onBrowseAll }: Pr
         {!trimmedQuery && moreCount > 0 ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`More skills — ${moreCount} more available`}
+            accessibilityLabel={`More technicians — ${moreCount} more available`}
             onPress={onBrowseAll}
             style={[styles.tile, styles.tileMore, tileWidth ? { width: tileWidth } : null]}>
             <Text style={styles.moreCount}>+{moreCount}</Text>
             <Text numberOfLines={2} style={styles.moreLabel}>
-              More skills
+              More technicians
             </Text>
           </Pressable>
         ) : null}
       </View>
 
-      {trimmedQuery && visibleSkills.length === 0 ? (
-        <Text style={styles.noMatch}>No skills match "{query.trim()}"</Text>
+      {trimmedQuery && visibleTechnicians.length === 0 ? (
+        <Text style={styles.noMatch}>No technicians match "{query.trim()}"</Text>
       ) : null}
     </View>
   );
@@ -188,17 +201,14 @@ const styles = StyleSheet.create({
     color: colors.textStrong,
   },
   countChip: {
-    backgroundColor: colors.surfaceSunken,
+    backgroundColor: colors.onPrimary,
     borderRadius: radius.pill,
     paddingHorizontal: spacing.s3,
     paddingVertical: spacing.s1,
     // The band this section sits on can be surfaceSunken too — the hairline
     // keeps the pill legible on both band colours.
-    // Deliberately NOT the CustomerPicker/TechnicianPicker treatment (white
-    // `onPrimary` chip + `palette.gray200` hairline) — the sunken chip is
-    // this section's settled look, not drift waiting to be unified.
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: palette.gray200,
   },
   countChipText: {
     ...typography.label,
@@ -243,17 +253,6 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     borderWidth: 1.5,
   },
-  iconChip: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceSunken,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconChipSelected: {
-    backgroundColor: palette.blue100,
-  },
   checkBadge: {
     position: 'absolute',
     top: spacing.s1 + 2,
@@ -273,6 +272,14 @@ const styles = StyleSheet.create({
   labelSelected: {
     ...typography.labelStrong,
     color: colors.primary,
+  },
+  // Deliberately not a Badge: that component's vocabulary is fixed to job
+  // state (Done / In Progress / Scheduled / Cancelled / neutral) and its doc
+  // says not to invent synonyms. "Invited" is a technician's state, not a
+  // job's.
+  invited: {
+    ...typography.caption,
+    color: colors.textMuted,
   },
   moreCount: {
     ...typography.heading,

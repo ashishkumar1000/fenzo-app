@@ -19,13 +19,13 @@
  * picked the screen shows the Skill section only — Customer, Date & time,
  * Assign technician and Notes appear once it is chosen.
  *
- * Sections are separated by the DS `SectionHead` — a hairline divider plus a
- * letter-spaced eyebrow label (product feedback 2026-09-20: the sections
- * previously ran in continuity with only whitespace between them). The
- * eyebrow is the section's only visible name: the Customer and Notes sections
- * name themselves nowhere else (the Skill section names itself inline in the
- * SkillPicker header instead — count chip and Browse all on one line, and
- * the CustomerPicker does the same beneath its eyebrow).
+ * Sections render as rounded bands whose backgrounds alternate round-robin
+ * between the two surface tokens (product feedback 2026-09-20: the sections
+ * previously sat on one continuous sheet, and even the SectionHead divider
+ * didn't break the continuity). The picker sections (Skill, Customer, Assign
+ * technician) name themselves inline in their picker headers — title, count
+ * chip and Browse all on one line; Date & time and Notes keep the DS
+ * `SectionHead` (hairline divider + eyebrow), which is their only name.
  *
  * "Add new technician" (product feedback 2026-09-20) opens the same sheet the
  * Technicians tab uses, over this form. The invite creates a real `users` row
@@ -33,6 +33,15 @@
  * immediately — but this picker reads the roster from `/users/me`, so the
  * handler forces a profile refresh and then auto-selects the newcomer when
  * they carry the selected skill.
+ *
+ * All three picker sections (Skill, Customer, Assign technician) share the
+ * same shape (story 11-8 completed the set): a tile grid with pinned
+ * selection and a "Browse all" link to a full-screen single-select browser
+ * (`SelectSkills` / `SelectCustomers` / `SelectTechnicians`) whose Apply and
+ * Clear return via `popTo` with a tri-state param that this screen consumes
+ * once and clears. The technician tiles stay skill-filtered (with the
+ * full-roster fallback when nobody carries the skill); the browser shows the
+ * whole roster with matching rows marked.
  */
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -54,7 +63,7 @@ import {
   Input,
   SectionHead,
 } from '../../components/ui';
-import { colors, spacing, touch, typography } from '../../theme';
+import { colors, radius, spacing, touch, typography } from '../../theme';
 import { jobService } from '../../services';
 import type { ApiError } from '../../services';
 import { upsertJob } from '../jobs';
@@ -65,13 +74,13 @@ import {
   loadMyProfile,
   useMyProfile,
 } from '../profile';
-import { TechnicianPicker } from '../../components/TechnicianPicker';
 import { AddTechnicianSheet, useTechnicians } from '../technicians';
 import type { NewTechnicianInput } from '../technicians';
 import { loadSkills, useSkills } from '../skills';
 import { DateTimeFields } from './components/DateTimeFields';
 import { SkillPicker } from './components/SkillPicker';
 import { CustomerPicker } from './components/CustomerPicker';
+import { TechnicianPicker } from './components/TechnicianPicker';
 import type { NewJobDraft } from './types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'NewJob'>;
@@ -97,6 +106,21 @@ const initialDraft = (): NewJobDraft => ({
   technicianId: null,
   notes: '',
 });
+
+/**
+ * Section bands (product feedback 2026-09-20): every section sat directly on
+ * the page surface, so even with the SectionHead divider they read as one
+ * continuous sheet. Each section is now a rounded band whose background
+ * alternates between the two surface tokens round-robin — neighbouring
+ * sections can never share a colour, however many sections the form grows.
+ */
+const SECTION_BANDS = [colors.surfaceCard, colors.surfaceSunken] as const;
+
+/** Band style for the section at `index` (0 = Skill, 1 = Customer, …). */
+const sectionBand = (index: number) => [
+  styles.section,
+  { backgroundColor: SECTION_BANDS[index % SECTION_BANDS.length] },
+];
 
 export default function NewJobScreen({ navigation, route }: Props) {
   const [draft, setDraft] = useState<NewJobDraft>(initialDraft);
@@ -148,6 +172,18 @@ export default function NewJobScreen({ navigation, route }: Props) {
     navigation.setParams({ selectedCustomerId: undefined });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route.params?.selectedCustomerId, navigation]);
+
+  // `SelectTechniciansScreen` returns here with the picked technician on
+  // Apply — a string picks it, `null` after "Clear" drops the technician
+  // (the job can't be submitted without one). `undefined` (param absent)
+  // means nothing to apply.
+  useEffect(() => {
+    const picked = route.params?.selectedTechnicianId;
+    if (picked === undefined) return;
+    patch({ technicianId: picked });
+    navigation.setParams({ selectedTechnicianId: undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route.params?.selectedTechnicianId, navigation]);
 
   // The tile grid needs the catalog. The store auto-loads on its subscribers'
   // mount too — this explicit call makes the screen self-sufficient on a cold
@@ -334,6 +370,19 @@ export default function NewJobScreen({ navigation, route }: Props) {
     navigation.navigate('AddCustomer', { returnRouteName: 'NewJob' });
 
   /**
+   * The technician browser opens with the current assignment (so it comes
+   * back pre-selected) and the job's skill (read-only there — it marks the
+   * rows that carry it, the browser never filters). `?? undefined`, not
+   * `null`: an absent param means "nothing pending", while `null` would
+   * pre-clear the browser's pending pick.
+   */
+  const handleBrowseTechnicians = () =>
+    navigation.navigate('SelectTechnicians', {
+      selectedTechnicianId: draft.technicianId ?? undefined,
+      skillId: draft.skillId ?? undefined,
+    });
+
+  /**
    * The inline sheet's submit. `add` rejects with `ApiError` on a failed
    * invite, which is what keeps the sheet open to show the error — so the
    * refresh and selection below only run on success.
@@ -464,6 +513,7 @@ export default function NewJobScreen({ navigation, route }: Props) {
 
     return (
       <CustomerPicker
+        title="Customer"
         options={customers}
         value={draft.customerId}
         onChange={id => patch({ customerId: id })}
@@ -524,17 +574,19 @@ export default function NewJobScreen({ navigation, route }: Props) {
 
     return (
       <>
+        <TechnicianPicker
+          title="Technician"
+          options={technicianOptions}
+          value={draft.technicianId}
+          onChange={id => patch({ technicianId: id })}
+          onBrowseAll={handleBrowseTechnicians}
+        />
         {noSkillMatch ? (
           <Text style={styles.statusText}>
             No technician is tagged with this skill — showing everyone. Pick
             whoever will do the job.
           </Text>
         ) : null}
-        <TechnicianPicker
-          technicians={technicianOptions}
-          selectedId={draft.technicianId}
-          onSelect={id => patch({ technicianId: id })}
-        />
       </>
     );
   };
@@ -562,7 +614,7 @@ export default function NewJobScreen({ navigation, route }: Props) {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          <View style={styles.section}>
+          <View style={sectionBand(0)}>
             {renderSkills()}
           </View>
 
@@ -573,8 +625,7 @@ export default function NewJobScreen({ navigation, route }: Props) {
               decision the rest of the form depends on. */}
           {draft.skillId ? (
             <>
-              <View style={styles.section}>
-                <SectionHead title="Customer" />
+              <View style={sectionBand(1)}>
                 {renderCustomers()}
                 <Pressable
                   onPress={handleAddCustomer}
@@ -588,7 +639,7 @@ export default function NewJobScreen({ navigation, route }: Props) {
                 </Pressable>
               </View>
 
-              <View style={styles.section}>
+              <View style={sectionBand(2)}>
                 <SectionHead title="Date & time" />
                 <DateTimeFields
                   value={draft.scheduledAt}
@@ -601,8 +652,7 @@ export default function NewJobScreen({ navigation, route }: Props) {
                 ) : null}
               </View>
 
-              <View style={styles.section}>
-                <SectionHead title="Assign technician" />
+              <View style={sectionBand(3)}>
                 {renderTechnicians()}
                 <Pressable
                   onPress={() => setAddSheetVisible(true)}
@@ -614,7 +664,7 @@ export default function NewJobScreen({ navigation, route }: Props) {
                 </Pressable>
               </View>
 
-              <View style={styles.section}>
+              <View style={sectionBand(4)}>
                 <SectionHead title="Notes for technician" />
                 <Input
                   value={draft.notes}
@@ -693,6 +743,11 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: spacing.s3,
+    // Band treatment (see SECTION_BANDS): the colour itself comes from
+    // `sectionBand(index)` — this carries the shared card shape so the
+    // content doesn't hug the band's edges.
+    borderRadius: radius.lg,
+    padding: spacing.s3,
   },
   // Stand-in for the tile grid while loading / on failure / when the catalog
   // has no skills. Roughly one tile row tall so the form doesn't jump when

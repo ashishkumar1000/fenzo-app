@@ -2,9 +2,13 @@
  * TechnicianPicker — search field plus the owner's technician roster.
  *
  * Two layouts:
- *   tiles (default) — horizontal tile row, as on New job.
+ *   tiles (default) — horizontal tile row (the Edit job sheet).
  *   rows            — vertical list with skills caption and a trailing check,
  *                     sized for a sheet (Edit job).
+ *
+ * New Job's technician section no longer reads this component — it uses the
+ * feature-local `src/features/newJob/components/TechnicianPicker.tsx` (the
+ * SkillPicker/CustomerPicker pattern, story 11-8) instead.
  *
  * Single-select: tapping the selected tile/row again clears the assignment,
  * so a job can be left unassigned without a separate "none" option. Callers

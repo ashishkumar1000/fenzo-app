@@ -18,11 +18,13 @@
  *    skill, matched by trimmed phone number; a failed invite refreshes
  *    nothing, so the sheet's stay-open-with-error contract still holds.
  *
- * 4. Select Skills / Select Customers round trips (product feedback
- *    2026-09-20) — "Browse all" pushes the full-screen page carrying the
- *    current selection; a picked id or `null` (Clear) returned in route
- *    params is applied to the draft and the param is cleared so it can't
- *    re-fire. `undefined` (param absent) means nothing to apply.
+ * 4. Select Skills / Select Customers / Select Technicians round trips
+ *    (product feedback 2026-09-20) — "Browse all" pushes the full-screen page
+ *    carrying the current selection (technicians also carry the job's skill,
+ *    read-only context for the browser's "Matches skill" pill); a picked id
+ *    or `null` (Clear) returned in route params is applied to the draft and
+ *    the param is cleared so it can't re-fire. `undefined` (param absent)
+ *    means nothing to apply.
  *
  * 5. Customer section degraded states (product feedback 2026-09-20) — the
  *    section shows a spinner while the first load is in flight, the error
@@ -129,7 +131,13 @@ const MOCK_SHEET_INPUT = {
 jest.mock('../technicians', () => {
   const React = require('react');
   const { Pressable } = require('react-native');
+  // The real pure helpers (filterTechnicians) run — the feature-local
+  // TechnicianPicker's search goes through them. Their behaviour is pinned
+  // through the picker and Select-screen suites (no standalone unit file,
+  // same discipline as the customers helpers).
+  const actual = jest.requireActual('../technicians');
   return {
+    ...actual,
     // Renders a single tappable stand-in while open; the real sheet's own
     // suite covers its form, error and dismissal behaviour.
     AddTechnicianSheet: (props: {
@@ -242,6 +250,19 @@ function customerTileState(
   );
 }
 
+/** The accessibility state of the named technician's picker tile. */
+function technicianTileState(
+  root: ReactTestRenderer.ReactTestInstance,
+  name: string,
+) {
+  return (
+    root
+      .findAllByProps({ accessibilityLabel: name })
+      .filter(t => t.props.accessibilityState !== undefined)[0]?.props
+      .accessibilityState ?? null
+  );
+}
+
 function findButtonWithText(
   root: ReactTestRenderer.ReactTestInstance,
   text: string,
@@ -338,13 +359,14 @@ it('reveals Customer, technician and Notes once a skill is picked', () => {
   expect(findButtonWithText(root, 'Add new technician')).toBeDefined();
 });
 
-it('separates the sections with eyebrow headers and dividers', () => {
+it('separates the sections: eyebrows for the form fields, inline titles for the pickers', () => {
   const { root } = renderScreen();
   pickFirstSkill(root);
 
   // The eyebrows, by their header role — an exact set, so a re-added field
-  // label or a dropped section head cannot slip through. "Skill" names
-  // itself inline in the picker header instead of an eyebrow.
+  // label or a dropped section head cannot slip through. "Skill", "Customer"
+  // and "Technician" name themselves inline in their picker headers
+  // (title + count chip + Browse all on one line) instead of an eyebrow.
   const names = [
     ...new Set(
       root
@@ -352,17 +374,15 @@ it('separates the sections with eyebrow headers and dividers', () => {
         .map(t => t.props.children),
     ),
   ];
-  expect(names).toEqual([
-    'Customer',
-    'Date & time',
-    'Assign technician',
-    'Notes for technician',
-  ]);
+  expect(names).toEqual(['Date & time', 'Notes for technician']);
   // One hairline per eyebrow — RN mirrors the testID onto the host wrapper,
   // doubling the node count; assert the floor, not the doubled exact count.
   expect(
     root.findAllByProps({ testID: 'section-divider' }).length,
-  ).toBeGreaterThanOrEqual(4);
+  ).toBeGreaterThanOrEqual(2);
+  // The picker sections carry their names inline instead.
+  expect(root.findAllByProps({ title: 'Customer' }).length).toBe(1);
+  expect(root.findAllByProps({ title: 'Technician' }).length).toBe(1);
 });
 
 // --- Inline "Add new technician" --------------------------------------------
@@ -412,7 +432,7 @@ it('invites, forces a profile refresh, and auto-selects the newcomer who carries
 
   expect(mockAddTechnician).toHaveBeenCalledWith(MOCK_SHEET_INPUT);
   expect(mockLoadMyProfile).toHaveBeenCalledWith({ force: true });
-  const picker = root.findAllByProps({ selectedId: 'user-tech-new' })[0];
+  const picker = root.findAllByProps({ value: 'user-tech-new' })[0];
   expect(picker).toBeDefined();
 });
 
@@ -443,11 +463,11 @@ it('does not auto-select a newcomer whose skills exclude the picked skill', asyn
   });
 
   expect(
-    root.findAllByProps({ selectedId: 'user-tech-new' }),
+    root.findAllByProps({ value: 'user-tech-new' }),
   ).toEqual([]);
   // Nobody ended up selected — the roster itself is not touched.
   expect(
-    root.findAllByProps({ selectedId: 'tech-1' }),
+    root.findAllByProps({ value: 'tech-1' }),
   ).toEqual([]);
 });
 
@@ -492,7 +512,7 @@ it('degrades silently when the fresh roster does not carry the newcomer', async 
   expect(mockAddTechnician).toHaveBeenCalledWith(MOCK_SHEET_INPUT);
   expect(mockLoadMyProfile).toHaveBeenCalledWith({ force: true });
   // Nobody selected — the pre-invite roster is untouched.
-  expect(root.findAllByProps({ selectedId: 'tech-1' })).toEqual([]);
+  expect(root.findAllByProps({ value: 'tech-1' })).toEqual([]);
 });
 
 // --- Select Skills round trip ------------------------------------------------
@@ -600,6 +620,86 @@ it('drops the customer when SelectCustomers returns an empty selection (Clear)',
   expect(navigation.setParams).toHaveBeenCalledWith({
     selectedCustomerId: undefined,
   });
+});
+
+// --- Select Technicians round trip -------------------------------------------
+
+it('"Browse all" pushes SelectTechnicians carrying the current selection and skill', () => {
+  const { root, navigation } = renderScreen();
+  pickFirstSkill(root);
+
+  // Pick Ravi first, so the handoff carries a real selection rather than
+  // the null the form starts with.
+  act(() => {
+    root.findAllByProps({ accessibilityLabel: 'Ravi Kumar' })[0].props.onPress();
+  });
+  act(() => {
+    root
+      .findAllByProps({ accessibilityLabel: 'Browse all technicians' })[0]
+      .props.onPress();
+  });
+
+  // The skill rides along as read-only context — it drives the browser's
+  // "Matches skill" pill, never a filter.
+  expect(navigation.navigate).toHaveBeenCalledWith('SelectTechnicians', {
+    selectedTechnicianId: 'tech-1',
+    skillId: 'skill-1',
+  });
+});
+
+it('applies the technician returned by SelectTechnicians and clears the param', () => {
+  const { root, navigation } = renderScreen(undefined, {
+    selectedTechnicianId: 'tech-1',
+  });
+
+  // The param applies on mount; the section itself only renders once a
+  // skill is picked (progressive disclosure).
+  pickFirstSkill(root);
+  expect(technicianTileState(root, 'Ravi Kumar')).toEqual({ selected: true });
+  // Cleared immediately so a later re-render can't re-apply it.
+  expect(navigation.setParams).toHaveBeenCalledWith({
+    selectedTechnicianId: undefined,
+  });
+});
+
+it('drops the technician when SelectTechnicians returns a null selection (Clear)', () => {
+  const navigation = {
+    navigate: jest.fn(),
+    goBack: jest.fn(),
+    setParams: jest.fn(),
+  };
+  let renderer!: ReactTestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = create(
+      <NewJobScreen
+        navigation={navigation as never}
+        route={{ params: { selectedTechnicianId: 'tech-1' } } as never}
+      />,
+    );
+  });
+  pickFirstSkill(renderer.root);
+  expect(technicianTileState(renderer.root, 'Ravi Kumar')).toEqual({
+    selected: true,
+  });
+
+  // Clear comes back with `null` — a decision the caller reacts to: the
+  // assignment drops and the tiles stay up with nothing selected.
+  act(() => {
+    renderer.update(
+      <NewJobScreen
+        navigation={navigation as never}
+        route={{ params: { selectedTechnicianId: null } } as never}
+      />,
+    );
+  });
+
+  expect(technicianTileState(renderer.root, 'Ravi Kumar')).toEqual({
+    selected: false,
+  });
+  expect(navigation.setParams).toHaveBeenCalledWith({
+    selectedTechnicianId: undefined,
+  });
+  renderer.unmount();
 });
 
 // --- Customer section degraded states ----------------------------------------

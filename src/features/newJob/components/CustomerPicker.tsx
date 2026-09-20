@@ -5,12 +5,12 @@
  * page; a search field that filters the whole customer store client-side; a
  * 3-column tile grid.
  *
- * The idle grid shows the five most recently served customers (by
+ * The idle grid shows the two most recently served customers (by
  * `lastJobDate`, name as the tiebreak — `sortCustomersByRecency`) plus a
- * "+N More customers" tile that opens the same full-screen page. Five, not
- * three, so the grid is always two complete rows — the dangling "+N more"
- * tile a 3-tile grid produced is exactly what this layout avoids. A selection
- * made outside those five (via "Browse all" or a search) is pinned to the
+ * "+N More customers" tile that opens the same full-screen page. Two, so 2
+ * tiles + the more tile fill exactly one complete row (COLUMNS = 3 divides
+ * 2 + 1) — no dangling tile on a row of its own. A selection
+ * made outside those two (via "Browse all" or a search) is pinned to the
  * front — otherwise the chosen tile would be invisible on the default
  * surface, leaving the section with no visible answer to "who is this job
  * for?".
@@ -22,9 +22,10 @@
  * state, and the tint is the customer's stable identity, not the
  * selection's.
  *
- * The section name ("Customer") lives in the NewJobScreen `SectionHead`
- * above this component — the header carries only the count chip and Browse
- * all, so the name is never doubled.
+ * The section name ("Customer") renders inline in the header before the
+ * count chip — one line, exactly like the SkillPicker header (product
+ * feedback 2026-09-20: the eyebrow-above-chip layout read as two separate
+ * rows).
  *
  * Presentational: the parent owns the option list and the selection.
  */
@@ -32,28 +33,30 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Check, ChevronRight, Search } from 'lucide-react-native';
 import { Avatar, Input } from '../../../components/ui';
-import { colors, radius, spacing, typography } from '../../../theme';
+import { colors, palette, radius, spacing, typography } from '../../../theme';
 import { filterCustomers, sortCustomersByRecency } from '../../customers';
 import type { Customer } from '../../customers';
 
 const COLUMNS = 3;
 const GAP = spacing.s3;
 /**
- * Tiles on screen before the "+N more" tile takes over — 5, exactly like the
- * SkillPicker, so the grid is always 2 complete rows (COLUMNS divides
- * VISIBLE_TILES + 1); any other count leaves the "+N more" tile dangling on
- * a row of its own.
+ * Tiles on screen before the "+N more" tile takes over — 2, matching the
+ * SkillPicker, so 2 tiles + the more tile fill exactly one complete row
+ * (COLUMNS divides VISIBLE_TILES + 1); any other count leaves the "+N more"
+ * tile dangling on a row of its own.
  */
-const VISIBLE_TILES = 5;
+const VISIBLE_TILES = 2;
 
 type Props = {
+  /** Section name rendered inline before the count chip (e.g. "Customer"). */
+  title?: string;
   options: Customer[];
   value: string | null;
   onChange: (id: string) => void;
   onBrowseAll: () => void;
 };
 
-export function CustomerPicker({ options, value, onChange, onBrowseAll }: Props) {
+export function CustomerPicker({ title, options, value, onChange, onBrowseAll }: Props) {
   const [rowWidth, setRowWidth] = useState(0);
   const [query, setQuery] = useState('');
 
@@ -65,10 +68,10 @@ export function CustomerPicker({ options, value, onChange, onBrowseAll }: Props)
   const trimmedQuery = query.trim();
 
   /**
-   * Empty query → the default surface: the five most recently served
+   * Empty query → the default surface: the two most recently served
    * customers plus the "+N more" tile. Non-empty → every match across the
    * whole store (same name-or-phone semantics as the Customers tab), so a
-   * search like "pri" finds rows beyond the first five without leaving
+   * search like "pri" finds rows beyond the idle tiles without leaving
    * the screen.
    */
   const visibleCustomers = useMemo(() => {
@@ -86,10 +89,13 @@ export function CustomerPicker({ options, value, onChange, onBrowseAll }: Props)
   return (
     <View>
       <View style={styles.header}>
-        <View style={styles.countChip}>
-          <Text style={styles.countChipText}>
-            {options.length} {options.length === 1 ? 'customer' : 'customers'}
-          </Text>
+        <View style={styles.headerLeft}>
+          {title ? <Text style={styles.title}>{title}</Text> : null}
+          <View style={styles.countChip}>
+            <Text style={styles.countChipText}>
+              {options.length} {options.length === 1 ? 'customer' : 'customers'}
+            </Text>
+          </View>
         </View>
         <Pressable
           accessibilityRole="button"
@@ -170,11 +176,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.s3,
   },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s3,
+  },
+  title: {
+    ...typography.bodyStrong,
+    color: colors.textStrong,
+  },
   countChip: {
-    backgroundColor: colors.surfaceSunken,
+    backgroundColor: colors.onPrimary,
     borderRadius: radius.pill,
     paddingHorizontal: spacing.s3,
     paddingVertical: spacing.s1,
+    // The band this section sits on can be surfaceSunken too — the hairline
+    // keeps the pill legible on both band colours.
+    borderWidth: 1,
+    borderColor: palette.gray200,
   },
   countChipText: {
     ...typography.label,
@@ -210,7 +229,7 @@ const styles = StyleSheet.create({
   },
   tileMore: {
     backgroundColor: colors.surfaceSunken,
-    borderColor: colors.surfaceSunken,
+    borderColor: colors.borderSubtle,
   },
   tileSelected: {
     // Selected = light primary tint + primary border, per the design mock —

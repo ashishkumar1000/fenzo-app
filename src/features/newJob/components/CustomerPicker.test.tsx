@@ -5,16 +5,18 @@
  *
  * - header row: customer count chip ("N customers") and a "Browse all" link
  *   that fires `onBrowseAll`;
- * - a 3-column grid of the FIRST FIVE customers in recency order
- *   (`sortCustomersByRecency` — most recent `lastJobDate` first, name as the
- *   tiebreak) plus a "+N More customers" tile that also fires `onBrowseAll`;
+ * - a 3-column grid whose idle state is the FIRST TWO customers in recency
+ *   order (`sortCustomersByRecency` — most recent `lastJobDate` first, name
+ *   as the tiebreak) plus a "+N More customers" tile that also fires
+ *   `onBrowseAll` — 2 tiles + the more tile fill exactly one complete row
+ *   (COLUMNS = 3);
  * - a search field that, when non-empty, searches the WHOLE store (name or
  *   phone digits, via `filterCustomers`) and shows a no-match message;
  * - a tap fires `onChange` with the customer's id; the selected tile is
  *   marked via `accessibilityState`.
  *
- * Selection × cap × search: a selection made outside the first five is
- * pinned onto the idle grid (still exactly five tiles), and a search that
+ * Selection × cap × search: a selection made outside the first two is
+ * pinned onto the idle grid (still exactly two tiles), and a search that
  * matches the selection keeps it visible.
  *
  * Presentational only — the parent owns the option list. The real
@@ -47,7 +49,7 @@ const CUSTOMERS: Customer[] = [
   make({ id: 'c-3', name: 'Gopal Menon' }),
 ];
 
-/** Seven rows so the first-five cap and the "+N more" tile both engage. */
+/** Seven rows so the two-tile cap and the "+N more" tile both engage. */
 const SEVEN: Customer[] = [
   ...CUSTOMERS,
   make({ id: 'c-4', name: 'Divya Iyer', lastJobDate: '2026-09-19T10:00:00Z' }),
@@ -128,21 +130,25 @@ function pressLabelled(
   });
 }
 
-it('renders one tile per customer, with the name as the label', () => {
+it('renders the recency-ordered tiles, with the name as the label', () => {
   const root = renderPicker(null, () => {});
   const labels = tileLabels(root);
-  expect(labels).toContain('Ravi Kumar');
+  // All three rows have no lastJobDate, so the idle grid is name-ordered:
+  // Anita, Gopal — and the idle grid caps at two tiles, so Ravi sits behind
+  // the "+N more" tile.
   expect(labels).toContain('Anita Sharma');
   expect(labels).toContain('Gopal Menon');
+  expect(labels).not.toContain('Ravi Kumar');
+  expect(labels).toContain('+1');
+  expect(labels).toContain('More customers');
 });
 
 it('marks the selected customer via accessibilityState', () => {
   // All three rows have no lastJobDate, so the idle grid is name-ordered:
-  // Anita, Gopal, Ravi.
+  // Anita, Gopal (Ravi is capped out).
   const root = renderPicker('c-2', () => {});
   expect(tiles(root).map(t => t.props.accessibilityState)).toEqual([
     { selected: true },
-    { selected: false },
     { selected: false },
   ]);
 });
@@ -152,10 +158,10 @@ it('fires onChange with the tapped customer id', () => {
   const root = renderPicker(null, onChange);
   const t = tiles(root);
   act(() => {
-    t[2].props.onPress();
+    t[1].props.onPress();
   });
   expect(onChange).toHaveBeenCalledTimes(1);
-  expect(onChange).toHaveBeenCalledWith('c-1'); // Ravi Kumar — name-ordered last
+  expect(onChange).toHaveBeenCalledWith('c-3'); // Gopal Menon — name-ordered second
 });
 
 it('shows the count chip and fires onBrowseAll from the Browse all link', () => {
@@ -175,26 +181,24 @@ it('singularises the count chip for a single customer', () => {
   expect(hasText(root, '1 customers')).toBe(false);
 });
 
-it('caps the idle grid at five tiles, recency-ordered, and routes the rest through the "+N More customers" tile', () => {
+it('caps the idle grid at two tiles, recency-ordered, and routes the rest through the "+N More customers" tile', () => {
   const onBrowseAll = jest.fn();
   const root = renderPicker(null, () => {}, onBrowseAll, SEVEN);
 
   const labels = tileLabels(root);
   // Recency order: the four customers with jobs come first (Divya → Bala →
-  // Meera → Zoya by lastJobDate desc), then the no-job rows by name (Anita).
-  // Gopal and Ravi — no jobs — are ranks 6-7 and must NOT leak onto the
-  // idle grid.
+  // Meera → Zoya by lastJobDate desc), then the no-job rows by name (Anita,
+  // Gopal, Ravi). The idle grid keeps only the first two — Divya and Bala;
+  // everyone else is reachable via the more tile.
   expect(labels).toContain('Divya Iyer');
   expect(labels).toContain('Bala Singh');
-  expect(labels).toContain('Meera Nair');
-  expect(labels).toContain('Zoya Khan');
-  expect(labels).toContain('Anita Sharma');
-  expect(labels).not.toContain('Ravi Kumar');
-  expect(labels).not.toContain('Gopal Menon');
-  expect(labels).toContain('+2');
+  expect(labels).not.toContain('Meera Nair');
+  expect(labels).not.toContain('Zoya Khan');
+  expect(labels).not.toContain('Anita Sharma');
+  expect(labels).toContain('+5');
   expect(labels).toContain('More customers');
 
-  pressLabelled(root, 'More customers — 2 more available');
+  pressLabelled(root, 'More customers — 5 more available');
   expect(onBrowseAll).toHaveBeenCalledTimes(1);
 });
 
@@ -226,7 +230,7 @@ it('matches on phone digits too, and says so when nothing fits', () => {
   ).toBe(true);
 });
 
-it('pins a selection made beyond the first five onto the idle grid', () => {
+it('pins a selection made beyond the first two onto the idle grid', () => {
   // Chosen via "Browse all" or a search, the selection would otherwise be
   // invisible on the default surface — the section would show no answer to
   // "who is this job for?".
@@ -234,12 +238,12 @@ it('pins a selection made beyond the first five onto the idle grid', () => {
   const labels = tileLabels(root);
 
   expect(labels).toContain('Zoya Khan');
-  expect(labels).not.toContain('Gopal Menon'); // the displaced last tile
+  expect(labels).not.toContain('Bala Singh'); // the displaced second tile
   expect(
     tiles(root).find(t => t.props.accessibilityState.selected),
   ).toBeDefined();
-  // Still exactly five tiles — the pin replaces, never adds a sixth.
-  expect(tiles(root)).toHaveLength(5);
+  // Still exactly two tiles — the pin replaces, never adds a third.
+  expect(tiles(root)).toHaveLength(2);
 });
 
 it('re-fires onChange with the same id when the selected tile is tapped', () => {

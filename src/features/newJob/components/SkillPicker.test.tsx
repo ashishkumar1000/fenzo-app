@@ -4,16 +4,17 @@
  *
  * - header row: catalog count chip ("N available") and a "Browse all" link
  *   that fires `onBrowseAll`;
- * - a 3-column grid of the FIRST FIVE catalog skills (seed order) plus a
- *   "+N More skills" tile that also fires `onBrowseAll`;
+ * - a 3-column grid whose idle state is the FIRST TWO catalog skills (seed
+ *   order) plus a "+N More skills" tile that also fires `onBrowseAll` —
+ *   2 tiles + the more tile fill exactly one complete row (COLUMNS = 3);
  * - a search field that, when non-empty, searches the WHOLE catalog (so a
- *   match beyond the first five is reachable without leaving the screen) and
+ *   match beyond the idle tiles is reachable without leaving the screen) and
  *   shows a no-match message when nothing fits;
  * - a tap fires `onChange` with the option's id; the selected tile is marked
  *   via `accessibilityState`.
  *
- * Selection × cap × search: a selection made outside the first five is
- * pinned onto the idle grid (still exactly five tiles), tapping the selected
+ * Selection × cap × search: a selection made outside the first two is
+ * pinned onto the idle grid (still exactly two tiles), tapping the selected
  * row re-fires `onChange` with the same id, and a search that matches the
  * selection keeps it visible.
  *
@@ -35,7 +36,7 @@ const SKILLS: Skill[] = [
   { id: 'sk-pest', name: 'Pest Control', description: 'Pests', icon: 'bug' },
 ];
 
-/** Seven rows so the first-five cap and the "+N more" tile both engage. */
+/** Seven rows so the two-tile cap and the "+N more" tile both engage. */
 const SEVEN: Skill[] = [
   ...SKILLS,
   { id: 'sk-ac', name: 'AC Service', description: 'Cooling', icon: 'snowflake' },
@@ -116,12 +117,16 @@ function pressLabelled(
   });
 }
 
-it('renders one tile per catalog skill, label only', () => {
+it('renders the seeded catalog tiles, label only', () => {
   const root = renderPicker(null, () => {});
   const labels = tileLabels(root);
   expect(labels).toContain('Plumbing');
   expect(labels).toContain('Electrical');
-  expect(labels).toContain('Pest Control');
+  // The idle grid caps at two tiles — Pest Control sits behind the "+N
+  // more" tile.
+  expect(labels).not.toContain('Pest Control');
+  expect(labels).toContain('+1');
+  expect(labels).toContain('More skills');
 });
 
 it('marks the selected skill via accessibilityState', () => {
@@ -129,7 +134,6 @@ it('marks the selected skill via accessibilityState', () => {
   expect(tiles(root).map(t => t.props.accessibilityState)).toEqual([
     { selected: false },
     { selected: true },
-    { selected: false },
   ]);
 });
 
@@ -138,10 +142,10 @@ it('fires onChange with the tapped skill id', () => {
   const root = renderPicker(null, onChange);
   const t = tiles(root);
   act(() => {
-    t[2].props.onPress();
+    t[1].props.onPress();
   });
   expect(onChange).toHaveBeenCalledTimes(1);
-  expect(onChange).toHaveBeenCalledWith('sk-pest');
+  expect(onChange).toHaveBeenCalledWith('sk-elec');
 });
 
 // --- Redesign (2026-09-20): header, search, capped grid ----------------------
@@ -174,20 +178,22 @@ it('renders the optional section title inline before the count chip', () => {
   expect(hasText(renderer.root, '3 available')).toBe(true);
 });
 
-it('caps the idle grid at five tiles and routes the rest through the "+N More skills" tile', () => {
+it('caps the idle grid at two tiles and routes the rest through the "+N More skills" tile', () => {
   const onBrowseAll = jest.fn();
   const root = renderPicker(null, () => {}, onBrowseAll, SEVEN);
 
   const labels = tileLabels(root);
-  // Seed order holds: the five earliest rows only — Leak Detection and
-  // Painting are catalog rows 6-7 and must NOT leak onto the idle grid.
+  // Seed order holds: the two earliest rows only — Pest Control onward are
+  // catalog rows 3-7 and must NOT leak onto the idle grid.
   expect(labels).toContain('Plumbing');
+  expect(labels).toContain('Electrical');
+  expect(labels).not.toContain('Pest Control');
   expect(labels).not.toContain('Leak Detection');
   expect(labels).not.toContain('Painting');
-  expect(labels).toContain('+2');
+  expect(labels).toContain('+5');
   expect(labels).toContain('More skills');
 
-  pressLabelled(root, 'More skills — 2 more available');
+  pressLabelled(root, 'More skills — 5 more available');
   expect(onBrowseAll).toHaveBeenCalledTimes(1);
 });
 
@@ -198,7 +204,7 @@ it('shows no "+N more" tile while a search is active', () => {
   expect(tileLabels(root)).toContain('Leak Detection');
 });
 
-it('searches the whole catalog, not just the first five rows', () => {
+it('searches the whole catalog, not just the idle tiles', () => {
   const root = renderPicker(null, () => {}, () => {}, SEVEN);
   typeIntoSearch(root, 'paint');
   const labels = tileLabels(root);
@@ -221,7 +227,7 @@ it('matches on descriptions too, and says so when nothing fits', () => {
 
 // --- Selection × grid cap × search -------------------------------------------
 
-it('pins a selection made beyond the first five onto the idle grid', () => {
+it('pins a selection made beyond the first two onto the idle grid', () => {
   // Chosen via "Browse all" or a search, the selection would otherwise be
   // invisible on the default surface — the section would show no answer to
   // "what skill is this job?".
@@ -229,12 +235,12 @@ it('pins a selection made beyond the first five onto the idle grid', () => {
   const labels = tileLabels(root);
 
   expect(labels).toContain('Painting');
-  expect(labels).not.toContain('Deep Cleaning'); // the displaced last tile
+  expect(labels).not.toContain('Electrical'); // the displaced second tile
   expect(
     tiles(root).find(t => t.props.accessibilityState.selected),
   ).toBeDefined();
-  // Still exactly five tiles — the pin replaces, never adds a sixth.
-  expect(tiles(root)).toHaveLength(5);
+  // Still exactly two tiles — the pin replaces, never adds a third.
+  expect(tiles(root)).toHaveLength(2);
 });
 
 it('re-fires onChange with the same id when the selected row is tapped', () => {
