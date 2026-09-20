@@ -7,6 +7,7 @@ export {
   useMyProfile,
   loadMyProfile,
   setProfileFromServer,
+  getMyProfileSnapshot,
 } from './useMyProfile';
 export { EditNameSheet } from './components/EditNameSheet';
 export type { MyProfileState } from './useMyProfile';

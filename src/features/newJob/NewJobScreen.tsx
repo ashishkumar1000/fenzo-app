@@ -14,6 +14,17 @@
  * skill id (exact id membership — no name comparison), so the skill has to be
  * chosen first. Customer, skill and technician are all required — `POST /jobs`
  * rejects a job without an assignee.
+ *
+ * Progressive disclosure (product feedback 2026-09-20): until a skill is
+ * picked the screen shows the Skill section only — Customer, Date & time,
+ * Assign technician and Notes appear once it is chosen.
+ *
+ * "Add new technician" (product feedback 2026-09-20) opens the same sheet the
+ * Technicians tab uses, over this form. The invite creates a real `users` row
+ * server-side (status `invited`), so the new technician is assignable
+ * immediately — but this picker reads the roster from `/users/me`, so the
+ * handler forces a profile refresh and then auto-selects the newcomer when
+ * they carry the selected skill.
  */
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -37,8 +48,14 @@ import type { ApiError } from '../../services';
 import { upsertJob } from '../jobs';
 import type { RootStackParamList } from '../../navigation/types';
 import { useCustomers } from '../customers';
-import { loadMyProfile, useMyProfile } from '../profile';
+import {
+  getMyProfileSnapshot,
+  loadMyProfile,
+  useMyProfile,
+} from '../profile';
 import { TechnicianPicker } from '../../components/TechnicianPicker';
+import { AddTechnicianSheet, useTechnicians } from '../technicians';
+import type { NewTechnicianInput } from '../technicians';
 import { loadSkills, useSkills } from '../skills';
 import { DateTimeFields } from './components/DateTimeFields';
 import { SkillPicker } from './components/SkillPicker';
@@ -72,6 +89,11 @@ export default function NewJobScreen({ navigation, route }: Props) {
   const [draft, setDraft] = useState<NewJobDraft>(initialDraft);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [addSheetVisible, setAddSheetVisible] = useState(false);
+
+  // The inline "Add new technician" sheet performs the invite itself via
+  // `add` (POST /auth/invite); New Job only reacts to its outcome.
+  const { add: addTechnician } = useTechnicians();
 
   // `AddCustomerScreen` returns here with `createdCustomerId` on a successful
   // save when opened from this screen's "Add new" link — select it in the
@@ -287,6 +309,34 @@ export default function NewJobScreen({ navigation, route }: Props) {
     navigation.navigate('AddCustomer', { returnRouteName: 'NewJob' });
 
   /**
+   * The inline sheet's submit. `add` rejects with `ApiError` on a failed
+   * invite, which is what keeps the sheet open to show the error — so the
+   * refresh and selection below only run on success.
+   *
+   * The picker's roster comes from `/users/me`, not the local technician
+   * store the invite writes to, so a forced profile refresh is what actually
+   * makes the newcomer visible. With the fresh roster in, the new technician
+   * is auto-selected when they carry the selected skill — the owner just
+   * added them for this job. Matched by phone number (unique per tenant —
+   * the invite itself rejects duplicates), never by the `invite_…` id, whose
+   * relationship to the real user id the API doesn't guarantee.
+   */
+  const handleAddTechnicianSubmit = async (input: NewTechnicianInput) => {
+    await addTechnician(input);
+    await loadMyProfile({ force: true });
+    const added = getMyProfileSnapshot()?.technicians.find(
+      t => t.phoneNumber === input.phone.trim(),
+    );
+    if (
+      added &&
+      draft.skillId !== null &&
+      (added.skillIds ?? []).includes(draft.skillId)
+    ) {
+      patch({ technicianId: added.id });
+    }
+  };
+
+  /**
    * The dropdown carries its own state in its placeholder and helper rather
    * than a separate status block: unlike the tile grid it's a single control,
    * and swapping it out for a spinner would make the form jump.
@@ -362,9 +412,11 @@ export default function NewJobScreen({ navigation, route }: Props) {
   };
 
   /**
-   * Gated on the skill, per the filtering rule above.
+   * Rendered only once a skill is picked — before that the whole rest of the
+   * form is hidden (progressive disclosure), so there is no "choose a skill
+   * first" placeholder to show here.
    *
-   * The roster's own degraded states mirror the skills section: while the
+   * The roster's degraded states mirror the skills section: while the
    * profile is still loading (or failed) there is nothing to show yet, and
    * saying "No technicians yet" for a roster that merely didn't arrive would
    * read as "you have nobody" — a spinner/retry is the honest state.
@@ -375,16 +427,6 @@ export default function NewJobScreen({ navigation, route }: Props) {
    * later.
    */
   const renderTechnicians = () => {
-    if (!draft.skillId) {
-      return (
-        <View style={styles.sectionStatus}>
-          <Text style={styles.statusText}>
-            Choose a skill first to see who can take this job.
-          </Text>
-        </View>
-      );
-    }
-
     if (profileLoading && allTechnicians.length === 0) {
       return (
         <View style={styles.sectionStatus}>
@@ -460,61 +502,78 @@ export default function NewJobScreen({ navigation, route }: Props) {
             {renderSkills()}
           </View>
 
-          <View style={styles.section}>
-            <Select
-              label="Customer"
-              value={draft.customerId ?? undefined}
-              onChange={id => patch({ customerId: id })}
-              options={customerOptions}
-              placeholder={customerPlaceholder}
-              // A dropdown with nothing in it should not open an empty sheet —
-              // the "Add new" link below is the way forward in that case.
-              disabled={customerOptions.length === 0}
-              helper={customerHelper}
-            />
-            <Pressable
-              onPress={handleAddCustomer}
-              hitSlop={8}
-              accessibilityRole="button"
-              style={styles.addCustomerRow}>
-              <UserPlus size={18} color={colors.textLink} strokeWidth={2} />
-              <Text style={styles.addCustomerText}>
-                Customer not in list? Add new
-              </Text>
-            </Pressable>
-            {/* A failed fetch leaves the Select disabled and empty, so without
-                this the owner is stuck on a dead control with no way back. */}
-            {customersError ? (
-              <Button variant="secondary" size="sm" onPress={refreshCustomers}>
-                Try again
-              </Button>
-            ) : null}
-          </View>
+          {/* Progressive disclosure (product feedback 2026-09-20): nothing
+              but the Skill section shows until a skill is picked — Customer,
+              Date & time, Assign technician and Notes all appear once it is.
+              The skill drives the technician filter, so it is the one
+              decision the rest of the form depends on. */}
+          {draft.skillId ? (
+            <>
+              <View style={styles.section}>
+                <Select
+                  label="Customer"
+                  value={draft.customerId ?? undefined}
+                  onChange={id => patch({ customerId: id })}
+                  options={customerOptions}
+                  placeholder={customerPlaceholder}
+                  // A dropdown with nothing in it should not open an empty sheet —
+                  // the "Add new" link below is the way forward in that case.
+                  disabled={customerOptions.length === 0}
+                  helper={customerHelper}
+                />
+                <Pressable
+                  onPress={handleAddCustomer}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  style={styles.inlineAddRow}>
+                  <UserPlus size={18} color={colors.textLink} strokeWidth={2} />
+                  <Text style={styles.inlineAddText}>
+                    Customer not in list? Add new
+                  </Text>
+                </Pressable>
+                {/* A failed fetch leaves the Select disabled and empty, so without
+                    this the owner is stuck on a dead control with no way back. */}
+                {customersError ? (
+                  <Button variant="secondary" size="sm" onPress={refreshCustomers}>
+                    Try again
+                  </Button>
+                ) : null}
+              </View>
 
-          <View style={styles.section}>
-            <DateTimeFields
-              value={draft.scheduledAt}
-              onChange={next => patch({ scheduledAt: next })}
-            />
-            {isPastSlot ? (
-              <Text style={styles.fieldError}>
-                Pick a time in the future.
-              </Text>
-            ) : null}
-          </View>
+              <View style={styles.section}>
+                <DateTimeFields
+                  value={draft.scheduledAt}
+                  onChange={next => patch({ scheduledAt: next })}
+                />
+                {isPastSlot ? (
+                  <Text style={styles.fieldError}>
+                    Pick a time in the future.
+                  </Text>
+                ) : null}
+              </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Assign technician</Text>
-            {renderTechnicians()}
-          </View>
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>Assign technician</Text>
+                {renderTechnicians()}
+                <Pressable
+                  onPress={() => setAddSheetVisible(true)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  style={styles.inlineAddRow}>
+                  <UserPlus size={18} color={colors.textLink} strokeWidth={2} />
+                  <Text style={styles.inlineAddText}>Add new technician</Text>
+                </Pressable>
+              </View>
 
-          <Input
-            label="Notes for technician"
-            value={draft.notes}
-            onChangeText={text => patch({ notes: text })}
-            placeholder="Any special instructions..."
-            multiline
-          />
+              <Input
+                label="Notes for technician"
+                value={draft.notes}
+                onChangeText={text => patch({ notes: text })}
+                placeholder="Any special instructions..."
+                multiline
+              />
+            </>
+          ) : null}
         </ScrollView>
 
         {/* Footer sits outside the ScrollView so "Create job" is always
@@ -533,6 +592,12 @@ export default function NewJobScreen({ navigation, route }: Props) {
           </Button>
         </SafeAreaView>
       </KeyboardAvoidingView>
+
+      <AddTechnicianSheet
+        visible={addSheetVisible}
+        onClose={() => setAddSheetVisible(false)}
+        onSubmit={handleAddTechnicianSubmit}
+      />
     </SafeAreaView>
   );
 }
@@ -594,7 +659,9 @@ const styles = StyleSheet.create({
     ...typography.bodySm,
     color: colors.textMuted,
   },
-  addCustomerRow: {
+  // Shared by the customer and technician inline-add rows — same link
+  // treatment on purpose: the two sections read as one pattern.
+  inlineAddRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.s2,
@@ -602,7 +669,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.s2,
     marginTop: -spacing.s1,
   },
-  addCustomerText: {
+  inlineAddText: {
     ...typography.labelStrong,
     color: colors.textLink,
   },

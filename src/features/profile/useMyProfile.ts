@@ -179,6 +179,16 @@ export function loadMyProfile(opts: { force?: boolean } = {}): Promise<void> {
 }
 
 /**
+ * Imperative read of the current profile — for a callback that just forced a
+ * refresh and needs the fresh data right away (e.g. New Job's inline
+ * technician add picks the newly invited technician out of the roster it
+ * just loaded). Screens that *render* the profile keep using `useMyProfile`.
+ */
+export function getMyProfileSnapshot(): MyProfile | null {
+  return state.profile;
+}
+
+/**
  * Reset to the pre-login state. Call on logout (via the reset registry).
  *
  * Invalidates any in-flight GET and marks every older response stale — a

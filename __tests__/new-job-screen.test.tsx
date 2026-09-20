@@ -30,6 +30,10 @@ jest.mock('../src/services', () => ({
 jest.mock('../src/features/profile', () => ({
   useMyProfile: jest.fn(),
   loadMyProfile: jest.fn(),
+  // NewJobScreen reads the post-invite roster through this snapshot — stub it
+  // so a future test here that reaches the sheet's submit path doesn't crash
+  // on the missing export.
+  getMyProfileSnapshot: jest.fn(() => null),
 }));
 
 jest.mock('../src/features/customers', () => ({
@@ -403,7 +407,7 @@ it('a technician who does not carry the newly selected skill is cleared', async 
   });
 });
 
-it('submission is blocked while no skill is chosen', async () => {
+it('submission is blocked and the rest of the form is hidden while no skill is chosen', async () => {
   let renderer!: ReactTestRenderer.ReactTestRenderer;
   await ReactTestRenderer.act(async () => {
     renderer = ReactTestRenderer.create(
@@ -419,13 +423,14 @@ it('submission is blocked while no skill is chosen', async () => {
     .find(b => b.props.children === 'Create job');
   expect(createButton!.props.disabled).toBe(true);
 
-  // And the technician section shows the gate, not a roster.
-  const texts = renderer.root.findAllByType(Text);
-  expect(
-    texts.some(t =>
-      typeof t.props.children === 'string' && t.props.children.includes('Choose a skill first'),
-    ),
-  ).toBe(true);
+  // Progressive disclosure (product feedback 2026-09-20): with no skill
+  // picked the Customer, Date & time, Assign technician and Notes sections
+  // are not on screen at all — there is no "choose a skill first" placeholder
+  // any more, the sections simply appear once a skill is picked.
+  expect(renderer.root.findAllByType(Select)).toEqual([]);
+  expect(hasText(renderer, 'Assign technician')).toBe(false);
+  expect(hasText(renderer, 'Add new technician')).toBe(false);
+  expect(hasText(renderer, 'Notes for technician')).toBe(false);
 
   await ReactTestRenderer.act(async () => {
     renderer.unmount();
