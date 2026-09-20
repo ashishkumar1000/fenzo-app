@@ -39,6 +39,7 @@ import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button, EmptyState, IconButton, InlineError, SegmentedControl } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
+import { useNow } from '../../hooks';
 import type { MainTabParamList, RootStackParamList } from '../../navigation/types';
 import { loadMyProfile, useMyProfile } from '../profile';
 import { useCustomers } from '../customers';
@@ -156,6 +157,11 @@ export default function JobsScreen({ navigation, route }: Props) {
   // in the store, and driven live by the 3.3 socket's own refetch.
   const { unreadCount, loadUnreadCount } = useNotifications();
 
+  // The urgency rail's clock — one 60s tick for the whole list. `now` is in
+  // renderJob's deps, so every visible row re-renders on each tick (cheap at
+  // list scale); that's what turns rails green→amber→red as thresholds pass.
+  const now = useNow();
+
   // Server-computed overdue count for the segment badge — the same figure
   // Home's Overdue strip shows, so the two screens can never disagree.
   const overdueCount = profile?.jobCounts.overdue ?? 0;
@@ -253,12 +259,16 @@ export default function JobsScreen({ navigation, route }: Props) {
       <JobCard
         job={item}
         scope={scope}
+        // Every scope gets the rail now (Today / Upcoming / Overdue /
+        // History): the model in urgency.ts gates inactive rows itself, so
+        // History (always completed/cancelled) renders no rail.
+        urgencyNow={now}
         customerName={customerNames.get(item.customerId)}
         technicianName={technicianNames.get(item.technicianId)}
         onPress={handleOpenJob}
       />
     ),
-    [customerNames, technicianNames, scope],
+    [customerNames, technicianNames, scope, now],
   );
 
   return (

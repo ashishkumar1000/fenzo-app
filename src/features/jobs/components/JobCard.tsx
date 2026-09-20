@@ -7,6 +7,14 @@
  * Header: title + status badge (with an Urgent marker when applicable) ·
  * meta rows: skill + time · footer: the assigned technician. No amount —
  * jobs don't carry one.
+ *
+ * Pass `urgencyNow` (a ticked wall-clock ms) to draw the urgency rail — a
+ * 3px left edge, green/amber/red by time-to-start. Every job list that
+ * passes a clock gets one (Today, Upcoming, Overdue — all scopes; see
+ * `urgency.ts` for the mapping and thresholds). Deliberately colour-only:
+ * the scheduled-time text on the card already carries the same information,
+ * so screen readers lose nothing — a non-colour cue would need its own
+ * design decision.
  */
 import { StyleSheet, Text, View } from 'react-native';
 import { Clock } from 'lucide-react-native';
@@ -16,6 +24,8 @@ import type { StatusKey } from '../../../theme';
 import { daysOverdue, formatIstDateLabel } from '../../../utils';
 import type { ApiJob, JobScope } from '../types';
 import { formatTimeLabel, statusToBadge } from '../format';
+import { jobUrgency } from '../urgency';
+import type { JobUrgency } from '../urgency';
 
 type Props = {
   job: ApiJob;
@@ -31,6 +41,13 @@ type Props = {
    *   history  — completion date/time from `completedAt`, or "Cancelled".
    */
   scope?: JobScope;
+  /**
+   * The ticked wall-clock (ms) that drives the urgency rail — the caller
+   * (a job-list screen) owns the tick, so one timer serves the whole
+   * list instead of one per card. Omit (undefined) for no rail: urgency is
+   * opt-in per surface, and only active jobs (not done/cancelled) get one.
+   */
+  urgencyNow?: number;
   /** Resolved customer display name; falls back to the skill name if absent. */
   customerName?: string;
   /** Resolved technician display name; falls back to a neutral placeholder. */
@@ -52,9 +69,22 @@ const STATUS_LABEL: Record<Exclude<StatusKey, 'neutral'>, string> = {
   cancelled: 'Cancelled',
 };
 
+/**
+ * Rail colours by urgency level — borrowed status palettes (DESIGN_SYSTEM.md).
+ * A total map, not a fall-through ternary: `null` urgency never reaches this
+ * (the style below guards on `urgency`), and no level can silently read as
+ * another colour.
+ */
+const URGENCY_BORDER: Record<Exclude<JobUrgency, null>, string> = {
+  calm: colors.status.done.solid,
+  near: colors.status.scheduled.solid,
+  now: colors.status.cancelled.solid,
+};
+
 export function JobCard({
   job,
   scope = 'today',
+  urgencyNow,
   customerName,
   technicianName,
   showFooter = true,
@@ -62,6 +92,17 @@ export function JobCard({
 }: Props) {
   const badgeStatus = statusToBadge(job.status);
   const skillLabel = job.skill?.name || 'Service';
+
+  // Urgency rail — the caller passes the ticked clock, and every list that
+  // does gets the rail on its active rows. An in-progress row keeps the same
+  // time-to-start mapping: before its slot it's on track, past its slot the
+  // red rail reads "running behind" (work still needs doing until it
+  // completes). Status palettes borrowed per DESIGN_SYSTEM.md: green "on
+  // track", amber "coming up" (the hue Scheduled already wears), red "act
+  // now" (the same borrow the Urgent badge makes). Inactive jobs get no rail
+  // at all.
+  const urgency: JobUrgency =
+    urgencyNow === undefined ? null : jobUrgency(job, urgencyNow);
 
   // The scheduled-time meta row, per scope. Today keeps the original
   // time-only rendering byte-for-byte. In history, a completed row with a
@@ -84,7 +125,13 @@ export function JobCard({
       padding="md"
       interactive={Boolean(onPress)}
       onPress={onPress ? () => onPress(job) : undefined}
-      style={styles.card}>
+      style={[
+        styles.card,
+        // The urgency rail: a 3px left edge over the card's 1px hairline —
+        // the other three sides keep borderSubtle. The guard narrows
+        // `urgency` non-null, so the map lookup is total.
+        urgency ? { borderLeftWidth: 3, borderLeftColor: URGENCY_BORDER[urgency] } : null,
+      ]}>
       <View style={styles.headerRow}>
         <Text style={styles.customerName} numberOfLines={1}>
           {customerName ?? skillLabel}

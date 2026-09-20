@@ -13,6 +13,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Calendar } from 'lucide-react-native';
 import { Button, Card } from '../../../components/ui';
 import { colors, radius, spacing, typography } from '../../../theme';
+import { useNow } from '../../../hooks';
 import { JobCard } from '../../jobs/components/JobCard';
 import type { ProfileJob, ProfileTechnician } from '../../../services';
 import { selectTodayJobs } from '../selectTodayJobs';
@@ -41,6 +42,8 @@ export function TodaysJobsSection({
   const todayJobs = selectTodayJobs(jobs);
   const technicianNames = new Map(technicians.map(t => [t.id, t.name]));
   const isEmpty = todayJobs.length === 0 && overdueCount === 0;
+  // The urgency rail's clock — one 60s tick for the section's rows.
+  const now = useNow();
 
   return (
     <View style={styles.section}>
@@ -52,6 +55,7 @@ export function TodaysJobsSection({
         <JobCard
           key={job.id}
           job={job}
+          urgencyNow={now}
           // `||`, not `??`: an anomaly row's embed name can be `''` as well as
           // `null` (fenzit-be Story 3-9 review notes) — either must fall
           // through to the next source, not render blank.

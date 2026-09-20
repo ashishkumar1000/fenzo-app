@@ -22,6 +22,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { CalendarCheck } from 'lucide-react-native';
 import { Button, EmptyState, Eyebrow, InlineError } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
+import { useNow } from '../../hooks';
 import { firstName, useMyProfile } from '../profile';
 import { JobCard } from '../jobs/components/JobCard';
 import type { ApiJob } from '../jobs/types';
@@ -65,6 +66,8 @@ export default function TodayScreen() {
   );
 
   const sections = buildTodaySections(today);
+  // The urgency rail's clock — one 60s tick for the sectioned list.
+  const now = useNow();
   // `name` is nullable on the wire (see `MyProfile`); the greeting falls back
   // to a nameless form when it's missing.
   const name = firstName(profile?.name ?? null);
@@ -102,7 +105,7 @@ export default function TodayScreen() {
           sections={sections}
           keyExtractor={item => item.id}
           renderItem={({ item }) => (
-            <JobCard job={item} showFooter={false} onPress={handleOpenJob} />
+            <JobCard job={item} urgencyNow={now} showFooter={false} onPress={handleOpenJob} />
           )}
           renderSectionHeader={({ section }) => (
             <Eyebrow style={styles.sectionHeaderSpacing}>

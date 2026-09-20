@@ -77,6 +77,21 @@ raw `palette.*` scales, except inside the token files themselves.
 badge color: **Done / In Progress / Scheduled / Cancelled** (+ neutral = Draft).
 Use `<Badge status="done|progress|scheduled|cancelled|neutral">`.
 
+**Urgency rail (time-to-start, not a status).** When a job list needs a
+time-urgency signal, draw a 3px left border on the Card (`borderLeftWidth: 3`)
+borrowing the status palettes — never a new colour, never a fifth badge:
+more than 2h to start → `colors.status.done.solid` (green, on track) ·
+inside 2h → `colors.status.scheduled.solid` (amber, coming up) · inside 30m or
+the slot has passed → `colors.status.cancelled.solid` (red, act now — the same
+borrow the Urgent badge makes). Active jobs only: done/cancelled rows keep the
+neutral card however late they ran, and an in-progress row past its slot stays
+red ("running behind") until it completes. The rail is deliberately
+colour-only: the card's scheduled-time text already carries the same
+information for screen readers, so a non-colour cue is a separate design
+decision, not a gap. The mapping lives with the feature
+(`features/jobs/urgency.ts`), the caller owns the ticking clock so one timer
+serves the list, and the clock re-syncs on app resume (`useNow`).
+
 **Selection controls — navigation vs filter.** `SegmentedControl` (sunken
 track, raised card on the active segment) is for **view switching**: 2–5 short,
 mutually exclusive choices that change what you're looking at. Chip rows
