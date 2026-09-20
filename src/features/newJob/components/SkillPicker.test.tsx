@@ -156,6 +156,24 @@ it('shows the catalog count chip and fires onBrowseAll from the Browse all link'
   expect(onBrowseAll).toHaveBeenCalledTimes(1);
 });
 
+it('renders the optional section title inline before the count chip', () => {
+  let renderer!: ReactTestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = create(
+      <SkillPicker
+        title="Skill"
+        options={SKILLS}
+        value={null}
+        onChange={() => {}}
+        onBrowseAll={() => {}}
+      />,
+    );
+  });
+
+  expect(hasText(renderer.root, 'Skill')).toBe(true);
+  expect(hasText(renderer.root, '3 available')).toBe(true);
+});
+
 it('caps the idle grid at five tiles and routes the rest through the "+N More skills" tile', () => {
   const onBrowseAll = jest.fn();
   const root = renderPicker(null, () => {}, onBrowseAll, SEVEN);

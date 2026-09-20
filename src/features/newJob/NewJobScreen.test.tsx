@@ -205,7 +205,7 @@ it('leaves the customer unselected and never clears params when the route carrie
   const { root, navigation } = renderScreen();
   pickFirstSkill(root);
 
-  const customerSelect = root.findAllByProps({ label: 'Customer' })[0];
+  const customerSelect = root.findAllByProps({ sheetTitle: 'Customer' })[0];
   expect(customerSelect.props.value).toBeUndefined();
   expect(navigation.setParams).not.toHaveBeenCalled();
 });
@@ -214,7 +214,7 @@ it('selects the returned createdCustomerId in the draft and clears the route par
   const { root, navigation } = renderScreen('cust-1');
   pickFirstSkill(root);
 
-  const customerSelect = root.findAllByProps({ label: 'Customer' })[0];
+  const customerSelect = root.findAllByProps({ sheetTitle: 'Customer' })[0];
   expect(customerSelect.props.value).toBe('cust-1');
   expect(navigation.setParams).toHaveBeenCalledWith({ createdCustomerId: undefined });
 });
@@ -244,8 +244,12 @@ it('shows only the Skill section until a skill is picked', () => {
   expect(
     root.findAllByProps({ accessibilityLabel: 'Plumbing' }).length,
   ).toBeGreaterThan(0);
-  expect(root.findAllByProps({ label: 'Customer' })).toEqual([]);
-  expect(root.findAllByProps({ label: 'Notes for technician' })).toEqual([]);
+  expect(root.findAllByProps({ sheetTitle: 'Customer' })).toEqual([]);
+  expect(root.findAllByProps({ accessibilityLabel: 'Notes for technician' })).toEqual([]);
+  // No section heads either — the only visible section (Skill) names itself
+  // inline in the picker header.
+  expect(root.findAllByProps({ accessibilityRole: 'header' })).toEqual([]);
+  expect(root.findAllByProps({ testID: 'section-divider' })).toEqual([]);
   expect(findButtonWithText(root, 'Add new technician')).toBeUndefined();
 });
 
@@ -253,9 +257,40 @@ it('reveals Customer, technician and Notes once a skill is picked', () => {
   const { root } = renderScreen();
   pickFirstSkill(root);
 
-  expect(root.findAllByProps({ label: 'Customer' }).length).toBe(1);
-  expect(root.findAllByProps({ label: 'Notes for technician' }).length).toBe(1);
+  expect(root.findAllByProps({ sheetTitle: 'Customer' }).length).toBe(1);
+  // RN mirrors accessibilityLabel onto host wrapper nodes — count the
+  // presence, not exactly one node.
+  expect(
+    root.findAllByProps({ accessibilityLabel: 'Notes for technician' }).length,
+  ).toBeGreaterThan(0);
   expect(findButtonWithText(root, 'Add new technician')).toBeDefined();
+});
+
+it('separates the sections with eyebrow headers and dividers', () => {
+  const { root } = renderScreen();
+  pickFirstSkill(root);
+
+  // The eyebrows, by their header role — an exact set, so a re-added field
+  // label or a dropped section head cannot slip through. "Skill" names
+  // itself inline in the picker header instead of an eyebrow.
+  const names = [
+    ...new Set(
+      root
+        .findAllByProps({ accessibilityRole: 'header' })
+        .map(t => t.props.children),
+    ),
+  ];
+  expect(names).toEqual([
+    'Customer',
+    'Date & time',
+    'Assign technician',
+    'Notes for technician',
+  ]);
+  // One hairline per eyebrow — RN mirrors the testID onto the host wrapper,
+  // doubling the node count; assert the floor, not the doubled exact count.
+  expect(
+    root.findAllByProps({ testID: 'section-divider' }).length,
+  ).toBeGreaterThanOrEqual(4);
 });
 
 // --- Inline "Add new technician" --------------------------------------------
@@ -429,8 +464,8 @@ it('collapses the form when SelectSkills returns an empty selection (Clear)', ()
 
   // `null` is a decision — the skill (and any technician needing it) is
   // dropped and the form re-collapses to just the Skill section.
-  expect(root.findAllByProps({ label: 'Customer' })).toEqual([]);
-  expect(root.findAllByProps({ label: 'Notes for technician' })).toEqual([]);
+  expect(root.findAllByProps({ sheetTitle: 'Customer' })).toEqual([]);
+  expect(root.findAllByProps({ accessibilityLabel: 'Notes for technician' })).toEqual([]);
   expect(navigation.setParams).toHaveBeenCalledWith({
     selectedSkillId: undefined,
   });

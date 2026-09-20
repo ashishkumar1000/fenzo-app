@@ -11,7 +11,7 @@
 import type { ApiJob } from '../jobs/types';
 
 export interface TodaySection {
-  /** Eyebrow label, ready to render — UPPERCASE, letterSpacing applied by the screen. */
+  /** Eyebrow label, ready to render — UPPERCASE (the DS `Eyebrow` also applies textTransform). */
   title: string;
   data: ApiJob[];
 }

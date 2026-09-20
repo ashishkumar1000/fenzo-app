@@ -24,6 +24,14 @@ type RawOption = string | Option;
 
 export type SelectProps = {
   label?: string;
+  /**
+   * Title for the options sheet when it differs from the field label — for a
+   * field whose visible label is carried by a section header instead (the
+   * sheet still needs a title of its own). Falls back to `label`. Also serves
+   * as the collapsed trigger's accessible name when `label` is absent —
+   * without it the trigger would read its placeholder.
+   */
+  sheetTitle?: string;
   value?: string;
   onChange: (value: string) => void;
   options: RawOption[];
@@ -48,6 +56,7 @@ function Chevron() {
 
 export function Select({
   label,
+  sheetTitle,
   value,
   onChange,
   options,
@@ -59,6 +68,9 @@ export function Select({
   const [open, setOpen] = useState(false);
   const opts = options.map(normalize);
   const selected = opts.find((o) => o.value === value);
+  // `||` not `??`: an empty-string title falls through to `label` rather
+  // than leaving the sheet untitled.
+  const title = sheetTitle || label;
 
   return (
     <View style={[styles.wrap, style]}>
@@ -66,7 +78,7 @@ export function Select({
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={label ?? placeholder}
+        accessibilityLabel={label || sheetTitle || placeholder}
         disabled={disabled}
         onPress={() => setOpen(true)}
         style={[
@@ -90,7 +102,7 @@ export function Select({
         onRequestClose={() => setOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
           <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-            {label ? <Text style={styles.sheetTitle}>{label}</Text> : null}
+            {title ? <Text style={styles.sheetTitle}>{title}</Text> : null}
             <FlatList
               data={opts}
               keyExtractor={(o) => o.value}

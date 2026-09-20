@@ -145,4 +145,17 @@ export const typography = {
     fontWeight: weight.semibold,
     lineHeight: Math.round(fontSize.xs * leading.snug),
   },
+  /**
+   * The eyebrow section label — `captionStrong` plus the letter-spaced caps
+   * tracking. The design system's one allowed caps use (tiny letter-spaced
+   * eyebrow labels only). Spacing is the `caps` token scaled to the role's
+   * size — screens never hardcode the px value.
+   */
+  eyebrow: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.xs,
+    fontWeight: weight.semibold,
+    lineHeight: Math.round(fontSize.xs * leading.snug),
+    letterSpacing: fontSize.xs * letterSpacing.caps,
+  },
 } as const;

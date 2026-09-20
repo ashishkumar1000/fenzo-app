@@ -20,7 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { CalendarCheck } from 'lucide-react-native';
-import { Button, EmptyState, InlineError } from '../../components/ui';
+import { Button, EmptyState, Eyebrow, InlineError } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import { firstName, useMyProfile } from '../profile';
 import { JobCard } from '../jobs/components/JobCard';
@@ -105,7 +105,9 @@ export default function TodayScreen() {
             <JobCard job={item} showFooter={false} onPress={handleOpenJob} />
           )}
           renderSectionHeader={({ section }) => (
-            <Text style={styles.sectionHeader}>{section.title}</Text>
+            <Eyebrow style={styles.sectionHeaderSpacing}>
+              {section.title}
+            </Eyebrow>
           )}
           contentContainerStyle={[
             styles.listContent,
@@ -150,13 +152,9 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: colors.textStrong,
   },
-  // The eyebrow section header: the ONE allowed caps use — tiny letter-spaced
-  // caption, muted (ui-design-spec §7). Semibold comes from the `captionStrong`
-  // role, not a fontWeight patch (weight must ride the font family).
-  sectionHeader: {
-    ...typography.captionStrong,
-    letterSpacing: 0.72,
-    color: colors.textMuted,
+  // The eyebrow treatment itself (type, tracking, caps, muted) lives in the
+  // DS `Eyebrow` — this only positions it inside the list.
+  sectionHeaderSpacing: {
     paddingVertical: spacing.s2,
   },
   listContent: {

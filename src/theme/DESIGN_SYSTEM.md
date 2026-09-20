@@ -24,7 +24,8 @@ src/theme/                 design tokens (the source of truth)
 src/components/ui/         the component library (compose these in screens)
   Button, IconButton       core actions
   Badge, Card, Avatar      feedback / surfaces / identity
-  Input, Select, Switch    forms
+  Input, Select, Switch    forms (Select's sheetTitle names the options sheet when the visible label lives in a SectionHead)
+  Eyebrow, SectionHead     section separation (hairline divider + letter-spaced caps label)
   SegmentedControl         view switching (sunken track, raised active card)
   Sheet                    bottom sheet (native TrueSheet — keyboard, drag-to-
                            dismiss and safe areas handled by the OS; controlled
@@ -88,8 +89,18 @@ the control owns "you are here" and the chips own "what's filtered".
 **Type.** A single typeface — **Inter** (weights 400–800). No serif, no second
 family. Mobile-first scale: body 16px (never smaller on inputs, to avoid iOS
 zoom), screen titles 28px, hero 48px. Use the semantic roles, not raw sizes:
-`typography.display | title | heading | body | bodySm | label | caption`.
-Money and counts should use tabular figures where possible.
+`typography.display | title | heading | body | bodySm | label | caption` (plus
+the strong variants `bodyStrong | labelStrong | captionStrong` and the
+`eyebrow` role for tiny letter-spaced caps — weight rides the font family,
+never a `fontWeight` patch). Money and counts should use tabular figures where
+possible. Form sections separate with the DS `<SectionHead title=…>` — a
+hairline divider (`StyleSheet.hairlineWidth`, `colors.borderSubtle`) plus an
+`<Eyebrow>` label (`typography.eyebrow`, muted, caps, `accessibilityRole
+"header"`). The eyebrow is then a single-field section's only visible name —
+the control carries no duplicate label (a `Select` keeps its options-sheet
+title and trigger name via `sheetTitle`; an `Input` carries
+`accessibilityLabel`). Multi-field sections keep their per-field labels; the
+eyebrow names the group (e.g. "Date & time" over Date/Time).
 
 **Spacing & layout.** 4px base grid via `spacing.s1 … spacing.s20`. Phone-first:
 `layout.contentMax` 480px, 16px screen gutters (`layout.gutterMobile`), 56px app

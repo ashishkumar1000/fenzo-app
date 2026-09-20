@@ -23,7 +23,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Input, Sheet } from '../../../components/ui';
+import { Button, Input, SectionHead, Sheet } from '../../../components/ui';
 import { Info } from 'lucide-react-native';
 import { TechnicianPicker } from '../../../components/TechnicianPicker';
 import { DateTimeFields } from '../../newJob/components/DateTimeFields';
@@ -307,7 +307,7 @@ export function EditJobSheet({ visible, job, technicians, onClose, onSaved }: Pr
         />
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Schedule</Text>
+          <SectionHead title="Schedule" />
           <DateTimeFields
             value={scheduledAt}
             onChange={next => {
@@ -330,7 +330,7 @@ export function EditJobSheet({ visible, job, technicians, onClose, onSaved }: Pr
         />
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Priority</Text>
+          <SectionHead title="Priority" />
           <View style={styles.pillRow}>
             {PRIORITIES.map(option => {
               const isSelected = option.value === priority;
@@ -359,7 +359,7 @@ export function EditJobSheet({ visible, job, technicians, onClose, onSaved }: Pr
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Technician</Text>
+          <SectionHead title="Technician" />
           <TechnicianPicker
             variant="rows"
             technicians={assignableTechnicians}
@@ -404,10 +404,6 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: spacing.s3,
-  },
-  sectionLabel: {
-    ...typography.label,
-    color: colors.textStrong,
   },
   pillRow: {
     flexDirection: 'row',

@@ -2,8 +2,9 @@
  * SkillPicker — the New Job skill section, redesigned per the 2026-09-20
  * product-feedback mock:
  *
- * - a header row with the catalog count chip ("N available") and a
- *   "Browse all" link to the full-screen Select Skills page;
+ * - a header row — the optional section title inline before the catalog
+ *   count chip ("N available"), and a "Browse all" link to the full-screen
+ *   Select Skills page;
  * - a search field — non-empty, it searches the WHOLE catalog (the full
  *   screen is one tap away, so this stays a quick filter, not a duplicate);
  * - a 3-column tile grid: the first five catalog skills (seed order) plus a
@@ -31,13 +32,15 @@ const GAP = spacing.s3;
 const VISIBLE_TILES = 5;
 
 type Props = {
+  /** Section name rendered inline before the count chip (e.g. "Skill"). */
+  title?: string;
   options: Skill[];
   value: string | null;
   onChange: (id: string) => void;
   onBrowseAll: () => void;
 };
 
-export function SkillPicker({ options, value, onChange, onBrowseAll }: Props) {
+export function SkillPicker({ title, options, value, onChange, onBrowseAll }: Props) {
   const [rowWidth, setRowWidth] = useState(0);
   const [query, setQuery] = useState('');
 
@@ -80,8 +83,11 @@ export function SkillPicker({ options, value, onChange, onBrowseAll }: Props) {
   return (
     <View>
       <View style={styles.header}>
-        <View style={styles.countChip}>
-          <Text style={styles.countChipText}>{options.length} available</Text>
+        <View style={styles.headerLeft}>
+          {title ? <Text style={styles.title}>{title}</Text> : null}
+          <View style={styles.countChip}>
+            <Text style={styles.countChipText}>{options.length} available</Text>
+          </View>
         </View>
         <Pressable
           accessibilityRole="button"
@@ -171,6 +177,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.s3,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s3,
+  },
+  title: {
+    ...typography.bodyStrong,
+    color: colors.textStrong,
   },
   countChip: {
     backgroundColor: colors.surfaceSunken,

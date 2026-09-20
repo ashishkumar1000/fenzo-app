@@ -19,6 +19,14 @@
  * picked the screen shows the Skill section only — Customer, Date & time,
  * Assign technician and Notes appear once it is chosen.
  *
+ * Sections are separated by the DS `SectionHead` — a hairline divider plus a
+ * letter-spaced eyebrow label (product feedback 2026-09-20: the sections
+ * previously ran in continuity with only whitespace between them). The
+ * eyebrow is the section's only visible name: the Customer Select and the
+ * Notes Input carry no field label of their own (the Select keeps its sheet
+ * title via `sheetTitle`). The Skill section names itself inline in the
+ * SkillPicker header instead — title, count chip and Browse all on one line.
+ *
  * "Add new technician" (product feedback 2026-09-20) opens the same sheet the
  * Technicians tab uses, over this form. The invite creates a real `users` row
  * server-side (status `invited`), so the new technician is assignable
@@ -41,7 +49,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, UserPlus } from 'lucide-react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button, Input, Select } from '../../components/ui';
+import {
+  Button,
+  Input,
+  SectionHead,
+  Select,
+} from '../../components/ui';
 import { colors, spacing, touch, typography } from '../../theme';
 import { jobService } from '../../services';
 import type { ApiError } from '../../services';
@@ -420,6 +433,7 @@ export default function NewJobScreen({ navigation, route }: Props) {
 
     return (
       <SkillPicker
+        title="Skill"
         options={skills}
         value={draft.skillId}
         onChange={handleSkillChange}
@@ -530,8 +544,8 @@ export default function NewJobScreen({ navigation, route }: Props) {
           {draft.skillId ? (
             <>
               <View style={styles.section}>
+                <SectionHead title="Customer" />
                 <Select
-                  label="Customer"
                   value={draft.customerId ?? undefined}
                   onChange={id => patch({ customerId: id })}
                   options={customerOptions}
@@ -540,6 +554,9 @@ export default function NewJobScreen({ navigation, route }: Props) {
                   // the "Add new" link below is the way forward in that case.
                   disabled={customerOptions.length === 0}
                   helper={customerHelper}
+                  // The section eyebrow is the field's visible name; the sheet
+                  // still needs its own title.
+                  sheetTitle="Customer"
                 />
                 <Pressable
                   onPress={handleAddCustomer}
@@ -561,6 +578,7 @@ export default function NewJobScreen({ navigation, route }: Props) {
               </View>
 
               <View style={styles.section}>
+                <SectionHead title="Date & time" />
                 <DateTimeFields
                   value={draft.scheduledAt}
                   onChange={next => patch({ scheduledAt: next })}
@@ -573,7 +591,7 @@ export default function NewJobScreen({ navigation, route }: Props) {
               </View>
 
               <View style={styles.section}>
-                <Text style={styles.sectionLabel}>Assign technician</Text>
+                <SectionHead title="Assign technician" />
                 {renderTechnicians()}
                 <Pressable
                   onPress={() => setAddSheetVisible(true)}
@@ -585,13 +603,16 @@ export default function NewJobScreen({ navigation, route }: Props) {
                 </Pressable>
               </View>
 
-              <Input
-                label="Notes for technician"
-                value={draft.notes}
-                onChangeText={text => patch({ notes: text })}
-                placeholder="Any special instructions..."
-                multiline
-              />
+              <View style={styles.section}>
+                <SectionHead title="Notes for technician" />
+                <Input
+                  value={draft.notes}
+                  onChangeText={text => patch({ notes: text })}
+                  placeholder="Any special instructions..."
+                  multiline
+                  accessibilityLabel="Notes for technician"
+                />
+              </View>
             </>
           ) : null}
         </ScrollView>
@@ -661,10 +682,6 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: spacing.s3,
-  },
-  sectionLabel: {
-    ...typography.label,
-    color: colors.textStrong,
   },
   // Stand-in for the tile grid while loading / on failure / when the catalog
   // has no skills. Roughly one tile row tall so the form doesn't jump when

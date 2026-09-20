@@ -46,3 +46,9 @@ export type { SegmentOption } from './SegmentedControl';
 
 export { Sheet } from './Sheet';
 export type { SheetProps } from './Sheet';
+
+export { Eyebrow } from './Eyebrow';
+export type { EyebrowProps } from './Eyebrow';
+
+export { SectionHead } from './SectionHead';
+export type { SectionHeadProps } from './SectionHead';
