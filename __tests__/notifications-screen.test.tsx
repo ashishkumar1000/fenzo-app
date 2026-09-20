@@ -54,12 +54,18 @@ jest.mock('../src/features/notifications/useNotifications', () => ({
   markAllNotificationsRead: (...args: unknown[]) => mockMarkAllNotificationsRead(...args),
 }));
 
+/** The jobIds the screen last handed the template cache (Epic 12 guard). */
+let mockTemplateJobIds: readonly unknown[] = [];
+
 jest.mock('../src/features/notifications/useJobTemplateCache', () => ({
   // Story 4.5: cards derive stages/labels from the job's workflow template.
   // The real hook fetches jobService.getById per job — stub it so the screen
   // gets a template without any network. The fixture mirrors the standard
   // five-step template (terminal step = setsStatus 'completed').
-  useJobTemplateCache: () => ({
+  // Epic 12: report notifications (jobId null) must never reach this hook.
+  useJobTemplateCache: (jobIds: readonly unknown[]) => {
+    mockTemplateJobIds = jobIds;
+    return {
     getTemplate: () => [
       { key: 'on_my_way', label: 'On my way', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: null, advancesOn: null },
       { key: 'arrived', label: 'Arrived', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: null, advancesOn: null },
@@ -68,15 +74,18 @@ jest.mock('../src/features/notifications/useJobTemplateCache', () => ({
       { key: 'completed', label: 'Completed', requiresPhoto: false, requiresSignature: false, requiresLocation: false, setsStatus: 'completed', advancesOn: null },
     ],
     updateTrigger: 0,
-  }),
+    };
+  },
 }));
 
 import NotificationsScreen from '../src/features/notifications/NotificationsScreen';
 import { NotificationCard } from '../src/features/notifications/components/NotificationCard';
 import { NotificationFilterBar } from '../src/features/notifications/components/NotificationFilterBar';
+import { ReportNotificationCard } from '../src/features/notifications/components/ReportNotificationCard';
 import { Avatar, Button, InlineError } from '../src/components/ui';
 import type { ApiNotification } from '../src/services';
 import type { NotificationCardData } from '../src/features/notifications/notificationCardModel';
+import type { ReportNotificationCardData } from '../src/features/notifications/reportNotificationModel';
 
 const Screen = NotificationsScreen as unknown as React.FC<{
   navigation: typeof mockNavigation;
@@ -127,6 +136,7 @@ function markAllButton(renderer: ReactTestRenderer.ReactTestRenderer) {
 
 beforeEach(() => {
   mockStore = emptyStore();
+  mockTemplateJobIds = [];
   mockRefresh.mockResolvedValue(undefined);
 });
 
@@ -420,5 +430,143 @@ describe('filter chips', () => {
       renderer.root.findByType(NotificationFilterBar).props.onChange('completed');
     });
     expect(renderer.root.findAllByType(NotificationCard)).toHaveLength(0);
+  });
+});
+
+// --- Report notifications (Epic 12) ----------------------------------------------
+
+describe('report notifications', () => {
+  /** The report worker's row shape — jobId NULL, payload has no job fields. */
+  function makeReportNotification(
+    id: string,
+    overrides: Partial<ApiNotification> = {},
+  ): ApiNotification {
+    return {
+      id,
+      jobId: null,
+      eventType: 'report_ready',
+      payload: {
+        reportId: 'report-1',
+        reportType: 'technician_job_activity',
+        reportLabel: 'Technician Job Report',
+        status: 'ready',
+        errorCode: null,
+      },
+      readAt: null,
+      createdAt: '2026-09-09T12:00:00Z', // newer than the job fixture → merged first
+      ...overrides,
+    };
+  }
+
+  function mountWithJobAndReport(): Promise<ReactTestRenderer.ReactTestRenderer> {
+    mockStore = emptyStore({
+      items: [makeNotification('n1'), makeReportNotification('r1')],
+    });
+    return mountScreen();
+  }
+
+  /** The one job-kind card among the NotificationCard-wrapped rows. */
+  function jobCardOf(renderer: ReactTestRenderer.ReactTestRenderer) {
+    const job = renderer.root
+      .findAllByType(NotificationCard)
+      .find(c => c.props.card.kind !== 'report');
+    if (!job) throw new Error('job card not rendered');
+    return job;
+  }
+
+  it('a mixed store renders both card kinds under the default "All" filter', async () => {
+    const renderer = await mountWithJobAndReport();
+
+    const report = renderer.root.findByType(ReportNotificationCard);
+    const reportCard = report.props.card as ReportNotificationCardData;
+    expect(reportCard.title).toBe('Report ready');
+    expect(reportCard.key).toBe('r1');
+    expect(jobCardOf(renderer).props.card.jobId).toBe('job-n1');
+
+    // Each kind keeps its own footer verb — a report card's "View Job" would
+    // be a dead end (job_id NULL), a job card has no report to open.
+    expect(
+      renderer.root.findAllByType(Button).find(b => b.props.children === 'View report'),
+    ).toBeDefined();
+    expect(
+      renderer.root.findAllByType(Button).find(b => b.props.children === 'View Job'),
+    ).toBeDefined();
+  });
+
+  it('the "All" count includes report cards on top of the job cards', async () => {
+    const renderer = await mountWithJobAndReport();
+    expect(renderer.root.findByType(NotificationFilterBar).props.counts).toEqual({
+      all: 2, // 1 job card + 1 report card
+      active: 1,
+      completed: 0,
+    });
+  });
+
+  it('the Active and Completed chips hide the report card — it never enters a job bucket', async () => {
+    const renderer = await mountWithJobAndReport();
+
+    await act(async () => {
+      renderer.root.findByType(NotificationFilterBar).props.onChange('completed');
+    });
+    expect(renderer.root.findAllByType(ReportNotificationCard)).toHaveLength(0);
+    expect(renderer.root.findAllByType(NotificationCard)).toHaveLength(0); // the job is active
+
+    await act(async () => {
+      renderer.root.findByType(NotificationFilterBar).props.onChange('active');
+    });
+    expect(renderer.root.findAllByType(ReportNotificationCard)).toHaveLength(0);
+    expect(renderer.root.findAllByType(NotificationCard)).toHaveLength(1); // the job only
+  });
+
+  it('tapping "View report" navigates to Reports (never JobDetail) and marks it read', async () => {
+    const renderer = await mountWithJobAndReport();
+
+    const viewReport = renderer.root
+      .findAllByType(Button)
+      .find(b => b.props.children === 'View report');
+    expect(viewReport).toBeDefined();
+    await act(async () => {
+      viewReport?.props.onPress();
+    });
+
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('Reports');
+    expect(mockNavigation.navigate).not.toHaveBeenCalledWith(
+      'JobDetail',
+      expect.anything(),
+    );
+    expect(mockMarkNotificationRead).toHaveBeenCalledWith('r1');
+  });
+
+  it('tapping the report card\'s body runs the same navigate-first contract', async () => {
+    const renderer = await mountWithJobAndReport();
+
+    const pressable = renderer.root
+      .findByType(ReportNotificationCard)
+      .findByProps({ accessibilityRole: 'button' });
+    await act(async () => {
+      pressable.props.onPress();
+    });
+
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('Reports');
+    expect(mockMarkNotificationRead).toHaveBeenCalledWith('r1');
+  });
+
+  it('tapping a job card still deep-links to JobDetail (regression guard)', async () => {
+    const renderer = await mountWithJobAndReport();
+
+    const job = jobCardOf(renderer);
+    await act(async () => {
+      job.props.onPress(job.props.card);
+    });
+
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('JobDetail', { jobId: 'job-n1' });
+    expect(mockNavigation.navigate).not.toHaveBeenCalledWith('Reports');
+  });
+
+  it('report notifications never reach the template cache as lookup targets', async () => {
+    await mountWithJobAndReport();
+    // The screen derives jobIds itself — the report's jobId null must not
+    // ride along (the hook fetches jobService.getById per id).
+    expect(mockTemplateJobIds).toEqual(['job-n1']);
   });
 });

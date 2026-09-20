@@ -89,3 +89,23 @@ export async function openMaps(
     console.warn('[linking] openMaps failed →', error);
   }
 }
+
+/**
+ * Opens an https URL in the system viewer (browser / PDF viewer). Built for
+ * report PDFs (story 12-6): the caller fetches a FRESH presigned URL at tap
+ * time and hands it here — presigned URLs are never cached, so a stale one
+ * is never opened.
+ *
+ * Unlike `openTel`/`openMaps` this REJECTS on failure (a row-press open
+ * failing silently would look like a dead tap — the caller shows a retryable
+ * banner instead). The guarded `try/catch` only normalizes the rejection.
+ */
+export async function openUrl(url: string): Promise<void> {
+  if (!url.trim()) return;
+  try {
+    await Linking.openURL(url);
+  } catch (error) {
+    console.warn('[linking] openUrl failed →', error);
+    throw error instanceof Error ? error : new Error(String(error));
+  }
+}

@@ -9,6 +9,7 @@ import {
 } from '../features/newJob';
 import { JobDetailScreen } from '../features/jobDetail';
 import { NotificationsScreen } from '../features/notifications';
+import { ReportsScreen } from '../features/reports';
 import { CustomerDetailScreen } from '../features/customerDetail';
 import { AddCustomerScreen } from '../features/customers';
 import type { RootStackParamList } from './types';
@@ -62,6 +63,11 @@ export default function RootNavigator() {
       <Stack.Screen
         name="Notifications"
         component={NotificationsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="Reports"
+        component={ReportsScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen

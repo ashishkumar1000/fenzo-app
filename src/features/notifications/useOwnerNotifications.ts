@@ -29,6 +29,10 @@ import { AppState } from 'react-native';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { loadMyProfile, useMyProfile } from '../profile/useMyProfile';
 import { loadJobs } from '../jobs/useJobs';
+// Story 12-6: report terminal events (`report_ready` / `report_failed`)
+// ride the same channel — they force-refetch the reports store instead of
+// raising the job-status banner.
+import { loadReports } from '../reports/useReports';
 // Story 3.4: a broadcast is the cheapest unread-count signal there is —
 // refresh the bell's badge alongside the stores it already force-refetches.
 import { loadUnreadCount } from './useNotifications';
@@ -44,6 +48,7 @@ import {
   bannerPartsFromEvent,
   bannerTextFromParts,
   eventRowPayload,
+  notificationEventType,
   notificationStepStatus,
   type JobStatusEventPayload,
 } from './notificationBannerModel';
@@ -131,6 +136,17 @@ export function useOwnerNotifications(
     // is async, so its handler can still fire while the app is backgrounded;
     // the foreground rule forbids any banner/refetch work in that state.
     if (!shouldSubscribe(AppState.currentState)) return;
+    // Story 12-6: report terminal events carry a different payload shape
+    // (reportId/reportLabel, no job fields) — they would render as the
+    // generic "Job status updated" fallback banner and pointlessly refetch
+    // jobs/profile, so they route to the reports store instead. The bell's
+    // unread count still refreshes: a report notification IS a notification.
+    const eventType = notificationEventType(message);
+    if (eventType === 'report_ready' || eventType === 'report_failed') {
+      void loadReports({ force: true });
+      void loadUnreadCount({ force: true });
+      return;
+    }
     showBanner(eventRowPayload(message));
     void loadJobs(undefined, undefined, { force: true });
     // Story 3.4: the bell badge tracks the same stream of events — force

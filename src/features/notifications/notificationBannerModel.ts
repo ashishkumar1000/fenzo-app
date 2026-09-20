@@ -94,6 +94,27 @@ export function eventRowPayload(message: unknown): JobStatusEventPayload | null 
 }
 
 /**
+ * The notifications row's `event_type` from one broadcast message — the
+ * same two-level unwrap `eventRowPayload` does, stopping at the ROW (the
+ * payload's shape depends on the event type, so dispatching on the type
+ * must read the row, not the payload). Story 12-6: the report engine
+ * inserts `report_ready` / `report_failed` rows (job_id NULL, a different
+ * payload shape), and callers need to route them away from the job-status
+ * banner. Unknown/missing → null (a job-step event, by elimination).
+ */
+export function notificationEventType(message: unknown): string | null {
+  let candidate = message as Record<string, unknown> | null | undefined;
+  if (candidate && typeof candidate === 'object' && 'event' in candidate && 'payload' in candidate) {
+    candidate = candidate.payload as typeof candidate;
+  }
+  if (candidate && typeof candidate === 'object' && 'record' in candidate) {
+    candidate = candidate.record as typeof candidate;
+  }
+  const eventType = (candidate as { event_type?: unknown } | null)?.event_type;
+  return typeof eventType === 'string' ? eventType : null;
+}
+
+/**
  * The banner's structured fields, extracted per-field: whatever the payload
  * carries is rendered, whatever is missing is dropped (the redesigned toast
  * shows avatar/name, job chip, and step chip independently). `step` is the

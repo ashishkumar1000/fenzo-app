@@ -27,8 +27,12 @@ import type { Paginated } from '../api/pagination';
 export interface ApiNotification {
   /** uuid */
   id: string;
-  /** uuid of the job the event happened on — the deep-link target. */
-  jobId: string;
+  /**
+   * uuid of the job the event happened on — the deep-link target. Epic 12
+   * report notifications (`report_ready` / `report_failed`) carry NULL here:
+   * they point at a report, not a job.
+   */
+  jobId: string | null;
   /** Event type — today always the workflow step that fired it. */
   eventType: string;
   /** Denormalized display fields (`job_number`, `step`, `technician_name`). */

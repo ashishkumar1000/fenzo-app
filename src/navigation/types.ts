@@ -86,6 +86,11 @@ export type RootStackParamList = {
   JobDetail: { jobId: string };
   /** Owner-only notification history (bell tap) — no params. */
   Notifications: undefined;
+  /**
+   * Owner-only PDF reports (story 12-6): request form + live history list.
+   * Opened from the Account tab's Reports row — no params.
+   */
+  Reports: undefined;
   /** Owner-only customer profile + job history — opened with the customer's uuid. */
   CustomerDetail: { customerId: string };
   /**

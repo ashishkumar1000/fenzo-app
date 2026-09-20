@@ -50,6 +50,10 @@ export interface CardStage {
 }
 
 export interface NotificationCardData {
+  /** Discriminant — report notifications (Epic 12) build `kind: 'report'` cards. */
+  kind: 'job';
+  /** FlatList key — the jobId (report cards key on their notification id). */
+  key: string;
   jobId: string;
   /** Payload display fields — null when the payload drifted (renders generic). */
   jobNumber: string | null;
@@ -135,6 +139,12 @@ export function groupNotificationsByJob(
 ): NotificationCardData[] {
   const byJob = new Map<string, ApiNotification[]>();
   for (const n of items) {
+    // Epic 12 report notifications (report_ready / report_failed) carry
+    // job_id NULL and their own payload shape — they never group into a job
+    // card; the screen builds them separately via reportNotificationModel.ts.
+    // The null guard is the same exclusion, kept for any future job-less
+    // event type.
+    if (n.jobId === null) continue;
     const group = byJob.get(n.jobId);
     if (group) group.push(n);
     else byJob.set(n.jobId, [n]);
@@ -197,6 +207,8 @@ function buildCard(
     };
 
     return {
+      kind: 'job',
+      key: jobId,
       jobId,
       jobNumber: payloadField('job_number'),
       technicianName: payloadField('technician_name'),
@@ -237,6 +249,8 @@ function buildCard(
   };
 
   return {
+    kind: 'job',
+    key: jobId,
     jobId,
     jobNumber: payloadField('job_number'),
     technicianName: payloadField('technician_name'),

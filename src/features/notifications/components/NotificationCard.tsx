@@ -1,7 +1,12 @@
 /**
- * NotificationCard — one job's card in the redesigned notifications list
- * (Story 3.4 redesign). Renders entirely from a `NotificationCardData` the
- * screen derives from the shared store — no per-card fetch.
+ * NotificationCard — one card in the redesigned notifications list
+ * (Story 3.4 redesign). Two card kinds share this entry point: a job card
+ * (one job's event history, rendered here) and an Epic-12 report
+ * notification (its own anatomy, `ReportNotificationCard` — a report
+ * points at no job, so it never renders the job timeline or "View Job").
+ *
+ * The job card renders entirely from a `NotificationCardData` the screen
+ * derives from the shared store — no per-card fetch.
  *
  * Anatomy (top to bottom): technician avatar + name + job-number pill, a
  * status banner in the step's Fenzit status family (label uppercase), the
@@ -16,17 +21,23 @@ import { Check } from 'lucide-react-native';
 import { Avatar, Button } from '../../../components/ui';
 import { colors, radius, shadow, spacing, typography } from '../../../theme';
 import { relativeTime } from '../../../utils';
-import type { NotificationCardData } from '../notificationCardModel';
 import { CARD_FALLBACK_TITLE, cardTitle, stepStatusKey } from '../notificationCardModel';
+import type { NotificationListItem } from '../reportNotificationModel';
 import { notificationStepLabel } from '../notificationBannerModel';
 import { StageStepper } from './StageStepper';
+import { ReportNotificationCard } from './ReportNotificationCard';
 
 interface NotificationCardProps {
-  card: NotificationCardData;
-  onPress: (card: NotificationCardData) => void;
+  card: NotificationListItem;
+  onPress: (card: NotificationListItem) => void;
 }
 
 export function NotificationCard({ card, onPress }: NotificationCardProps) {
+  // Report notifications are their own card (Epic 12) — no job fields to
+  // render and a different tap destination.
+  if (card.kind === 'report') {
+    return <ReportNotificationCard card={card} onPress={onPress} />;
+  }
   const title = cardTitle(card);
   const status = stepStatusKey(card.currentStep, card.templateSteps);
   const statusColors = colors.status[status];

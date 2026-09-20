@@ -50,6 +50,14 @@ export { skillService } from './skills';
 export type { Skill, NewSkillInput } from './skills';
 export { notificationService } from './notifications';
 export type { ApiNotification, ListNotificationsQuery } from './notifications';
+export { reportService, TECHNICIAN_JOB_ACTIVITY_TYPE } from './reports';
+export type {
+  CreateReportRequest,
+  CreateReportResponse,
+  ReportListItem,
+  ReportRequestStatus,
+  ReportStatusResponse,
+} from './reports';
 export { authApi } from './authApi';
 export { usersApi } from './users';
 export type {

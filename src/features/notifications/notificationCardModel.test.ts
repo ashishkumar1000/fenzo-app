@@ -497,6 +497,51 @@ describe('filterCards', () => {
   });
 });
 
+describe('jobId-null rows (Epic-12 report notifications)', () => {
+  it('excludes a report notification row entirely — no card, no crash', () => {
+    // Report engine rows carry job_id NULL and a report payload shape (no
+    // job fields) — grouping them would build a dead "Job status updated"
+    // card with nothing to deep-link to. They render via
+    // reportNotificationModel.ts instead.
+    const report = makeNotification('r1', {
+      jobId: null,
+      eventType: 'report_ready',
+    }, { reportId: 'report-1', reportLabel: 'Technician Job Report' });
+    expect(groupNotificationsByJob([report], getTemplate)).toEqual([]);
+  });
+
+  it('a jobId-null row is not silently folded into some other job’s card', () => {
+    const report = makeNotification('r1', {
+      jobId: null,
+      eventType: 'report_failed',
+    }, { reportId: 'report-1', errorCode: 'REPORT_TOO_LARGE' });
+    const cards = groupNotificationsByJob(
+      [makeNotification('n1', { jobId: 'job-1' }), report],
+      getTemplate,
+    );
+    expect(cards.map(c => c.jobId)).toEqual(['job-1']);
+    expect(cards[0].events.map(e => e.id)).toEqual(['n1']);
+  });
+
+  it('a mix of job rows and jobId-null rows yields cards only for the real jobs', () => {
+    const cards = groupNotificationsByJob(
+      [
+        makeNotification('n1', { jobId: 'job-a' }),
+        makeNotification('r1', {
+          jobId: null,
+          eventType: 'report_ready',
+        }, { reportId: 'report-1', reportLabel: 'Technician Job Report' }),
+        makeNotification('n2', { jobId: 'job-b' }),
+        makeNotification('n3', { jobId: 'job-a' }),
+      ],
+      getTemplate,
+    );
+    expect(cards.map(c => c.jobId)).toEqual(['job-a', 'job-b']);
+    expect(cards[0].events.map(e => e.id)).toEqual(['n1', 'n3']);
+    expect(cards[0].events.some(e => e.id === 'r1')).toBe(false);
+  });
+});
+
 describe('cardTitle', () => {
   it('collapses a partial payload to the generic copy (banner-model rule)', () => {
     expect(cardTitle({ jobNumber: 'JB-1', technicianName: null })).toBe('Job status updated');

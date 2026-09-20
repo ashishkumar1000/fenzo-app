@@ -6,6 +6,7 @@ import {
   bannerPartsFromEvent,
   bannerTextFromParts,
   eventRowPayload,
+  notificationEventType,
   notificationStepLabel,
   notificationStepStatus,
 } from './notificationBannerModel';
@@ -97,6 +98,65 @@ describe('eventRowPayload', () => {
   it('returns null for null/undefined messages', () => {
     expect(eventRowPayload(null)).toBeNull();
     expect(eventRowPayload(undefined)).toBeNull();
+  });
+});
+
+describe('notificationEventType', () => {
+  it('reads event_type off a bare notifications row', () => {
+    const row = { id: 'n1', event_type: 'on_my_way', payload: {} };
+    expect(notificationEventType(row)).toBe('on_my_way');
+  });
+
+  it('reads event_type off the report engine’s rows (Epic 12)', () => {
+    expect(
+      notificationEventType({ id: 'r1', event_type: 'report_ready', payload: { reportId: 'rep-1' } }),
+    ).toBe('report_ready');
+    expect(
+      notificationEventType({ id: 'r2', event_type: 'report_failed', payload: {} }),
+    ).toBe('report_failed');
+  });
+
+  it('unwraps the broadcast_changes envelope inside a channel message', () => {
+    // The same level-0 gate eventRowPayload applies: `'event' in candidate`.
+    expect(
+      notificationEventType({ event: 'INSERT', payload: { event_type: 'report_failed' } }),
+    ).toBe('report_failed');
+  });
+
+  it('unwraps the record level of the envelope, too', () => {
+    expect(
+      notificationEventType({ event: 'INSERT', payload: { record: { event_type: 'report_ready' } } }),
+    ).toBe('report_ready');
+  });
+
+  it('reads the full device-verified channel shape (three levels)', () => {
+    const channelMessage = {
+      type: 'broadcast',
+      event: 'INSERT',
+      payload: {
+        id: 'evt-1',
+        table: 'notifications',
+        operation: 'INSERT',
+        record: { id: 'r1', event_type: 'report_ready', payload: { reportId: 'rep-1' } },
+      },
+      meta: { id: 'evt-1' },
+    };
+    expect(notificationEventType(channelMessage)).toBe('report_ready');
+  });
+
+  it('returns null for missing, non-string, null, or undefined event_type', () => {
+    expect(notificationEventType({})).toBeNull();
+    expect(notificationEventType({ id: 'n1' })).toBeNull();
+    expect(notificationEventType({ event_type: 42 })).toBeNull();
+    expect(notificationEventType({ event_type: null })).toBeNull();
+    expect(notificationEventType({ event_type: undefined })).toBeNull();
+  });
+
+  it('returns null for null/undefined/primitive input — a job-step event by elimination', () => {
+    expect(notificationEventType(null)).toBeNull();
+    expect(notificationEventType(undefined)).toBeNull();
+    expect(notificationEventType('report_ready')).toBeNull();
+    expect(notificationEventType(7)).toBeNull();
   });
 });
 

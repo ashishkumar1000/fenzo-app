@@ -18,6 +18,19 @@ jest.mock('react-native-reanimated/src/css/native/proxy', () => ({
 
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 
+// Reanimated 4's mock imports the real src, whose singleton constructor
+// (reanimatedModuleInstance.native.ts) resolves the ReanimatedModule turbo
+// spec via TurboModuleRegistry. In jest that resolution is not deterministic
+// — in most runs it yields a truthy mock whose installTurboModule() is falsy,
+// so the constructor installs reanimated's own DummyReanimatedModuleProxy and
+// boots fine — but when the spec resolves falsy the constructor falls through
+// to its "native part not initialized" throw and the suite dies at import.
+// Mocking the spec here pins the safe path: installTurboModule() always
+// returns falsy, the constructor always takes the dummy-proxy branch.
+jest.mock('react-native-reanimated/src/specs', () => ({
+  ReanimatedTurboModule: { installTurboModule: () => false },
+}));
+
 // The signature pad renders a real WebView (native TurboModule) — it cannot
 // boot in jest. Every suite that transitively imports SignatureScreen gets a
 // fake pad whose props/ref mirror the library's contract (onOK/onBegin/

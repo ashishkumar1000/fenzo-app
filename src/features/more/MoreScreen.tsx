@@ -19,7 +19,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Bell, HardHat, LogOut, Pencil, Phone, ShieldCheck, Users } from 'lucide-react-native';
+import { Bell, FileText, HardHat, LogOut, Pencil, Phone, ShieldCheck, Users } from 'lucide-react-native';
 import { Avatar, Badge, Card, IconButton } from '../../components/ui';
 import { colors, radius, spacing, typography } from '../../theme';
 import { runAllResets } from '../../services';
@@ -180,6 +180,15 @@ export default function MoreScreen({ navigation }: Props) {
           title="Customers"
           subtitle={customersSubtitle}
           onPress={() => navigation.navigate('Customers')}
+        />
+
+        {/* Story 12-6 — owner PDF reports (request + live history). */}
+        <MoreRow
+          icon={<FileText size={20} color={colors.status.progress.solid} strokeWidth={1.5} />}
+          iconBg={colors.status.progress.bg}
+          title="Reports"
+          subtitle="Job reports (PDF)"
+          onPress={() => navigation.navigate('Reports')}
         />
 
         <MoreRow

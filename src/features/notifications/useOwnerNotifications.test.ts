@@ -16,6 +16,10 @@ jest.mock('../profile/useMyProfile', () => ({
 
 jest.mock('../jobs/useJobs', () => ({ loadJobs: jest.fn() }));
 
+// Epic 12: report terminal events route to the reports store instead of the
+// job-status banner — pinned on the (mocked) loader wire call.
+jest.mock('../reports/useReports', () => ({ loadReports: jest.fn() }));
+
 jest.mock('../../services', () => ({
   getRealtimeToken: jest.fn(),
   getOwnerChannel: jest.fn(),
@@ -28,6 +32,7 @@ jest.mock('../../services', () => ({
 }));
 
 import { loadJobs } from '../jobs/useJobs';
+import { loadReports } from '../reports/useReports';
 import { loadMyProfile } from '../profile/useMyProfile';
 import {
   getOwnerChannel,
@@ -48,6 +53,7 @@ const getOwnerChannelMock = getOwnerChannel as jest.Mock;
 const teardownOwnerChannelMock = teardownOwnerChannel as jest.Mock;
 const registerResetMock = registerReset as jest.Mock;
 const loadJobsMock = loadJobs as jest.Mock;
+const loadReportsMock = loadReports as jest.Mock;
 const loadMyProfileMock = loadMyProfile as jest.Mock;
 const unreadCountMock = notificationService.unreadCount as jest.Mock;
 
@@ -98,6 +104,7 @@ beforeEach(() => {
   getOwnerChannelMock.mockImplementation(() => channel);
   getRealtimeTokenMock.mockResolvedValue('realtime-jwt');
   loadJobsMock.mockResolvedValue(undefined);
+  loadReportsMock.mockResolvedValue(undefined);
   jest.spyOn(AppState, 'addEventListener').mockImplementation(((
     _type: string,
     listener: never,
@@ -435,5 +442,73 @@ describe('event handling', () => {
       jest.advanceTimersByTime(4000);
     });
     expect(probe?.banner).toBeNull();
+  });
+});
+
+describe('report event routing (Epic 12)', () => {
+  beforeEach(async () => {
+    await mountProbe();
+    broadcastCb = channel.on.mock.calls[0][2] as BroadcastCallback;
+  });
+
+  /** The device-verified channel shape: wrapper → envelope → row. */
+  const reportMessage = (eventType: string) => ({
+    type: 'broadcast',
+    event: 'INSERT',
+    payload: {
+      id: 'evt-r1',
+      table: 'notifications',
+      schema: 'public',
+      operation: 'INSERT',
+      old_record: null,
+      record: {
+        id: 'r1',
+        event_type: eventType,
+        payload: { reportId: 'report-1', reportType: 'technician_job_activity', status: 'ready' },
+      },
+    },
+    meta: { id: 'evt-r1' },
+  });
+
+  it.each(['report_ready', 'report_failed'])(
+    'routes %s to the reports store: force-refetches reports + unread count, no banner, no jobs/profile fetch',
+    async eventType => {
+      await ReactTestRenderer.act(async () => {
+        broadcastCb?.(reportMessage(eventType));
+        await Promise.resolve();
+      });
+
+      // The reports store gets the force hint (bypasses the focus TTL —
+      // the realtime event is the faster hint; the 5s poll is the fallback).
+      expect(loadReportsMock).toHaveBeenCalledWith({ force: true });
+      // A report notification IS a notification — the bell badge refreshes.
+      expect(unreadCountMock).toHaveBeenCalled();
+      // But the job-status pipeline is untouched: no jobs refetch, no
+      // profile refetch, and no "Job status updated" dead banner.
+      expect(loadJobsMock).not.toHaveBeenCalledWith(undefined, undefined, { force: true });
+      expect(loadMyProfileMock).not.toHaveBeenCalledWith({ force: true });
+      expect(probe?.banner).toBeNull();
+    },
+  );
+
+  it('a normal job-step event still raises the banner and never touches the reports store (regression guard)', async () => {
+    await ReactTestRenderer.act(async () => {
+      broadcastCb?.({
+        id: 'evt-1',
+        table: 'notifications',
+        operation: 'INSERT',
+        record: {
+          id: 'n1',
+          event_type: 'on_my_way',
+          payload: { job_number: 'JOB-1042', step: 'on_my_way', technician_name: 'Priya' },
+        },
+      });
+      await Promise.resolve();
+    });
+
+    expect(probe?.banner?.text).toBe('Priya · JOB-1042 · on_my_way');
+    expect(loadJobsMock).toHaveBeenCalledWith(undefined, undefined, { force: true });
+    expect(loadReportsMock).not.toHaveBeenCalled();
+    expect(unreadCountMock).toHaveBeenCalled();
   });
 });

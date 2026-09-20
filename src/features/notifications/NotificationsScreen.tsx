@@ -11,7 +11,11 @@
  * The redesign renders one CARD per job (grouped client-side from the flat
  * list by `notificationCardModel.ts` — the card's stage timeline comes from
  * that job's own notifications, no extra API calls) behind an All / Active /
- * Completed filter chip row.
+ * Completed filter chip row. Epic 12 report notifications (`report_ready` /
+ * `report_failed`, job_id NULL) get their own card kind instead (see
+ * `reportNotificationModel.ts`): they show under "All" only — the Active /
+ * Completed chips are job-status buckets — and their button opens the
+ * Reports screen, never JobDetail.
  *
  * Tapping a card is NAVIGATE-FIRST: the deep link to that job's JobDetail is
  * the user's intent; the optimistic mark-read of the card's unread events is
@@ -47,8 +51,13 @@ import {
 import { NotificationCard } from './components/NotificationCard';
 import { NotificationFilterBar } from './components/NotificationFilterBar';
 import { filterCards, groupNotificationsByJob } from './notificationCardModel';
+import {
+  buildReportCards,
+  mergeNotificationCards,
+} from './reportNotificationModel';
 import { useJobTemplateCache } from './useJobTemplateCache';
-import type { NotificationCardData, NotificationFilter } from './notificationCardModel';
+import type { NotificationFilter } from './notificationCardModel';
+import type { NotificationListItem } from './reportNotificationModel';
 
 /**
  * Mostly a plain root-stack screen, but the empty state's "Go to jobs" CTA
@@ -100,20 +109,32 @@ export default function NotificationsScreen({ navigation }: Props) {
   }, []);
 
   const handleCardPress = useCallback(
-    (card: NotificationCardData) => {
+    (card: NotificationListItem) => {
       // Navigate first — the deep link is the user's intent and must not
       // wait on the mark-read POST. Read-state is cosmetic (handled
       // optimistically inside the store, with its own rollback). Opening a
       // job's card settles ALL of its unread events (the POSTs are
       // idempotent; a card usually carries at most a couple).
       for (const id of card.unreadIds) void markNotificationRead(id);
+      // Epic 12: a report notification points at a REPORT, not a job — the
+      // Reports screen (root-stack sibling, same navigation the More tab
+      // uses). It loads its own list on focus, so no reports-store arming
+      // is needed here.
+      if (card.kind === 'report') {
+        navigation.navigate('Reports');
+        return;
+      }
       navigation.navigate('JobDetail', { jobId: card.jobId });
     },
     [navigation, markNotificationRead],
   );
 
-  // Memoize job IDs to avoid refetch on every render.
-  const jobIds = useMemo(() => items.map(n => n.jobId), [items]);
+  // Memoize job IDs to avoid refetch on every render. Report notifications
+  // carry jobId null — never a template-lookup target.
+  const jobIds = useMemo(
+    () => items.flatMap(n => (n.jobId !== null ? [n.jobId] : [])),
+    [items],
+  );
   // Fetch workflow templates for all notification jobs to display dynamic stages.
   // Also returns an update trigger that fires when templates load.
   const { getTemplate, updateTrigger } = useJobTemplateCache(jobIds);
@@ -121,26 +142,39 @@ export default function NotificationsScreen({ navigation }: Props) {
   // The flat newest-first list becomes one card per job; the stage timeline
   // on each card is derived from that job's own notifications AND the job's
   // stamped workflow template (Story 4.5 dynamic). Rebuild when templates load.
+  // Report notifications (jobId null) are skipped by the grouping itself.
   const cards = useMemo(
     () => groupNotificationsByJob(items, getTemplate),
     [items, getTemplate, updateTrigger],
   );
+  // Epic 12: report notifications get their own one-card-per-row cards.
+  const reportCards = useMemo(() => buildReportCards(items), [items]);
+  // Interleaved by recency under "All"; the job buckets (below) stay job-only.
+  const listCards = useMemo(
+    () => mergeNotificationCards(cards, reportCards),
+    [cards, reportCards],
+  );
   const [filter, setFilter] = useState<NotificationFilter>('all');
-  const visibleCards = useMemo(() => filterCards(cards, filter), [cards, filter]);
+  // Active/Completed are JOB-status buckets — report notifications show
+  // under "All" only and never enter either bucket.
+  const visibleCards = useMemo(
+    () => (filter === 'all' ? listCards : filterCards(cards, filter)),
+    [listCards, cards, filter],
+  );
   // Derived through the SAME `filterCards` the list filters with — a drifted
   // card counts as active in both places, and the chips can never disagree
-  // with what a filter actually shows.
+  // with what a filter actually shows. "All" counts every card (jobs + reports).
   const counts = useMemo(
     () => ({
-      all: cards.length,
+      all: cards.length + reportCards.length,
       active: filterCards(cards, 'active').length,
       completed: filterCards(cards, 'completed').length,
     }),
-    [cards],
+    [cards, reportCards],
   );
 
   const renderCard = useCallback(
-    ({ item }: { item: NotificationCardData }) => (
+    ({ item }: { item: NotificationListItem }) => (
       <NotificationCard card={item} onPress={handleCardPress} />
     ),
     [handleCardPress],
@@ -228,7 +262,7 @@ export default function NotificationsScreen({ navigation }: Props) {
           ) : null}
           <FlatList
             data={visibleCards}
-            keyExtractor={item => item.jobId}
+            keyExtractor={item => item.key}
             renderItem={renderCard}
             onEndReached={() => void loadMoreNotifications()}
             onEndReachedThreshold={0.4}
@@ -268,7 +302,7 @@ export default function NotificationsScreen({ navigation }: Props) {
                 <EmptyState
                   icon={<Bell size={36} color={colors.primary} strokeWidth={1.5} />}
                   title="No notifications yet"
-                  description="Updates from your technicians — job arrivals, progress and completions — will show up here."
+                  description="Updates from your technicians — job arrivals, progress, completions and report updates — will show up here."
                   ctaLabel="Go to jobs"
                   // The spec's "CTA back to jobs": navigate to the Jobs TAB,
                   // never `goBack` — from the Home bell that would land on
