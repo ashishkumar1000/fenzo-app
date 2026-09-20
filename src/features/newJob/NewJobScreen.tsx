@@ -22,10 +22,10 @@
  * Sections are separated by the DS `SectionHead` — a hairline divider plus a
  * letter-spaced eyebrow label (product feedback 2026-09-20: the sections
  * previously ran in continuity with only whitespace between them). The
- * eyebrow is the section's only visible name: the Customer Select and the
- * Notes Input carry no field label of their own (the Select keeps its sheet
- * title via `sheetTitle`). The Skill section names itself inline in the
- * SkillPicker header instead — title, count chip and Browse all on one line.
+ * eyebrow is the section's only visible name: the Customer and Notes sections
+ * name themselves nowhere else (the Skill section names itself inline in the
+ * SkillPicker header instead — count chip and Browse all on one line, and
+ * the CustomerPicker does the same beneath its eyebrow).
  *
  * "Add new technician" (product feedback 2026-09-20) opens the same sheet the
  * Technicians tab uses, over this form. The invite creates a real `users` row
@@ -53,7 +53,6 @@ import {
   Button,
   Input,
   SectionHead,
-  Select,
 } from '../../components/ui';
 import { colors, spacing, touch, typography } from '../../theme';
 import { jobService } from '../../services';
@@ -72,6 +71,7 @@ import type { NewTechnicianInput } from '../technicians';
 import { loadSkills, useSkills } from '../skills';
 import { DateTimeFields } from './components/DateTimeFields';
 import { SkillPicker } from './components/SkillPicker';
+import { CustomerPicker } from './components/CustomerPicker';
 import type { NewJobDraft } from './types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'NewJob'>;
@@ -137,6 +137,18 @@ export default function NewJobScreen({ navigation, route }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route.params?.selectedSkillId, navigation]);
 
+  // `SelectCustomersScreen` returns here with the picked customer on Apply —
+  // a string picks it, `null` after "Clear" drops the customer (the grid
+  // clears its selection; the job can't be submitted without one).
+  // `undefined` (param absent) means nothing to apply.
+  useEffect(() => {
+    const picked = route.params?.selectedCustomerId;
+    if (picked === undefined) return;
+    patch({ customerId: picked });
+    navigation.setParams({ selectedCustomerId: undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route.params?.selectedCustomerId, navigation]);
+
   // The tile grid needs the catalog. The store auto-loads on its subscribers'
   // mount too — this explicit call makes the screen self-sufficient on a cold
   // start regardless (loadSkills joins any in-flight request, so no double
@@ -174,22 +186,6 @@ export default function NewJobScreen({ navigation, route }: Props) {
     hasLoaded: customersLoaded,
     refresh: refreshCustomers,
   } = useCustomers();
-
-  /**
-   * `Name · City`, not the full `customerLocation` string. A dropdown row needs
-   * just enough to tell two same-named customers apart, and `customerLocation`
-   * renders city-first while `serviceLocation` below builds address-first to
-   * match the API's format — showing both on one screen read as inconsistent.
-   * City alone sidesteps that and keeps the row short.
-   */
-  const customerOptions = useMemo(
-    () =>
-      customers.map(c => ({
-        value: c.id,
-        label: c.city ? `${c.name} · ${c.city}` : c.name,
-      })),
-    [customers],
-  );
 
   /**
    * `serviceLocation` is required by the API and comes from the selected
@@ -366,28 +362,6 @@ export default function NewJobScreen({ navigation, route }: Props) {
   };
 
   /**
-   * The dropdown carries its own state in its placeholder and helper rather
-   * than a separate status block: unlike the tile grid it's a single control,
-   * and swapping it out for a spinner would make the form jump.
-   *
-   * `hasLoaded` is what separates "no customers yet" from "not fetched yet" —
-   * without it a slow first load would read as an empty address book.
-   */
-  const customerPlaceholder = customersLoading
-    ? 'Loading customers…'
-    : customersError
-      ? "Couldn't load customers"
-      : customersLoaded && customerOptions.length === 0
-        ? 'No customers yet'
-        : 'Choose customer...';
-
-  const customerHelper =
-    customersError ??
-    (customersLoaded && customerOptions.length === 0
-      ? 'Add your first customer to create a job.'
-      : '');
-
-  /**
    * Four outcomes, none of which existed while this ran on sample constants:
    * the catalog is still loading, the load failed with nothing to show, it
    * succeeded but the platform seeds no skills, or there are tiles to show.
@@ -440,6 +414,62 @@ export default function NewJobScreen({ navigation, route }: Props) {
         onBrowseAll={() =>
           navigation.navigate('SelectSkills', {
             selectedSkillId: draft.skillId,
+          })
+        }
+      />
+    );
+  };
+
+  /**
+   * The customer section mirrors the skills one: while the store's first
+   * load is in flight (or failed with nothing to show) there is nothing to
+   * tile, and saying "no customers" for a list that merely didn't arrive
+   * would read as "you have nobody" — a spinner/retry is the honest state.
+   * A failed refresh over rows already on screen keeps the tiles (stale but
+   * usable) rather than blanking the grid.
+   *
+   * An empty-but-loaded address book is a real state: the "Add new" link
+   * below is the way forward, so the status copy points there rather than
+   * pretending a customer can be picked.
+   */
+  const renderCustomers = () => {
+    if (customersLoading && customers.length === 0) {
+      return (
+        <View style={styles.sectionStatus}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      );
+    }
+
+    if (customersError && customers.length === 0) {
+      return (
+        <View style={styles.sectionStatus}>
+          <Text style={styles.statusText}>{customersError}</Text>
+          <Button variant="secondary" size="sm" onPress={refreshCustomers}>
+            Try again
+          </Button>
+        </View>
+      );
+    }
+
+    if (customersLoaded && customers.length === 0) {
+      return (
+        <View style={styles.sectionStatus}>
+          <Text style={styles.statusText}>
+            No customers yet. Add your first customer to create a job.
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <CustomerPicker
+        options={customers}
+        value={draft.customerId}
+        onChange={id => patch({ customerId: id })}
+        onBrowseAll={() =>
+          navigation.navigate('SelectCustomers', {
+            selectedCustomerId: draft.customerId,
           })
         }
       />
@@ -545,19 +575,7 @@ export default function NewJobScreen({ navigation, route }: Props) {
             <>
               <View style={styles.section}>
                 <SectionHead title="Customer" />
-                <Select
-                  value={draft.customerId ?? undefined}
-                  onChange={id => patch({ customerId: id })}
-                  options={customerOptions}
-                  placeholder={customerPlaceholder}
-                  // A dropdown with nothing in it should not open an empty sheet —
-                  // the "Add new" link below is the way forward in that case.
-                  disabled={customerOptions.length === 0}
-                  helper={customerHelper}
-                  // The section eyebrow is the field's visible name; the sheet
-                  // still needs its own title.
-                  sheetTitle="Customer"
-                />
+                {renderCustomers()}
                 <Pressable
                   onPress={handleAddCustomer}
                   hitSlop={8}
@@ -568,13 +586,6 @@ export default function NewJobScreen({ navigation, route }: Props) {
                     Customer not in list? Add new
                   </Text>
                 </Pressable>
-                {/* A failed fetch leaves the Select disabled and empty, so without
-                    this the owner is stuck on a dead control with no way back. */}
-                {customersError ? (
-                  <Button variant="secondary" size="sm" onPress={refreshCustomers}>
-                    Try again
-                  </Button>
-                ) : null}
               </View>
 
               <View style={styles.section}>

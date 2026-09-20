@@ -18,24 +18,57 @@
  *    skill, matched by trimmed phone number; a failed invite refreshes
  *    nothing, so the sheet's stay-open-with-error contract still holds.
  *
- * 4. Select Skills round trip (product feedback 2026-09-20) — "Browse all"
- *    pushes the full-screen page carrying the current selection; a picked id
- *    or `null` (Clear) returned in route params is applied to the draft and
- *    the param is cleared so it can't re-fire. `undefined` (param absent)
- *    means nothing to apply.
+ * 4. Select Skills / Select Customers round trips (product feedback
+ *    2026-09-20) — "Browse all" pushes the full-screen page carrying the
+ *    current selection; a picked id or `null` (Clear) returned in route
+ *    params is applied to the draft and the param is cleared so it can't
+ *    re-fire. `undefined` (param absent) means nothing to apply.
+ *
+ * 5. Customer section degraded states (product feedback 2026-09-20) — the
+ *    section shows a spinner while the first load is in flight, the error
+ *    with a working "Try again" when the store failed, and the empty-book
+ *    copy when the owner has no customers (the "Add new" link is the way
+ *    forward).
  *
  * `AddTechnicianSheet` is stubbed — its open/close/error contract is covered
  * by its own suite; only the screen's reaction to its outcome matters here.
  */
-jest.mock('../customers', () => ({
-  useCustomers: jest.fn(() => ({
-    customers: [],
-    isLoading: false,
-    error: null,
-    hasLoaded: true,
-    refresh: jest.fn().mockResolvedValue(undefined),
-  })),
-}));
+const mockCustomers = {
+  current: [] as Array<{
+    id: string;
+    name: string;
+    countryCode: string;
+    phoneNumber: string;
+    city: string;
+    address: string;
+    jobCount: number;
+    lastJobDate: string | null;
+  }>,
+  isLoading: false,
+  error: null as string | null,
+  hasLoaded: true,
+};
+
+const mockRefreshCustomers = jest.fn<Promise<void>, []>(() =>
+  Promise.resolve(),
+);
+
+jest.mock('../customers', () => {
+  // The real pure helpers (filterCustomers / sortCustomersByRecency) run —
+  // CustomerPicker's search and tile order go through them; the helpers'
+  // own suites cover them in depth. Only the store hook is stubbed.
+  const actual = jest.requireActual('../customers');
+  return {
+    ...actual,
+    useCustomers: jest.fn(() => ({
+      customers: mockCustomers.current,
+      isLoading: mockCustomers.isLoading,
+      error: mockCustomers.error,
+      hasLoaded: mockCustomers.hasLoaded,
+      refresh: mockRefreshCustomers,
+    })),
+  };
+});
 
 type ProfileFixture = {
   technicians: Array<{
@@ -120,12 +153,35 @@ jest.mock('../technicians', () => {
 import type ReactTestRenderer from 'react-test-renderer';
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { Pressable, Text } from 'react-native';
+import { Pressable, Text, ActivityIndicator } from 'react-native';
 import NewJobScreen from './NewJobScreen';
 
 const SKILLS = [
   { id: 'skill-1', name: 'Plumbing' },
   { id: 'skill-2', name: 'Electrical' },
+];
+
+const CUSTOMERS = [
+  {
+    id: 'cust-1',
+    name: 'Priya Sharma',
+    countryCode: '+91',
+    phoneNumber: '9000000001',
+    city: 'Chennai',
+    address: '12 Beach Rd',
+    jobCount: 3,
+    lastJobDate: '2026-09-19T10:00:00Z',
+  },
+  {
+    id: 'cust-2',
+    name: 'Arun V',
+    countryCode: '+91',
+    phoneNumber: '9000000002',
+    city: 'Chennai',
+    address: '',
+    jobCount: 1,
+    lastJobDate: null,
+  },
 ];
 
 const BASE_TECHNICIANS = [
@@ -173,6 +229,19 @@ function pickFirstSkill(root: ReactTestRenderer.ReactTestInstance) {
   });
 }
 
+/** The accessibility state of the named customer's picker tile. */
+function customerTileState(
+  root: ReactTestRenderer.ReactTestInstance,
+  name: string,
+) {
+  return (
+    root
+      .findAllByProps({ accessibilityLabel: name })
+      .filter(t => t.props.accessibilityState !== undefined)[0]?.props
+      .accessibilityState ?? null
+  );
+}
+
 function findButtonWithText(
   root: ReactTestRenderer.ReactTestInstance,
   text: string,
@@ -194,8 +263,13 @@ function hasText(root: ReactTestRenderer.ReactTestInstance, text: string) {
 
 beforeEach(() => {
   mockSkills.current = SKILLS;
+  mockCustomers.current = CUSTOMERS;
+  mockCustomers.isLoading = false;
+  mockCustomers.error = null;
+  mockCustomers.hasLoaded = true;
   mockProfile.current = { technicians: BASE_TECHNICIANS };
   mockLoadMyProfile.mockClear();
+  mockRefreshCustomers.mockClear();
   mockAddTechnician.mockClear().mockResolvedValue(undefined);
 });
 
@@ -205,8 +279,7 @@ it('leaves the customer unselected and never clears params when the route carrie
   const { root, navigation } = renderScreen();
   pickFirstSkill(root);
 
-  const customerSelect = root.findAllByProps({ sheetTitle: 'Customer' })[0];
-  expect(customerSelect.props.value).toBeUndefined();
+  expect(customerTileState(root, 'Priya Sharma')).toEqual({ selected: false });
   expect(navigation.setParams).not.toHaveBeenCalled();
 });
 
@@ -214,8 +287,7 @@ it('selects the returned createdCustomerId in the draft and clears the route par
   const { root, navigation } = renderScreen('cust-1');
   pickFirstSkill(root);
 
-  const customerSelect = root.findAllByProps({ sheetTitle: 'Customer' })[0];
-  expect(customerSelect.props.value).toBe('cust-1');
+  expect(customerTileState(root, 'Priya Sharma')).toEqual({ selected: true });
   expect(navigation.setParams).toHaveBeenCalledWith({ createdCustomerId: undefined });
 });
 
@@ -244,7 +316,7 @@ it('shows only the Skill section until a skill is picked', () => {
   expect(
     root.findAllByProps({ accessibilityLabel: 'Plumbing' }).length,
   ).toBeGreaterThan(0);
-  expect(root.findAllByProps({ sheetTitle: 'Customer' })).toEqual([]);
+  expect(root.findAllByProps({ accessibilityLabel: 'Browse all customers' })).toEqual([]);
   expect(root.findAllByProps({ accessibilityLabel: 'Notes for technician' })).toEqual([]);
   // No section heads either — the only visible section (Skill) names itself
   // inline in the picker header.
@@ -257,7 +329,7 @@ it('reveals Customer, technician and Notes once a skill is picked', () => {
   const { root } = renderScreen();
   pickFirstSkill(root);
 
-  expect(root.findAllByProps({ sheetTitle: 'Customer' }).length).toBe(1);
+  expect(root.findAllByProps({ accessibilityLabel: 'Browse all customers' }).length).toBeGreaterThan(0);
   // RN mirrors accessibilityLabel onto host wrapper nodes — count the
   // presence, not exactly one node.
   expect(
@@ -464,7 +536,7 @@ it('collapses the form when SelectSkills returns an empty selection (Clear)', ()
 
   // `null` is a decision — the skill (and any technician needing it) is
   // dropped and the form re-collapses to just the Skill section.
-  expect(root.findAllByProps({ sheetTitle: 'Customer' })).toEqual([]);
+  expect(root.findAllByProps({ accessibilityLabel: 'Browse all customers' })).toEqual([]);
   expect(root.findAllByProps({ accessibilityLabel: 'Notes for technician' })).toEqual([]);
   expect(navigation.setParams).toHaveBeenCalledWith({
     selectedSkillId: undefined,
@@ -474,4 +546,108 @@ it('collapses the form when SelectSkills returns an empty selection (Clear)', ()
 it('does nothing when no SelectSkills result is in the route params', () => {
   const { navigation } = renderScreen();
   expect(navigation.setParams).not.toHaveBeenCalled();
+});
+
+// --- Select Customers round trip ---------------------------------------------
+
+it('"Browse all" pushes SelectCustomers carrying the current selection', () => {
+  const { root, navigation } = renderScreen();
+  pickFirstSkill(root);
+
+  // Pick Priya first, so the handoff carries a real selection rather than
+  // the null the form starts with.
+  act(() => {
+    root.findAllByProps({ accessibilityLabel: 'Priya Sharma' })[0].props.onPress();
+  });
+  act(() => {
+    root
+      .findAllByProps({ accessibilityLabel: 'Browse all customers' })[0]
+      .props.onPress();
+  });
+
+  expect(navigation.navigate).toHaveBeenCalledWith('SelectCustomers', {
+    selectedCustomerId: 'cust-1',
+  });
+});
+
+it('applies the customer returned by SelectCustomers and clears the param', () => {
+  const { root, navigation } = renderScreen(undefined, {
+    selectedCustomerId: 'cust-1',
+  });
+
+  // The param applies on mount; the section itself only renders once a
+  // skill is picked (progressive disclosure).
+  pickFirstSkill(root);
+  expect(customerTileState(root, 'Priya Sharma')).toEqual({ selected: true });
+  // Cleared immediately so a later re-render can't re-apply it.
+  expect(navigation.setParams).toHaveBeenCalledWith({
+    selectedCustomerId: undefined,
+  });
+});
+
+it('drops the customer when SelectCustomers returns an empty selection (Clear)', () => {
+  // createdCustomerId picks Priya first; the Clear return (`null`) then
+  // drops her — the tiles stay up with nothing selected, and a job can't
+  // be submitted without a customer.
+  const { root, navigation } = renderScreen('cust-1', {
+    selectedCustomerId: null,
+  });
+
+  pickFirstSkill(root);
+  expect(customerTileState(root, 'Priya Sharma')).toEqual({
+    selected: false,
+  });
+  expect(navigation.setParams).toHaveBeenCalledWith({
+    selectedCustomerId: undefined,
+  });
+});
+
+// --- Customer section degraded states ----------------------------------------
+
+it('shows a spinner for the customer section while the first load is in flight', () => {
+  mockCustomers.current = [];
+  mockCustomers.isLoading = true;
+  mockCustomers.hasLoaded = false;
+
+  const { root } = renderScreen();
+  pickFirstSkill(root);
+
+  // No tiles and no premature empty-book copy — just the spinner.
+  expect(customerTileState(root, 'Priya Sharma')).toBeNull();
+  expect(hasText(root, 'No customers yet')).toBe(false);
+  expect(root.findAllByType(ActivityIndicator).length).toBeGreaterThan(0);
+});
+
+it('shows the customer error with a working "Try again" when the store failed', () => {
+  mockCustomers.current = [];
+  mockCustomers.error = 'Customers failed to load';
+  mockCustomers.hasLoaded = false;
+
+  const { root } = renderScreen();
+  pickFirstSkill(root);
+
+  expect(hasText(root, 'Customers failed to load')).toBe(true);
+  // DS Button exposes no accessibilityRole — match on the label instead.
+  const retry = root
+    .findAll(node => typeof node.props.onPress === 'function')
+    .find(node =>
+      node.findAllByType(Text).some(t => t.props.children === 'Try again'),
+    );
+  expect(retry).toBeDefined();
+  act(() => {
+    retry?.props.onPress();
+  });
+  expect(mockRefreshCustomers).toHaveBeenCalled();
+});
+
+it('shows the empty-book copy when the owner has no customers yet', () => {
+  mockCustomers.current = [];
+  mockCustomers.hasLoaded = true;
+
+  const { root } = renderScreen();
+  pickFirstSkill(root);
+
+  expect(hasText(root, 'No customers yet')).toBe(true);
+  // The Add-new link stays up as the way forward from here.
+  expect(hasText(root, 'Customer not in list? Add new')).toBe(true);
 });

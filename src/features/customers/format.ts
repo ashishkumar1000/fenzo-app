@@ -71,6 +71,31 @@ export function jobCountLabel(count: number): string {
 }
 
 /**
+ * Tile order for the New Job customer picker: the customer the owner most
+ * likely wants is the one they served most recently, so `lastJobDate`
+ * descending, then name A→Z as the tiebreak (and the fallback when nobody
+ * has jobs — a freshly added customer's `lastJobDate` is `null`).
+ *
+ * Pure and non-mutating: the list screens keep the store's order; only the
+ * picker's tiles reorder. An unparseable `lastJobDate` counts as "no job"
+ * rather than poisoning the comparator with NaN.
+ */
+export function sortCustomersByRecency(customers: Customer[]): Customer[] {
+  const recency = (iso: string | null): number | null => {
+    if (!iso) return null;
+    const time = new Date(iso).getTime();
+    return Number.isNaN(time) ? null : time;
+  };
+  return customers.slice().sort((a, b) => {
+    const at = recency(a.lastJobDate);
+    const bt = recency(b.lastJobDate);
+    if (at !== null && bt !== null && at !== bt) return bt - at;
+    if ((at === null) !== (bt === null)) return at === null ? 1 : -1;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+/**
  * "12 Jun 25" from an ISO timestamp; empty string if unparseable.
  *
  * Formatted by hand rather than via `toLocaleDateString` so the output can't

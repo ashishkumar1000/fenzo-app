@@ -63,18 +63,22 @@ jest.mock('../src/features/newJob/components/DateTimeFields', () => ({
 jest.mock('../src/features/newJob/components/SkillPicker', () => ({
   SkillPicker: () => null,
 }));
+jest.mock('../src/features/newJob/components/CustomerPicker', () => ({
+  CustomerPicker: () => null,
+}));
 jest.mock('../src/components/TechnicianPicker', () => ({
   TechnicianPicker: () => null,
 }));
 
 import NewJobScreen from '../src/features/newJob/NewJobScreen';
-import { Button, Select } from '../src/components/ui';
+import { Button } from '../src/components/ui';
 import { jobService } from '../src/services';
 import { loadMyProfile, useMyProfile } from '../src/features/profile';
 import { useCustomers, upsertCustomer } from '../src/features/customers';
 import { upsertJob } from '../src/features/jobs';
 import { useSkills, loadSkills } from '../src/features/skills';
 import { SkillPicker } from '../src/features/newJob/components/SkillPicker';
+import { CustomerPicker } from '../src/features/newJob/components/CustomerPicker';
 import { TechnicianPicker } from '../src/components/TechnicianPicker';
 import type { MyProfile } from '../src/services';
 
@@ -165,7 +169,7 @@ async function submitSuccessfulJob(
     renderer.root.findByType(SkillPicker).props.onChange('sk-plumb');
   });
   await ReactTestRenderer.act(async () => {
-    renderer.root.findByType(Select).props.onChange('c-1');
+    renderer.root.findByType(CustomerPicker).props.onChange('c-1');
   });
   await ReactTestRenderer.act(async () => {
     renderer.root.findByType(TechnicianPicker).props.onSelect('tech-1');
@@ -427,7 +431,7 @@ it('submission is blocked and the rest of the form is hidden while no skill is c
   // picked the Customer, Date & time, Assign technician and Notes sections
   // are not on screen at all — there is no "choose a skill first" placeholder
   // any more, the sections simply appear once a skill is picked.
-  expect(renderer.root.findAllByType(Select)).toEqual([]);
+  expect(renderer.root.findAllByType(CustomerPicker)).toEqual([]);
   expect(hasText(renderer, 'Assign technician')).toBe(false);
   expect(hasText(renderer, 'Add new technician')).toBe(false);
   expect(hasText(renderer, 'Notes for technician')).toBe(false);
