@@ -1,30 +1,63 @@
 /**
  * MoreScreen — the account/settings tab. Header is a plain "Account &
- * settings"; below it, Technicians + Notifications tiles, the account card,
- * and Log out. Logging out runs the same forced-logout flow as
- * a 401 expiry (story 5.3): the reset registry wipes every store, the token
- * is cleared, and `useAuth().reset()` sends the user back to login.
+ * settings"; below it, the Technicians / Notifications / Customers tiles,
+ * the account card, and Log out. Logging out runs the same forced-logout
+ * flow as a 401 expiry (story 5.3): the reset registry wipes every store,
+ * the token is cleared, and `useAuth().reset()` sends the user back to
+ * login.
+ *
+ * Tile counts read the shared stores — `technicianCount` is server truth on
+ * the profile; the customers tile mirrors the Customers tab's own store and
+ * the notifications tile mirrors the bells' unread count. Both loaders are
+ * focus-throttled in their stores, so a focus refresh here costs at most
+ * one request per window.
  */
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Alert, ActivityIndicator, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { Bell, HardHat, LogOut, Pencil, Phone, ShieldCheck } from 'lucide-react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { CompositeScreenProps } from '@react-navigation/native';
+import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Bell, HardHat, LogOut, Pencil, Phone, ShieldCheck, Users } from 'lucide-react-native';
 import { Avatar, Card, IconButton } from '../../components/ui';
 import { colors, radius, spacing, typography } from '../../theme';
 import { runAllResets } from '../../services';
 import { clearAuthToken } from '../../services/authToken';
 import { useAuth } from '../auth';
 import { EditNameSheet, formatPhone, formatRole, useMyProfile } from '../profile';
+import { loadUnreadCount, useNotifications } from '../notifications';
+import { loadCustomers, useCustomers } from '../customers';
 import { MoreTile } from './components/MoreTile';
+import type { MainTabParamList, RootStackParamList } from '../../navigation/types';
 
-export default function MoreScreen() {
+/**
+ * A tab screen that also pushes root-stack routes (Technicians,
+ * Notifications) — hence the composite navigation, the same shape
+ * NotificationsScreen uses in mirror image.
+ */
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<MainTabParamList, 'More'>,
+  NativeStackScreenProps<RootStackParamList>
+>;
+
+export default function MoreScreen({ navigation }: Props) {
   const { width } = useWindowDimensions();
   const tileSize = (width - spacing.s4 * 2 - spacing.s3) / 2;
   const { reset } = useAuth();
   const { profile, isLoading } = useMyProfile();
-  const navigation = useNavigation();
+  const { unreadCount } = useNotifications();
+  const { count: customerCount, hasLoaded: customersHasLoaded } = useCustomers();
   const [editNameOpen, setEditNameOpen] = useState(false);
+
+  // Same throttled focus refresh the bells (Jobs/Home headers) and the
+  // Customers tab run — at most one request per store per window.
+  useFocusEffect(
+    useCallback(() => {
+      void loadUnreadCount();
+      void loadCustomers();
+    }, []),
+  );
 
   // Server truth (`technicianCount`), not the local invite store. The API has
   // no active/offline split, so the tile shows the count only.
@@ -33,6 +66,23 @@ export default function MoreScreen() {
     technicianCount === 0
       ? 'Add your team'
       : `${technicianCount} ${technicianCount === 1 ? 'technician' : 'technicians'}`;
+
+  // The count arrives async (null until the throttled count lands).
+  const notificationsSubtitle =
+    unreadCount === null
+      ? 'Job & team updates'
+      : unreadCount === 0
+        ? 'All caught up'
+        : `${unreadCount} unread`;
+
+  // The customers count reads 0 while the first load is still in flight —
+  // `hasLoaded` separates "no customers yet" from "not fetched", so the tile
+  // never invites an owner to add a customer they may already have.
+  const customersSubtitle = !customersHasLoaded
+    ? 'People you serve'
+    : customerCount === 0
+      ? 'Add your first customer'
+      : `${customerCount} ${customerCount === 1 ? 'customer' : 'customers'}`;
 
   const handleLogOut = () => {
     Alert.alert('Log out', 'You will need to verify your number again to sign back in.', [
@@ -79,14 +129,24 @@ export default function MoreScreen() {
             size={tileSize}
             onPress={() => navigation.navigate('Technicians')}
           />
-          {/* No notifications system exists yet — greyed out until there is one. */}
           <MoreTile
-            icon={<Bell size={22} color={colors.status.neutral.solid} strokeWidth={1.5} />}
-            iconBg={colors.status.neutral.bg}
+            icon={<Bell size={22} color={colors.status.scheduled.solid} strokeWidth={1.5} />}
+            iconBg={colors.status.scheduled.bg}
             title="Notifications"
-            subtitle="Coming soon"
-            inactive
+            subtitle={notificationsSubtitle}
             size={tileSize}
+            onPress={() => navigation.navigate('Notifications')}
+          />
+        </View>
+
+        <View style={styles.tileRow}>
+          <MoreTile
+            icon={<Users size={22} color={colors.status.done.solid} strokeWidth={1.5} />}
+            iconBg={colors.status.done.bg}
+            title="Customers"
+            subtitle={customersSubtitle}
+            size={tileSize}
+            onPress={() => navigation.navigate('Customers')}
           />
         </View>
 

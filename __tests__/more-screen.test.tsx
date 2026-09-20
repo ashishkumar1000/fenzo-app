@@ -12,6 +12,9 @@ const mockNavigation = { navigate: jest.fn(), goBack: jest.fn(), canGoBack: jest
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => mockNavigation,
+  // The tiles' shared-store focus refresh (Notifications + Customers) is the
+  // tile tests' job (src/features/more/MoreScreen.test.tsx) — inert here.
+  useFocusEffect: jest.fn(),
 }));
 
 jest.mock('../src/features/auth', () => ({
@@ -19,7 +22,13 @@ jest.mock('../src/features/auth', () => ({
 }));
 
 jest.mock('../src/features/customers', () => ({
-  useCustomers: () => ({ clear: jest.fn() }),
+  useCustomers: () => ({ count: 0, hasLoaded: true, clear: jest.fn() }),
+  loadCustomers: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('../src/features/notifications', () => ({
+  useNotifications: () => ({ unreadCount: null }),
+  loadUnreadCount: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('../src/features/technicians', () => ({
