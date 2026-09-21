@@ -7,8 +7,15 @@
  *
  * Responsibilities (and nothing else — see apiError.ts for error shaping):
  *   1. Base URL + timeout, sourced from `src/config`.
- *   2. Request interceptor — attaches the bearer token, if one is stored.
- *   3. Response interceptor — hands every failure to `toApiError` so callers
+ *   2. Request interceptors — three of them, registered below in this order:
+ *      observability headers (a fresh `X-Correlation-ID` per request and a
+ *      stable per-launch `X-Session-ID` — fenzit-be echoes them and puts both
+ *      on every log line, so a reported issue can be traced to the exact
+ *      request and the app sitting), the bearer token (if one is stored), and
+ *      the abort deadline. None of them reads another's headers, so runtime
+ *      order (axios runs request interceptors LIFO) is not load-bearing.
+ *   3. Abort deadline per request (below) — see the section comment.
+ *   4. Response interceptor — hands every failure to `toApiError` so callers
  *      always receive the same `ApiError` shape, regardless of whether the
  *      failure was a network drop, a timeout, a cancellation, or a 4xx/5xx
  *      from the backend. Also decides *whether* a 401 should trigger a
@@ -25,6 +32,7 @@ import axios from 'axios';
 import type { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { API_BASE_URL, API_TIMEOUT } from '../../config';
 import { clearAuthToken, getAuthToken } from '../authToken';
+import { generateIdempotencyKey } from '../../utils/idempotency';
 import { DEADLINE_ABORTED, toApiError } from './apiError';
 
 export type { ApiError } from './apiError';
@@ -61,6 +69,31 @@ export const apiClient = axios.create({
   // mode; it also drops null/undefined/empty-array params and serializes Date
   // values as ISO strings, so nothing needs to be hand-rolled here.
   paramsSerializer: { indexes: null },
+});
+
+// --- Request interceptor: correlation + session ids (observability) ---------
+// Every request carries two UUIDs fenzit-be echoes back and puts on every log
+// line (13-1's CorrelationInterceptor): `X-Correlation-ID`, minted fresh per
+// request so a reported issue maps to the exact request, and `X-Session-ID`,
+// minted once below at module load — one id per app sitting, in memory only
+// (not persisted, and logout does not reset it: signing out does not end the
+// sitting). A "sitting" is one JS-context lifetime: force-kill or a dev
+// reload mints a new id; a merely backgrounded app keeps the old one. Both
+// come from the zero-dependency v4 generator in utils/idempotency.ts. The id
+// is set on the request's own config, never on
+// shared axios defaults — shared defaults would stamp one correlation id on
+// every concurrent request (documented axios anti-pattern).
+//
+// NOT every outbound transport: utils/r2Upload.ts (the presigned R2 PUT) is a
+// plain `fetch` to a different origin and deliberately carries no extra
+// headers — it never touches `apiClient`, so it is excluded by construction.
+const sessionId = generateIdempotencyKey();
+
+apiClient.interceptors.request.use(config => {
+  config.headers = config.headers ?? {};
+  config.headers['X-Correlation-ID'] = generateIdempotencyKey();
+  config.headers['X-Session-ID'] = sessionId;
+  return config;
 });
 
 // --- Request interceptor: attach auth token --------------------------------

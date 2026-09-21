@@ -6,7 +6,9 @@
  * `apiClient` — because this request goes to the R2 host (a different origin
  * from the API) and must carry NO Authorization header: the presigned URL's
  * query signature is the only credential, so anything extra risks a
- * signature mismatch.
+ * signature mismatch. That also excludes it from the correlation/session
+ * observability headers (`X-Correlation-ID`/`X-Session-ID`, story 13.2) —
+ * the PUT is anonymous by design and untraceable by the API's request ids.
  *
  * Resolves with the byte size the PUT actually sent (the blob's own size) —
  * that value, not the picker's possibly-absent `fileSize`, is what the
