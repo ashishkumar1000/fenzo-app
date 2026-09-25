@@ -197,7 +197,7 @@ Available aliases: `@components`, `@screens`, `@navigation`, `@hooks`, `@utils`,
 - Example: `export const API_URL = process.env.API_URL || 'http://localhost:8000'`
 
 ## Workflow rules
-- Use the **BMAD Method** for planning development tasks.
+- Use the **BMAD Method** for planning development tasks — run it from the `fenzo-meta` repo (single source of truth for all BMAD artifacts); this repo has no BMAD install.
 - Don't create summary/`.md` files unless explicitly asked.
 - Don't commit or push unless explicitly asked.
 - When unsure about version-specific behavior or library APIs, search the web —

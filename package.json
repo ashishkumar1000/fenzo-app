@@ -18,11 +18,7 @@
     "test": "jest",
     "verify:version": "bun scripts/verify-version-sync.js",
     "sync:version": "bun scripts/sync-version.js",
-    "verify:store": "bun scripts/check-store-downgrade.js",
-    "bmad": "bmad-method",
-    "bmad:help": "bmad-method help",
-    "bmad:install": "bmad-method install",
-    "bmad:status": "bmad-method status"
+    "verify:store": "bun scripts/check-store-downgrade.js"
   },
   "dependencies": {
     "@lodev09/react-native-true-sheet": "^3.11.12",
@@ -69,7 +65,6 @@
     "@types/jest": "^29.5.13",
     "@types/react": "^19.2.0",
     "@types/react-test-renderer": "^19.1.0",
-    "bmad-method": "^6.9.0",
     "eslint": "^8.19.0",
     "jest": "^29.6.3",
     "prettier": "2.8.8",
