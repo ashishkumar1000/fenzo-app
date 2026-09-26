@@ -3,6 +3,7 @@ import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
 import RNBootSplash
+import GoogleMaps
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -15,6 +16,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
+    // Google Maps SDK key — react-native-maps requires this to be the FIRST
+    // call of this method. Read from Info.plist (GOOGLE_MAPS_API_KEY) so the
+    // key lives in one tracked iOS file; same pre-launch caveat as
+    // android/keystore.properties (restrict by iOS bundle id com.fenzitapp).
+    if let mapsApiKey = Bundle.main.object(
+      forInfoDictionaryKey: "GOOGLE_MAPS_API_KEY") as? String {
+      GMSServices.provideAPIKey(mapsApiKey)
+    }
+
     let delegate = ReactNativeDelegate()
     let factory = RCTReactNativeFactory(delegate: delegate)
     delegate.dependencyProvider = RCTAppDependencyProvider()

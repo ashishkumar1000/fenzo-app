@@ -39,6 +39,12 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<!-- Google Maps SDK key (react-native-maps — attendance office geofence
+	     picker). Same key as android/keystore.properties FENZIT_MAPS_API_KEY
+	     for the 15.1 spike; unrestricted — before launch restrict in Google
+	     Cloud (iOS bundle id com.fenzitapp, API = Maps SDK for iOS). -->
+	<key>GOOGLE_MAPS_API_KEY</key>
+	<string>AIzaSyDE0COs1sKwQRoW1lwBdi9uJmNHFhSp55U</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Take photos of completed work</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

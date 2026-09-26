@@ -109,6 +109,19 @@ android {
         applicationId "com.fenzitapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
+        // Google Maps SDK key for react-native-maps (attendance geofence map
+        // picker, Epic 15+). Lives with the signing credentials in
+        // android/keystore.properties — tracked intentionally for now, same
+        // rotation caveat. Restrict the key in Google Cloud (Android app +
+        // applicationId com.fenzitapp): the DEBUG keystore SHA-1 is already
+        // needed for dev/metroDebug builds; add the RELEASE keystore SHA-1
+        // before any distributed/launch build.
+        def mapsPropsFile = rootProject.file("keystore.properties")
+        def mapsProps = new Properties()
+        if (mapsPropsFile.exists()) {
+            mapsPropsFile.withInputStream { mapsProps.load(it) }
+        }
+        manifestPlaceholders.mapsApiKey = mapsProps['FENZIT_MAPS_API_KEY'] ?: ''
         // Version scheme: SemVer for versionName; deterministic versionCode =
         // 10000*major + 100*minor + patch (1.0.0 → 10000). minor/patch stay < 100.
         // Store policy: every upload is a SemVer bump — RCs are the next patch

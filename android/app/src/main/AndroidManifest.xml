@@ -13,6 +13,11 @@
     android:theme="@style/AppTheme"
     android:usesCleartextTraffic="${usesCleartextTraffic}"
     android:supportsRtl="true">
+    <!-- Google Maps SDK key (react-native-maps) — value set from
+         keystore.properties via manifestPlaceholders in app/build.gradle. -->
+    <meta-data
+      android:name="com.google.android.geo.API_KEY"
+      android:value="${mapsApiKey}" />
     <activity
       android:name=".MainActivity"
       android:label="@string/app_name"

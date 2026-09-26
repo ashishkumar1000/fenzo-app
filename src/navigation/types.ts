@@ -36,6 +36,12 @@ export type TechnicianTabParamList = {
 export type RootStackParamList = {
   MainTabs: undefined;
   /**
+   * SPIKE (Story 15.1) — disposable react-native-maps validation screen.
+   * Temporarily the initial route; delete the type, registration and
+   * `initialRouteName` once Story 15.4 lands.
+   */
+  MapSpike: undefined;
+  /**
    * `autoOpenAdd` — Home's "Add technician" quick action pushes this route
    * with the Add sheet already open, mirroring the one-tap intent (a plain
    * push would land on the list and force a second tap on "Add"). Params are
@@ -133,6 +139,9 @@ export type TechnicianRootStackParamList = {
    * links route per role (job cards → TechJobDetail here).
    */
   Notifications: undefined;
+  // SPIKE 15.1 — temporary map-validation screen, pushed from Today's test
+  // button; delete with the story (15.4 replaces it with the real picker).
+  MapSpike: undefined;
 };
 
 declare global {

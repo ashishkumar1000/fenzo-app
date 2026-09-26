@@ -14,6 +14,7 @@ import TechJobDetailScreen from '../features/technicianApp/TechJobDetailScreen';
 import SignatureScreen from '../features/technicianApp/SignatureScreen';
 import { LocationCaptureScreen } from '../features/technicianApp/LocationCaptureScreen';
 import { NotificationsScreen } from '../features/notifications';
+import MapSpikeScreen from '../screens/MapSpikeScreen'; // SPIKE 15.1 — delete with the story
 import type { TechnicianRootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<TechnicianRootStackParamList>();
@@ -29,6 +30,8 @@ export default function TechnicianRootNavigator() {
       <Stack.Screen name="LocationCapture" component={LocationCaptureScreen} options={{ headerShown: false }} />
       {/* 14.3 — the shared notification inbox, behind the Today bell. */}
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: false }} />
+      {/* SPIKE 15.1 — temporary map screen, pushed from Today's test button. */}
+      <Stack.Screen name="MapSpike" component={MapSpikeScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }

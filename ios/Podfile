@@ -15,6 +15,15 @@ if linkage != nil
 end
 
 target 'FenzitApp' do
+  # Google Maps provider for react-native-maps (attendance geofence map
+  # picker, Epic 15+). Without this the pod installs only its default
+  # Apple Maps subspec (`react-native-maps/Maps`) and `provider="google"`
+  # fails at runtime. The subspec itself sets HAVE_GOOGLE_MAPS=1 and pins
+  # GoogleMaps 9.4.0 + Google-Maps-iOS-Utils 6.1.0 — no manual macros.
+  # Run `pod install` after changing this line.
+  rn_maps_path = '../node_modules/react-native-maps'
+  pod 'react-native-maps/Google', :path => rn_maps_path
+
   config = use_native_modules!
 
   use_react_native!(

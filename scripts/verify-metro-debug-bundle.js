@@ -25,17 +25,18 @@ const BUNDLE_PATH = path.join(
 );
 
 // Resolve the URL from src/config/index.ts (the single source of truth)
-// rather than hardcoding a copy here. API_BASE_URL is a template literal
-// over two parts, so extract the pieces and join them.
+// rather than hardcoding a copy here. Only API_HOST is asserted
+// contiguously: Metro does not guarantee API_HOST and API_VERSION_PREFIX
+// are folded into one literal in the minified bundle (they are joined at
+// runtime), so searching the joined URL can false-fail (seen 2026-09-26).
+// The host alone is the thing being guarded — a dev/localhost URL baked in.
 const CONFIG_PATH = path.join(__dirname, '..', 'src', 'config', 'index.ts');
 const config = fs.readFileSync(CONFIG_PATH, 'utf8');
-const host = config.match(/API_HOST\s*=\s*'([^']+)'/)?.[1];
-const versionPrefix = config.match(/API_VERSION_PREFIX\s*=\s*'([^']+)'/)?.[1];
-const apiUrl = host && versionPrefix ? `${host}${versionPrefix}` : undefined;
+const apiUrl = config.match(/API_HOST\s*=\s*'([^']+)'/)?.[1];
 
 if (!apiUrl) {
   console.error(
-    'verify-metro-debug-bundle: could not resolve API_BASE_URL from src/config/index.ts',
+    'verify-metro-debug-bundle: could not resolve API_HOST from src/config/index.ts',
   );
   process.exit(1);
 }

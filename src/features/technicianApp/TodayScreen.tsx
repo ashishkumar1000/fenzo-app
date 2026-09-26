@@ -25,7 +25,7 @@ import { ActivityIndicator, RefreshControl, SectionList, StyleSheet, Text, View 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Bell, CalendarCheck } from 'lucide-react-native';
+import { Bell, CalendarCheck, Map } from 'lucide-react-native';
 import { Button, EmptyState, Eyebrow, IconButton, InlineError } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import { useNow } from '../../hooks';
@@ -81,6 +81,12 @@ export default function TodayScreen() {
     navigation.navigate('Notifications');
   }, [navigation]);
 
+  // SPIKE 15.1 — temporary test button for the map-validation screen; delete
+  // with the story (the spike route in TechnicianRootNavigator goes too).
+  const handleOpenMapSpike = useCallback(() => {
+    navigation.navigate('MapSpike');
+  }, [navigation]);
+
   const sections = buildTodaySections(today);
   // The urgency rail's clock — one 60s tick for the sectioned list.
   const now = useNow();
@@ -94,6 +100,14 @@ export default function TodayScreen() {
         <Text style={styles.greeting} numberOfLines={1}>
           {name ? `Good morning, ${name}` : 'Good morning'}
         </Text>
+        {/* SPIKE 15.1 — temporary test button, sits left of the bell. */}
+        <IconButton
+          variant="ghost"
+          size="md"
+          label="Map spike test"
+          onPress={handleOpenMapSpike}>
+          <Map size={22} color={colors.textStrong} strokeWidth={2} />
+        </IconButton>
         <IconButton
           variant="ghost"
           size="md"
