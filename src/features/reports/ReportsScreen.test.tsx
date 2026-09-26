@@ -196,7 +196,7 @@ describe('history list', () => {
       .map(t => flatten(t.props.children))
       .join('\n');
     expect(text).toContain('History');
-    expect(text).toContain('We could not build this report. Try again.');
+    expect(text).toContain('Report generation failed. Try again.');
   });
 
   it('opens a ready row through a fresh status fetch and the system viewer', async () => {

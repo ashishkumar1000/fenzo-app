@@ -82,9 +82,11 @@ describe('rangeDays', () => {
     expect(rangeDays('2025-02-01', '2025-02-28')).toBe(28);
   });
 
-  it('returns NaN when either date is not a real calendar date', () => {
-    expect(rangeDays('not-a-date', '2026-09-20')).toBeNaN();
-    expect(rangeDays('2026-09-20', 'not-a-date')).toBeNaN();
+  // Unparseable dates degrade to 0 rather than NaN — `validateRange` is the
+  // gate that catches them, so `rangeDays` never has to render a signal.
+  it('returns 0 when either date is not a real calendar date', () => {
+    expect(rangeDays('not-a-date', '2026-09-20')).toBe(0);
+    expect(rangeDays('2026-09-20', 'not-a-date')).toBe(0);
   });
 });
 
@@ -96,13 +98,13 @@ describe('validateRange', () => {
   });
 
   it('rejects a missing date', () => {
-    expect(validateRange('', '2026-09-20', now)).toBe('Pick both dates');
-    expect(validateRange('2026-09-01', '', now)).toBe('Pick both dates');
+    expect(validateRange('', '2026-09-20', now)).toBe('Date range is required');
+    expect(validateRange('2026-09-01', '', now)).toBe('Date range is required');
   });
 
   it('rejects a reversed range', () => {
     expect(validateRange('2026-09-20', '2026-09-01', now)).toBe(
-      'End date is before the start date',
+      'Start date cannot be after end date',
     );
   });
 
@@ -125,7 +127,7 @@ describe('validateRange', () => {
     expect(rangeDays('2026-06-21', '2026-09-20')).toBe(92);
     expect(validateRange('2026-06-21', '2026-09-20', now)).toBeNull();
     expect(validateRange('2026-06-20', '2026-09-20', now)).toBe(
-      'Pick a range of 92 days or less',
+      'Range exceeds 92 days',
     );
     expect(MAX_RANGE_DAYS).toBe(92);
   });
@@ -151,26 +153,25 @@ describe('statusBadge', () => {
 
 describe('failedReportCopy', () => {
   it('maps each known engine code to its friendly line', () => {
-    expect(failedReportCopy('REPORT_RANGE_TOO_LARGE')).toBe(
-      'That date range is too long. Try 92 days or less.',
-    );
     expect(failedReportCopy('REPORT_TOO_LARGE')).toBe(
-      'Too many jobs in this range. Try a shorter one.',
+      'Too many jobs in range. Narrow the date range.',
     );
     expect(failedReportCopy('REPORT_GENERATION_FAILED')).toBe(
-      'We could not build this report. Try again.',
+      'Report generation failed. Try again.',
+    );
+    // Codes the engine stopped sending (or never had a line for) surface
+    // honestly with their code — never a made-up explanation (FR21).
+    expect(failedReportCopy('REPORT_RANGE_TOO_LARGE')).toBe(
+      'Error (code: REPORT_RANGE_TOO_LARGE)',
     );
     expect(failedReportCopy('REPORT_PRESIGN_FAILED')).toBe(
-      'The report file could not be opened. Try again shortly.',
+      'Error (code: REPORT_PRESIGN_FAILED)',
     );
   });
 
-  it('falls back to the generic line for null, undefined and unknown codes', () => {
-    expect(failedReportCopy(null)).toBe('This report failed. Try requesting it again.');
-    expect(failedReportCopy(undefined)).toBe('This report failed. Try requesting it again.');
-    expect(failedReportCopy('SOMETHING_ELSE')).toBe(
-      'This report failed. Try requesting it again.',
-    );
+  it('falls back to the generic line for null and undefined codes', () => {
+    expect(failedReportCopy(null)).toBe('This report failed. Try again.');
+    expect(failedReportCopy(undefined)).toBe('This report failed. Try again.');
   });
 });
 

@@ -113,7 +113,7 @@ describe('the Generate gate', () => {
       endDate: '2026-09-01',
     });
     expect(generateButton(root)?.props.disabled).toBe(true);
-    expect(allText(root)).toContain('End date is before the start date');
+    expect(allText(root)).toContain('Start date cannot be after end date');
   });
 
   it('disables Generate past the 92-day cap and says why', () => {
@@ -122,7 +122,7 @@ describe('the Generate gate', () => {
       endDate: '2026-09-20',
     });
     expect(generateButton(root)?.props.disabled).toBe(true);
-    expect(allText(root)).toContain('Pick a range of 92 days or less');
+    expect(allText(root)).toContain('Range exceeds 92 days');
   });
 
   it('disables Generate for a future end date on the IST clock', () => {

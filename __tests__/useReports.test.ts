@@ -343,7 +343,7 @@ describe('createReportRequest', () => {
     const apiErr = {
       status: 429,
       code: 'REPORT_IN_FLIGHT_LIMIT',
-      message: 'Too many reports are generating right now',
+      message: 'You have a report generating. Wait for it to finish before creating another.',
     };
     await mountProbeAt(T0);
 
@@ -355,7 +355,9 @@ describe('createReportRequest', () => {
       });
     });
     expect(caught).toEqual(apiErr);
-    expect(probe?.submitError).toBe('Too many reports are generating right now');
+    expect(probe?.submitError).toBe(
+      'You have a report generating. Wait for it to finish before creating another.',
+    );
     expect(probe?.isSubmitting).toBe(false);
 
     // A rejection with no message at all gets the generic copy.

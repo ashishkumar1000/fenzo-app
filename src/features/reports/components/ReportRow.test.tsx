@@ -145,7 +145,7 @@ describe('a failed row', () => {
       .map(t => flatten(t.props.children))
       .join('\n');
     expect(text).toContain('Failed');
-    expect(text).toContain('That date range is too long. Try 92 days or less.');
+    expect(text).toContain('Error (code: REPORT_RANGE_TOO_LARGE)');
   });
 
   it('falls back to generic copy when the row has no error code', () => {
@@ -154,7 +154,7 @@ describe('a failed row', () => {
       .findAllByType(Text)
       .map(t => flatten(t.props.children))
       .join('\n');
-    expect(text).toContain('This report failed. Try requesting it again.');
+    expect(text).toContain('This report failed. Try again.');
   });
 
   it('fires onRetry with the item when Retry is pressed', () => {
