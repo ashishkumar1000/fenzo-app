@@ -1,9 +1,9 @@
 /**
  * ProfileScreen — the technician's "Profile" tab. First cut is deliberately
  * just identity + Log out: no Jobs done / Rating stat cards (no backend to
- * compute them yet) and no Notifications row (no notifications system
- * exists anywhere in the app yet either). Add those back once the profile
- * API exists — the API contract for it isn't available yet.
+ * compute them yet). Notifications live behind the Today header bell
+ * (Story 14-3) rather than a row here. Add the stat cards back once the
+ * profile API exists — the API contract for it isn't available yet.
  *
  * Name and phone come from `GET /users/me` via `useMyProfile`, not from the
  * auth session — the session holds gating fields only.

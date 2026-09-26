@@ -1,14 +1,17 @@
 /**
- * useNotifications — the owner's notification history and unread badge,
- * from `GET /notifications` + `GET /notifications/unread-count` (Story 3.4).
+ * useNotifications — the shared notification history and unread badge,
+ * from `GET /notifications` + `GET /notifications/unread-count` (Story 3.4;
+ * recipient-scoped for both roles since Story 14-2/14-3 — the client never
+ * sends a user id, so Owner and technician read the same store).
  *
  * Same API-backed shared-store pattern as `useJobs`: one module-level state
  * object, any number of subscribers via `useSyncExternalStore`, in-flight
  * requests de-duplicated, and the cursor carried alongside the rows. Two
  * independent loads share the store — the full LIST (only the Notifications
- * screen asks for it) and the unread COUNT (every owner surface with a bell:
- * Jobs header, Home header) — so their throttles are separate: opening the
- * app twice in a minute refreshes the badge without ever pulling the list.
+ * screen asks for it) and the unread COUNT (every surface with a bell:
+ * owner Jobs header, owner Home header, technician Today header) — so
+ * their throttles are separate: opening the app twice in a minute refreshes
+ * the badge without ever pulling the list.
  *
  * Not MMKV-persisted: server truth, same reasoning as `useJobs`.
  *

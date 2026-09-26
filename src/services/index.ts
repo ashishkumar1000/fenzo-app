@@ -24,9 +24,9 @@ export { getAuthToken, setAuthToken, clearAuthToken } from './authToken';
 export { getRealtimeToken, clearRealtimeToken } from './realtimeToken';
 export {
   supabaseRealtime,
-  getOwnerChannel,
-  teardownOwnerChannel,
-  ownerNotificationsTopic,
+  getUserChannel,
+  teardownChannel,
+  userNotificationsTopic,
 } from './supabaseRealtime';
 export { storage } from './storage';
 export { currentResetEpoch, registerReset, runAllResets } from './resetRegistry';

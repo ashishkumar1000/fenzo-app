@@ -36,6 +36,15 @@ const mockRefresh = jest.fn();
 const mockMarkNotificationRead = jest.fn();
 const mockMarkAllNotificationsRead = jest.fn();
 
+// Story 14-3: the screen's role comes from the auth session. Default null —
+// the screen's `?? 'owner'` bootstrap fallback — so every pre-existing
+// (owner-behaviour) assertion keeps meaning exactly what it meant before
+// the generalization.
+let mockSession: { role: 'owner' | 'technician' } | null = null;
+jest.mock('../src/features/auth/useAuth', () => ({
+  useAuth: () => ({ session: mockSession }),
+}));
+
 jest.mock('../src/features/notifications/useNotifications', () => ({
   // The screen reads the store through the hook...
   useNotifications: () => ({
@@ -82,6 +91,7 @@ import NotificationsScreen from '../src/features/notifications/NotificationsScre
 import { NotificationCard } from '../src/features/notifications/components/NotificationCard';
 import { NotificationFilterBar } from '../src/features/notifications/components/NotificationFilterBar';
 import { ReportNotificationCard } from '../src/features/notifications/components/ReportNotificationCard';
+import { GenericNotificationCard } from '../src/features/notifications/components/GenericNotificationCard';
 import { Avatar, Button, InlineError } from '../src/components/ui';
 import type { ApiNotification } from '../src/services';
 import type { NotificationCardData } from '../src/features/notifications/notificationCardModel';
@@ -96,6 +106,8 @@ function makeNotification(id: string, overrides: Partial<ApiNotification> = {}):
     id,
     jobId: `job-${id}`,
     eventType: 'on_my_way',
+    entityType: null,
+    entityId: null,
     payload: { job_number: 'JB-2026-0042', step: 'on_my_way', technician_name: 'Priya' },
     readAt: null,
     createdAt: '2026-09-09T11:59:30Z', // <1min before NOW-ish → "Just now"
@@ -137,6 +149,7 @@ function markAllButton(renderer: ReactTestRenderer.ReactTestRenderer) {
 beforeEach(() => {
   mockStore = emptyStore();
   mockTemplateJobIds = [];
+  mockSession = null;
   mockRefresh.mockResolvedValue(undefined);
 });
 
@@ -445,6 +458,8 @@ describe('report notifications', () => {
       id,
       jobId: null,
       eventType: 'report_ready',
+      entityType: null,
+      entityId: null,
       payload: {
         reportId: 'report-1',
         reportType: 'technician_job_activity',
@@ -568,5 +583,70 @@ describe('report notifications', () => {
     // The screen derives jobIds itself — the report's jobId null must not
     // ride along (the hook fetches jobService.getById per id).
     expect(mockTemplateJobIds).toEqual(['job-n1']);
+  });
+});
+
+// --- Role routing (Story 14-3) -------------------------------------------------
+//
+// The technician's session: same shared screen, different deep links, the
+// report rows degraded to generic, and an owner-only empty-state CTA. One
+// inbox, never a second.
+
+describe('technician role routing', () => {
+  beforeEach(() => {
+    mockSession = { role: 'technician' };
+  });
+
+  it('tapping a job card navigates to TechJobDetail (never JobDetail)', async () => {
+    mockStore = emptyStore({ items: [makeNotification('n1')] });
+    const renderer = await mountScreen();
+
+    await act(async () => {
+      const card = renderer.root.findByType(NotificationCard);
+      card.props.onPress(card.props.card);
+    });
+
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('TechJobDetail', { jobId: 'job-n1' });
+    expect(mockNavigation.navigate).not.toHaveBeenCalledWith('JobDetail', expect.anything());
+    expect(mockMarkNotificationRead).toHaveBeenCalledWith('n1');
+  });
+
+  it('a report row renders the inert generic card — reports are owner-only', async () => {
+    mockStore = emptyStore({ items: [makeNotification('r1', { jobId: null, eventType: 'report_ready', payload: { status: 'ready', reportLabel: 'Technician Job Report' } })] });
+    const renderer = await mountScreen();
+
+    expect(renderer.root.findByType(GenericNotificationCard).props.card.title).toBe(
+      'Report ready',
+    );
+    expect(renderer.root.findAllByType(ReportNotificationCard)).toHaveLength(0);
+    // No View report button — tapping can never reach the Reports screen.
+    expect(
+      renderer.root.findAllByType(Button).find(b => b.props.children === 'View report'),
+    ).toBeUndefined();
+  });
+
+  it('an unknown event type renders the inert generic card for both roles', async () => {
+    mockStore = emptyStore({
+      items: [makeNotification('g1', { jobId: null, eventType: 'leave_approved', payload: { message: 'Approved by your owner' } })],
+    });
+    const renderer = await mountScreen();
+
+    const card = renderer.root.findByType(GenericNotificationCard).props.card;
+    expect(card.title).toBe('Leave approved');
+    expect(card.message).toBe('Approved by your owner');
+    // The generic card takes no onPress — inert by construction.
+    expect(
+      renderer.root.findByType(GenericNotificationCard).findAllByProps({ accessibilityRole: 'button' }),
+    ).toHaveLength(0);
+  });
+
+  it('the empty state hides the "Go to jobs" CTA and uses the technician copy', async () => {
+    const renderer = await mountScreen();
+
+    expect(
+      renderer.root.findAllByType(Button).find(b => b.props.children === 'Go to jobs'),
+    ).toBeUndefined();
+    const text = renderer.root.findAllByType(Text).map(t => t.props.children);
+    expect(text).toContain('Updates for you will show up here.');
   });
 });

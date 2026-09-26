@@ -52,6 +52,8 @@ function makeNotification(
     id,
     jobId: 'job-1',
     eventType: 'on_my_way',
+    entityType: null,
+    entityId: null,
     payload: {
       job_number: 'JB-2026-0042',
       step: 'on_my_way',

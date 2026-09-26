@@ -84,7 +84,12 @@ export type RootStackParamList = {
   } | undefined;
   /** Owner/technician job detail — opened with the job's uuid. */
   JobDetail: { jobId: string };
-  /** Owner-only notification history (bell tap) — no params. */
+  /**
+   * Notification history (bell tap) — no params. Shared screen, rendered in
+   * BOTH stacks since Story 14-3: registered in `RootStackParamList`
+   * (owner) and `TechnicianRootStackParamList` (technician); role
+   * differences are only what a tap leads to.
+   */
   Notifications: undefined;
   /**
    * Owner-only PDF reports (story 12-6): request form + live history list.
@@ -122,6 +127,12 @@ export type TechnicianRootStackParamList = {
   Signature: { jobId: string; stepKey: string; steps: WorkflowTemplateStep[] };
   /** Registered in Story 7.7 — location capture flow. */
   LocationCapture: { jobId: string; stepKey: string; signatureRef?: string };
+  /**
+   * Story 14-3 — the shared notifications screen, rendered in the technician
+   * stack behind the Today header bell. Same component as the owner's; deep
+   * links route per role (job cards → TechJobDetail here).
+   */
+  Notifications: undefined;
 };
 
 declare global {

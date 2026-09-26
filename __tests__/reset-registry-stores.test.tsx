@@ -100,6 +100,8 @@ const makeNotification = (overrides: Partial<ApiNotification> = {}): ApiNotifica
   id: 'n-1',
   jobId: 'job-1',
   eventType: 'on_my_way',
+  entityType: null,
+  entityId: null,
   payload: { job_number: 'JB-2026-0042', step: 'on_my_way', technician_name: 'Priya' },
   readAt: null,
   createdAt: '2026-09-09T09:00:00Z',

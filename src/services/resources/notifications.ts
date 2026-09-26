@@ -1,11 +1,12 @@
 /**
  * services/resources/notifications.ts
  * ───────────────────────────────────
- * The owner's notifications: the newest-first paginated list (`GET
- * /notifications`), the unread badge count (`GET /notifications/unread-count`)
- * and the two read-state commands (`POST /notifications/mark-read`,
- * `POST /notifications/mark-all-read`) — Stories 3.1/3.2 (fenzit-be) own the
- * wire; this module mirrors it.
+ * The user's notifications (recipient-scoped server-side by the JWT —
+ * Owner and technician alike since Story 14-2): the newest-first paginated
+ * list (`GET /notifications`), the unread badge count
+ * (`GET /notifications/unread-count`) and the two read-state commands
+ * (`POST /notifications/mark-read`, `POST /notifications/mark-all-read`) —
+ * Stories 3.1/3.2 (fenzit-be) own the wire; this module mirrors it.
  *
  * A plain function object on the shared `apiClient` (same shape as
  * `jobs.ts`). Every endpoint is recipient-scoped server-side by the JWT —
@@ -33,8 +34,17 @@ export interface ApiNotification {
    * they point at a report, not a job.
    */
   jobId: string | null;
-  /** Event type — today always the workflow step that fired it. */
+  /** Event type — today the workflow step that fired it, or a report event. */
   eventType: string;
+  /**
+   * Entity the notification is about (Story 14-2, additive): the event
+   * family (`job` / `report` / …) and its uuid — the deep-link target for
+   * notifications that are not about a job (attendance/leave, later epics).
+   * NULL on rows written before 14-2 (job/report rows) — the registry falls
+   * back to `eventType` + `jobId` for those.
+   */
+  entityType: string | null;
+  entityId: string | null;
   /** Denormalized display fields (`job_number`, `step`, `technician_name`). */
   payload: Record<string, unknown>;
   /** ISO 8601, UTC — null while unread. */

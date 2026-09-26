@@ -43,6 +43,9 @@ function makeNotification(id: string, overrides: Partial<ApiNotification> = {}):
     id,
     jobId: `job-${id}`,
     eventType: 'on_my_way',
+    // Story 14-2 columns — NULL on job/report rows (the worker never set them).
+    entityType: null,
+    entityId: null,
     payload: { job_number: 'JB-2026-0042', step: 'on_my_way', technician_name: 'Priya' },
     readAt: null,
     createdAt: '2026-09-09T09:00:00Z',

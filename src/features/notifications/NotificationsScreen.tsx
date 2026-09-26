@@ -1,12 +1,14 @@
 /**
- * NotificationsScreen — the owner's notification history (Story 3.4,
- * redesigned 2026-09).
+ * NotificationsScreen — the shared notification inbox (Story 3.4, redesigned
+ * 2026-09; generalized to both roles in Story 14-3 — one screen, never a
+ * second inbox).
  *
- * A full-screen root-stack route (sibling of JobDetail — covers the tab
- * bar), opened from either bell (Jobs header, Home header). Newest-first
- * cursor-paginated list over the `useNotifications` shared store: loads on
- * focus (TTL-throttled in the store), pages in on scroll-end, pulls to
- * refresh, and carries the "Mark all read" action in its header.
+ * A full-screen root-stack route (sibling of JobDetail / TechJobDetail —
+ * covers the tab bar), opened from either bell (Jobs header, Home header,
+ * technician Today header). Newest-first cursor-paginated list over the
+ * `useNotifications` shared store: loads on focus (TTL-throttled in the
+ * store), pages in on scroll-end, pulls to refresh, and carries the
+ * "Mark all read" action in its header.
  *
  * The redesign renders one CARD per job (grouped client-side from the flat
  * list by `notificationCardModel.ts` — the card's stage timeline comes from
@@ -17,7 +19,15 @@
  * Completed chips are job-status buckets — and their button opens the
  * Reports screen, never JobDetail.
  *
- * Tapping a card is NAVIGATE-FIRST: the deep link to that job's JobDetail is
+ * Story 14-3's event-type registry (`notificationEventRegistry.ts`) decides
+ * what EVERY row renders as, keyed on event type + role: job-status rows →
+ * the grouped job card, report rows → the report card (owner only), and
+ * anything this build doesn't know yet → the inert generic card. A tap's
+ * deep link routes per role: job cards open JobDetail for the owner and
+ * TechJobDetail for the technician; report cards are owner-only; generic
+ * cards are not tappable. The empty state's "Go to jobs" CTA is owner-only.
+ *
+ * Tapping a card is NAVIGATE-FIRST: the deep link to that event's screen is
  * the user's intent; the optimistic mark-read of the card's unread events is
  * cosmetic and happens alongside it (read cards still navigate — no POST,
  * no rollback ceremony).
@@ -35,12 +45,15 @@ import {
 import { Bell, Check, ChevronLeft } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import type { CompositeScreenProps } from '@react-navigation/native';
-import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button, EmptyState, IconButton, InlineError } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
-import type { MainTabParamList, RootStackParamList } from '../../navigation/types';
+import type {
+  MainTabParamList,
+  RootStackParamList,
+  TechnicianRootStackParamList,
+} from '../../navigation/types';
+import { useAuth } from '../auth/useAuth';
 import {
   loadMoreNotifications,
   loadNotifications,
@@ -50,26 +63,45 @@ import {
 } from './useNotifications';
 import { NotificationCard } from './components/NotificationCard';
 import { NotificationFilterBar } from './components/NotificationFilterBar';
+import { GenericNotificationCard } from './components/GenericNotificationCard';
 import { filterCards, groupNotificationsByJob } from './notificationCardModel';
 import {
   buildReportCards,
   mergeNotificationCards,
 } from './reportNotificationModel';
+import {
+  buildGenericCards,
+  type SessionRole,
+} from './notificationEventRegistry';
 import { useJobTemplateCache } from './useJobTemplateCache';
 import type { NotificationFilter } from './notificationCardModel';
-import type { NotificationListItem } from './reportNotificationModel';
+import type {
+  NotificationListItem,
+  TappableNotificationListItem,
+} from './reportNotificationModel';
 
 /**
- * Mostly a plain root-stack screen, but the empty state's "Go to jobs" CTA
- * navigates to the Jobs TAB (a nested route) — hence the composite props,
- * the same shape JobsScreen uses in mirror image.
+ * Both stacks' routes plus both tab groups, in one param list — the shared
+ * screen is registered in the owner's RootNavigator AND the technician's
+ * TechnicianRootNavigator (Story 14-3), and the role decides which routes a
+ * tap leads to: job cards → JobDetail (owner) / TechJobDetail (technician),
+ * report cards → Reports (owner), the empty-state CTA → the Jobs tab
+ * (owner). `Notifications` itself is deliberately declared in both stacks
+ * (this screen's own route), so the intersection typechecks for every
+ * `navigate` below — cross-tree routes are kept apart only by the runtime
+ * role guards, not by the types.
  */
-type Props = CompositeScreenProps<
-  NativeStackScreenProps<RootStackParamList, 'Notifications'>,
-  BottomTabScreenProps<MainTabParamList>
->;
+type SharedRoutes = RootStackParamList &
+  TechnicianRootStackParamList &
+  MainTabParamList;
+
+type Props = NativeStackScreenProps<SharedRoutes, 'Notifications'>;
 
 export default function NotificationsScreen({ navigation }: Props) {
+  const { session } = useAuth();
+  // The screen is only reachable with a session; `owner` is also the
+  // bootstrap fallback so the original behaviour is the default.
+  const role: SessionRole = session?.role ?? 'owner';
   const {
     items,
     isLoading,
@@ -109,7 +141,7 @@ export default function NotificationsScreen({ navigation }: Props) {
   }, []);
 
   const handleCardPress = useCallback(
-    (card: NotificationListItem) => {
+    (card: TappableNotificationListItem) => {
       // Navigate first — the deep link is the user's intent and must not
       // wait on the mark-read POST. Read-state is cosmetic (handled
       // optimistically inside the store, with its own rollback). Opening a
@@ -118,15 +150,23 @@ export default function NotificationsScreen({ navigation }: Props) {
       for (const id of card.unreadIds) void markNotificationRead(id);
       // Epic 12: a report notification points at a REPORT, not a job — the
       // Reports screen (root-stack sibling, same navigation the More tab
-      // uses). It loads its own list on focus, so no reports-store arming
+      // uses). Owner-only: the registry renders report rows generic for
+      // technicians, so this branch is unreachable for them — kept as a
+      // guard. It loads its own list on focus, so no reports-store arming
       // is needed here.
       if (card.kind === 'report') {
-        navigation.navigate('Reports');
+        if (role === 'owner') navigation.navigate('Reports');
+        return;
+      }
+      // Story 14-3: the deep link routes per role — job cards open the
+      // viewer for the signed-in role's tree.
+      if (role === 'technician') {
+        navigation.navigate('TechJobDetail', { jobId: card.jobId });
         return;
       }
       navigation.navigate('JobDetail', { jobId: card.jobId });
     },
-    [navigation, markNotificationRead],
+    [navigation, markNotificationRead, role],
   );
 
   // Memoize job IDs to avoid refetch on every render. Report notifications
@@ -147,36 +187,46 @@ export default function NotificationsScreen({ navigation }: Props) {
     () => groupNotificationsByJob(items, getTemplate),
     [items, getTemplate, updateTrigger],
   );
-  // Epic 12: report notifications get their own one-card-per-row cards.
-  const reportCards = useMemo(() => buildReportCards(items), [items]);
+  // Epic 12: report notifications get their own one-card-per-row cards —
+  // owner only (the registry renders them generic for technicians).
+  const reportCards = useMemo(() => buildReportCards(items, role), [items, role]);
+  // Story 14-3: the event-type registry's fallback — unknown event types
+  // (later attendance/leave epics) render the inert generic card, one per
+  // row, under "All" only. Owner job/report rows are classified exactly as
+  // before, so this is additive.
+  const genericCards = useMemo(() => buildGenericCards(items, role), [items, role]);
   // Interleaved by recency under "All"; the job buckets (below) stay job-only.
   const listCards = useMemo(
-    () => mergeNotificationCards(cards, reportCards),
-    [cards, reportCards],
+    () => mergeNotificationCards(cards, reportCards, genericCards),
+    [cards, reportCards, genericCards],
   );
   const [filter, setFilter] = useState<NotificationFilter>('all');
-  // Active/Completed are JOB-status buckets — report notifications show
-  // under "All" only and never enter either bucket.
+  // Active/Completed are JOB-status buckets — report and generic
+  // notifications show under "All" only and never enter either bucket.
   const visibleCards = useMemo(
     () => (filter === 'all' ? listCards : filterCards(cards, filter)),
     [listCards, cards, filter],
   );
   // Derived through the SAME `filterCards` the list filters with — a drifted
   // card counts as active in both places, and the chips can never disagree
-  // with what a filter actually shows. "All" counts every card (jobs + reports).
+  // with what a filter actually shows. "All" counts every card (jobs +
+  // reports + generic).
   const counts = useMemo(
     () => ({
-      all: cards.length + reportCards.length,
+      all: cards.length + reportCards.length + genericCards.length,
       active: filterCards(cards, 'active').length,
       completed: filterCards(cards, 'completed').length,
     }),
-    [cards, reportCards],
+    [cards, reportCards, genericCards],
   );
 
   const renderCard = useCallback(
-    ({ item }: { item: NotificationListItem }) => (
-      <NotificationCard card={item} onPress={handleCardPress} />
-    ),
+    ({ item }: { item: NotificationListItem }) =>
+      item.kind === 'generic' ? (
+        <GenericNotificationCard card={item} />
+      ) : (
+        <NotificationCard card={item} onPress={handleCardPress} />
+      ),
     [handleCardPress],
   );
 
@@ -302,12 +352,22 @@ export default function NotificationsScreen({ navigation }: Props) {
                 <EmptyState
                   icon={<Bell size={36} color={colors.primary} strokeWidth={1.5} />}
                   title="No notifications yet"
-                  description="Updates from your technicians — job arrivals, progress, completions and report updates — will show up here."
-                  ctaLabel="Go to jobs"
-                  // The spec's "CTA back to jobs": navigate to the Jobs TAB,
-                  // never `goBack` — from the Home bell that would land on
-                  // Home (the CTA would lie about where it goes).
-                  onPressCta={() => navigation.navigate('Jobs', { scope: 'today' })}
+                  description={
+                    role === 'technician'
+                      ? 'Updates for you will show up here.'
+                      : 'Updates from your technicians — job arrivals, progress, completions and report updates — will show up here.'
+                  }
+                  // Owner-only: the CTA leads to the owner's Jobs TAB; a
+                  // technician has no Jobs tab, so the CTA is simply absent.
+                  {...(role === 'owner'
+                    ? {
+                        ctaLabel: 'Go to jobs',
+                        // The spec's "CTA back to jobs": navigate to the Jobs
+                        // TAB, never `goBack` — from the Home bell that would
+                        // land on Home (the CTA would lie about where it goes).
+                        onPressCta: () => navigation.navigate('Jobs', { scope: 'today' }),
+                      }
+                    : {})}
                 />
               )
             }

@@ -121,4 +121,16 @@ describe('getRealtimeToken', () => {
     await expect(getRealtimeToken()).resolves.toBe('realtime-jwt');
     expect(apiGetMock).toHaveBeenCalledTimes(2);
   });
+
+  it('exchanges for a TECHNICIAN auth token too — no role-based early return (Story 14-2/14-3 gate)', async () => {
+    // A real three-segment JWT whose payload role is 'technician'. Story 14-3
+    // removed the role-based skip that used to return null here; this
+    // assertion is what would fail if a role-based skip were re-added.
+    const payload = Buffer.from(JSON.stringify({ role: 'technician', sub: 'tech-1' }))
+      .toString('base64url');
+    getAuthTokenMock.mockReturnValue(`header.${payload}.signature`);
+
+    await expect(getRealtimeToken()).resolves.toBe('realtime-jwt');
+    expect(apiGetMock).toHaveBeenCalledTimes(1);
+  });
 });

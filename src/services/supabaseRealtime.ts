@@ -64,18 +64,20 @@ export const supabaseRealtime = createClient(
  * The private topic a given user listens on — must match Story 3.1's
  * broadcast format exactly (`user:<user_id>:notifications`; the
  * `notifications_topic_recipient_only` RLS policy parses segment 2).
+ * Role-agnostic since Story 14-2/14-3: owner and technician alike get a
+ * topic derived from their own user id.
  */
-export function ownerNotificationsTopic(userId: string): string {
+export function userNotificationsTopic(userId: string): string {
   return `user:${userId}:notifications`;
 }
 
 /**
- * Builds (does not yet subscribe to) the owner's private notification
- * channel. Call `.on('broadcast', { event: 'INSERT' }, ...)` and
- * `.subscribe()` on the returned channel.
+ * Builds (does not yet subscribe to) a user's private notification channel.
+ * Call `.on('broadcast', { event: 'INSERT' }, ...)` and `.subscribe()` on
+ * the returned channel.
  */
-export function getOwnerChannel(userId: string): RealtimeChannel {
-  return supabaseRealtime.channel(ownerNotificationsTopic(userId), {
+export function getUserChannel(userId: string): RealtimeChannel {
+  return supabaseRealtime.channel(userNotificationsTopic(userId), {
     config: { private: true },
   });
 }
@@ -85,7 +87,7 @@ export function getOwnerChannel(userId: string): RealtimeChannel {
  * teardown) — used on app background, logout, and user switch, so a stale
  * channel object is never re-subscribed by accident.
  */
-export function teardownOwnerChannel(channel: RealtimeChannel): void {
+export function teardownChannel(channel: RealtimeChannel): void {
   // removeChannel can reject (e.g. channel left in a broken state after a
   // socket drop) — logged, silent to the user, same failure contract as the
   // token exchange.

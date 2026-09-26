@@ -11,9 +11,9 @@ import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../config';
 import { getRealtimeToken } from './realtimeToken';
 import {
-  getOwnerChannel,
-  ownerNotificationsTopic,
-  teardownOwnerChannel,
+  getUserChannel,
+  userNotificationsTopic,
+  teardownChannel,
 } from './supabaseRealtime';
 
 jest.mock('@supabase/supabase-js', () => {
@@ -64,11 +64,11 @@ describe('client construction', () => {
 
 describe('topic + channel factory', () => {
   it('derives the exact private topic Story 3.1 broadcasts on', () => {
-    expect(ownerNotificationsTopic('abc-123')).toBe('user:abc-123:notifications');
+    expect(userNotificationsTopic('abc-123')).toBe('user:abc-123:notifications');
   });
 
   it('creates the channel as private — that is what triggers server-side RLS', () => {
-    const channel = getOwnerChannel('abc-123');
+    const channel = getUserChannel('abc-123');
 
     expect(clientStub.channel).toHaveBeenCalledWith('user:abc-123:notifications', {
       config: { private: true },
@@ -77,10 +77,10 @@ describe('topic + channel factory', () => {
   });
 });
 
-describe('teardownOwnerChannel', () => {
+describe('teardownChannel', () => {
   it('removes the channel from the client', () => {
     const channel = { on: jest.fn(), subscribe: jest.fn() };
-    teardownOwnerChannel(channel as never);
+    teardownChannel(channel as never);
 
     expect(clientStub.removeChannel).toHaveBeenCalledWith(channel);
   });
@@ -89,7 +89,7 @@ describe('teardownOwnerChannel', () => {
     clientStub.removeChannel.mockRejectedValueOnce(new Error('socket already closed'));
     const channel = { on: jest.fn(), subscribe: jest.fn() };
 
-    expect(() => teardownOwnerChannel(channel as never)).not.toThrow();
+    expect(() => teardownChannel(channel as never)).not.toThrow();
     // Let the rejected promise's .catch run — no unhandled rejection.
     await Promise.resolve();
     await Promise.resolve();

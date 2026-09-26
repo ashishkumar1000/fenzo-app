@@ -20,6 +20,7 @@ import type { ApiNotification } from '../../services';
 import type { StatusKey } from '../../theme';
 import { failedReportCopy } from '../reports/reportModel';
 import type { NotificationCardData } from './notificationCardModel';
+import type { GenericNotificationCardData, SessionRole } from './notificationEventRegistry';
 
 /** Event types the report worker writes (Epic 12). */
 export const REPORT_READY_EVENT = 'report_ready';
@@ -77,15 +78,36 @@ export interface ReportNotificationCardData {
 }
 
 /** Everything the screen renders for one list row. */
-export type NotificationListItem = NotificationCardData | ReportNotificationCardData;
+export type NotificationListItem =
+  | NotificationCardData
+  | ReportNotificationCardData
+  | GenericNotificationCardData;
+
+/**
+ * The tappable card kinds — the `NotificationCard` component's contract.
+ * The registry's generic card (Story 14-3) is inert (no deep link, no tap),
+ * so it is excluded here.
+ */
+export type TappableNotificationListItem = Exclude<
+  NotificationListItem,
+  { kind: 'generic' }
+>;
 
 /**
  * Builds one card per report notification, preserving the list's
  * newest-first order (the store's sort — untouched, same contract as
  * `groupNotificationsByJob`).
+ *
+ * `role` — Story 14-3: reports are an owner surface (AD-19/UX-DR7), so a
+ * technician's report rows build NO report cards; the event-type registry
+ * renders them generic instead. The parameter is REQUIRED (no silent
+ * 'owner' default): a caller that omits the role is a bug, not a fallback.
  */
-export function buildReportCards(items: ApiNotification[]): ReportNotificationCardData[] {
-  return items.filter(isReportNotification).map(buildReportCard);
+export function buildReportCards(
+  items: ApiNotification[],
+  role: SessionRole,
+): ReportNotificationCardData[] {
+  return role === 'technician' ? [] : items.filter(isReportNotification).map(buildReportCard);
 }
 
 function buildReportCard(n: ApiNotification): ReportNotificationCardData {
@@ -125,16 +147,20 @@ function buildReportCard(n: ApiNotification): ReportNotificationCardData {
 }
 
 /**
- * One FlatList out of two card kinds: job cards (the store's newest-first
- * first-appearance order) and report cards (one per notification row),
- * interleaved by the card's newest event. A stable sort keeps each side's
- * own order intact — the job side's order already IS "newest event first".
+ * One FlatList out of three card kinds: job cards (the store's
+ * newest-first first-appearance order), report cards (one per notification
+ * row) and generic cards (Story 14-3's registry fallback, one per row —
+ * unknown event types), interleaved by the card's newest event. A stable
+ * sort keeps each side's own order intact — the job side's order already IS
+ * "newest event first". `genericCards` is optional so the owner-only call
+ * shape (job + report) keeps working unchanged.
  */
 export function mergeNotificationCards(
   jobCards: NotificationCardData[],
   reportCards: ReportNotificationCardData[],
+  genericCards: GenericNotificationCardData[] = [],
 ): NotificationListItem[] {
-  return [...reportCards, ...jobCards].sort(
+  return [...genericCards, ...reportCards, ...jobCards].sort(
     (a, b) => Date.parse(b.latestCreatedAt) - Date.parse(a.latestCreatedAt),
   );
 }

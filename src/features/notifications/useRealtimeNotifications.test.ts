@@ -1,5 +1,5 @@
 /**
- * useOwnerNotifications — tested through a react-test-renderer probe with
+ * useRealtimeNotifications — tested through a react-test-renderer probe with
  * every I/O surface mocked (same approach as __tests__/useJobs.test.ts):
  * the services barrel (token exchange + channel factory), the profile
  * store, the jobs store's loadJobs, and AppState. No real socket in jest.
@@ -14,6 +14,14 @@ jest.mock('../profile/useMyProfile', () => ({
   loadMyProfile: jest.fn(),
 }));
 
+// Story 14-3: the hook reads the session role — owner here, so every
+// pre-existing (owner-behaviour) assertion keeps meaning exactly what it
+// meant before the generalization.
+let mockSession: { role: 'owner' | 'technician' } | null = { role: 'owner' };
+jest.mock('../auth/useAuth', () => ({
+  useAuth: () => ({ session: mockSession }),
+}));
+
 jest.mock('../jobs/useJobs', () => ({ loadJobs: jest.fn() }));
 
 // Epic 12: report terminal events route to the reports store instead of the
@@ -22,40 +30,46 @@ jest.mock('../reports/useReports', () => ({ loadReports: jest.fn() }));
 
 jest.mock('../../services', () => ({
   getRealtimeToken: jest.fn(),
-  getOwnerChannel: jest.fn(),
-  teardownOwnerChannel: jest.fn(),
-  ownerNotificationsTopic: (userId: string) => `user:${userId}:notifications`,
+  getUserChannel: jest.fn(),
+  teardownChannel: jest.fn(),
+  userNotificationsTopic: (userId: string) => `user:${userId}:notifications`,
   registerReset: jest.fn(() => jest.fn()),
   // Story 3.4: every broadcast also force-refreshes the bell's unread count
   // — a resolved stub so the event handler's call is a harmless no-op here.
-  notificationService: { unreadCount: jest.fn().mockResolvedValue({ unreadCount: 0 }) },
+  // Story 14-3: the technician branch also force-refetches the list store —
+  // the real loader runs, so its wire call is what the technician test pins.
+  notificationService: {
+    unreadCount: jest.fn().mockResolvedValue({ unreadCount: 0 }),
+    list: jest.fn().mockResolvedValue({ data: [], nextCursor: null }),
+  },
 }));
 
 import { loadJobs } from '../jobs/useJobs';
 import { loadReports } from '../reports/useReports';
 import { loadMyProfile } from '../profile/useMyProfile';
 import {
-  getOwnerChannel,
+  getUserChannel,
   getRealtimeToken,
   notificationService,
-  ownerNotificationsTopic,
+  userNotificationsTopic,
   registerReset,
-  teardownOwnerChannel,
+  teardownChannel,
 } from '../../services';
 import {
   OwnerNotificationBanner,
   shouldSubscribe,
-  useOwnerNotifications,
-} from './useOwnerNotifications';
+  useRealtimeNotifications,
+} from './useRealtimeNotifications';
 
 const getRealtimeTokenMock = getRealtimeToken as jest.Mock;
-const getOwnerChannelMock = getOwnerChannel as jest.Mock;
-const teardownOwnerChannelMock = teardownOwnerChannel as jest.Mock;
+const getUserChannelMock = getUserChannel as jest.Mock;
+const teardownChannelMock = teardownChannel as jest.Mock;
 const registerResetMock = registerReset as jest.Mock;
 const loadJobsMock = loadJobs as jest.Mock;
 const loadReportsMock = loadReports as jest.Mock;
 const loadMyProfileMock = loadMyProfile as jest.Mock;
 const unreadCountMock = notificationService.unreadCount as jest.Mock;
+const listMock = notificationService.list as jest.Mock;
 
 /** Chainable channel stub: `.on(...)` and `.subscribe()` both return it —
  * real supabase-js's `subscribe()` returns the channel, and the hook stores
@@ -83,7 +97,7 @@ const TOPIC = `user:${USER_ID}:notifications`;
 
 let probe: { banner: OwnerNotificationBanner | null } | null = null;
 function Probe(): null {
-  probe = useOwnerNotifications();
+  probe = useRealtimeNotifications();
   return null;
 }
 
@@ -101,7 +115,7 @@ beforeEach(() => {
   mockProfile = { id: USER_ID };
   broadcastCb = null;
   channel = makeChannel();
-  getOwnerChannelMock.mockImplementation(() => channel);
+  getUserChannelMock.mockImplementation(() => channel);
   getRealtimeTokenMock.mockResolvedValue('realtime-jwt');
   loadJobsMock.mockResolvedValue(undefined);
   loadReportsMock.mockResolvedValue(undefined);
@@ -139,11 +153,11 @@ describe('subscription lifecycle', () => {
     await mountProbe();
 
     expect(getRealtimeTokenMock).toHaveBeenCalled();
-    expect(ownerNotificationsTopic(USER_ID)).toBe(TOPIC);
-    expect(getOwnerChannelMock).toHaveBeenCalledWith(USER_ID);
+    expect(userNotificationsTopic(USER_ID)).toBe(TOPIC);
+    expect(getUserChannelMock).toHaveBeenCalledWith(USER_ID);
     expect(channel.on).toHaveBeenCalledWith('broadcast', { event: 'INSERT' }, expect.any(Function));
     expect(channel.subscribe).toHaveBeenCalled();
-    expect(teardownOwnerChannelMock).not.toHaveBeenCalled();
+    expect(teardownChannelMock).not.toHaveBeenCalled();
 
     broadcastCb = channel.on.mock.calls[0][2] as BroadcastCallback;
   });
@@ -154,7 +168,7 @@ describe('subscription lifecycle', () => {
     // `never` under tsc's control-flow analysis.
     const holder: { banner: OwnerNotificationBanner | null } = { banner: null };
     function DisabledProbe(): null {
-      holder.banner = useOwnerNotifications({ enabled: false }).banner;
+      holder.banner = useRealtimeNotifications({ enabled: false }).banner;
       return null;
     }
     await ReactTestRenderer.act(async () => {
@@ -162,7 +176,7 @@ describe('subscription lifecycle', () => {
     });
 
     expect(getRealtimeTokenMock).not.toHaveBeenCalled();
-    expect(getOwnerChannelMock).not.toHaveBeenCalled();
+    expect(getUserChannelMock).not.toHaveBeenCalled();
     expect(holder.banner).toBeNull();
   });
 
@@ -170,7 +184,7 @@ describe('subscription lifecycle', () => {
     getRealtimeTokenMock.mockResolvedValue(null);
     await mountProbe();
 
-    expect(getOwnerChannelMock).not.toHaveBeenCalled();
+    expect(getUserChannelMock).not.toHaveBeenCalled();
     expect(channel.subscribe).not.toHaveBeenCalled();
   });
 
@@ -190,7 +204,7 @@ describe('subscription lifecycle', () => {
     await ReactTestRenderer.act(async () => {
       ReactTestRenderer.create(React.createElement(Probe));
     });
-    expect(getOwnerChannelMock).not.toHaveBeenCalled();
+    expect(getUserChannelMock).not.toHaveBeenCalled();
 
     // Background while the exchange is in flight, THEN let it resolve —
     // the socket must never open behind the foreground rule's back.
@@ -206,7 +220,7 @@ describe('subscription lifecycle', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(getOwnerChannelMock).not.toHaveBeenCalled();
+    expect(getUserChannelMock).not.toHaveBeenCalled();
     expect(channel.subscribe).not.toHaveBeenCalled();
 
     // Foregrounding afterwards subscribes normally.
@@ -226,7 +240,7 @@ describe('subscription lifecycle', () => {
     const resolveToken = deferToken();
     const winner = makeChannel();
     const loser = makeChannel();
-    getOwnerChannelMock
+    getUserChannelMock
       .mockImplementationOnce(() => winner)
       .mockImplementationOnce(() => loser);
 
@@ -245,21 +259,21 @@ describe('subscription lifecycle', () => {
       await Promise.resolve();
     });
 
-    expect(getOwnerChannelMock).toHaveBeenCalledTimes(2);
+    expect(getUserChannelMock).toHaveBeenCalledTimes(2);
     // The winner was adopted; the loser's channel was torn down instead of
     // overwriting it (the pre-review bug leaked it permanently).
-    expect(teardownOwnerChannelMock).toHaveBeenCalledTimes(1);
-    expect(teardownOwnerChannelMock).toHaveBeenCalledWith(loser);
+    expect(teardownChannelMock).toHaveBeenCalledTimes(1);
+    expect(teardownChannelMock).toHaveBeenCalledWith(loser);
   });
 
   it('tears the channel down on app background and re-subscribes on foreground', async () => {
     await mountProbe();
-    expect(teardownOwnerChannelMock).not.toHaveBeenCalled();
+    expect(teardownChannelMock).not.toHaveBeenCalled();
 
     await ReactTestRenderer.act(async () => {
       appStateListener?.('background');
     });
-    expect(teardownOwnerChannelMock).toHaveBeenCalledWith(channel);
+    expect(teardownChannelMock).toHaveBeenCalledWith(channel);
 
     await ReactTestRenderer.act(async () => {
       appStateListener?.('active');
@@ -278,7 +292,7 @@ describe('subscription lifecycle', () => {
     await ReactTestRenderer.act(async () => {
       reset();
     });
-    expect(teardownOwnerChannelMock).toHaveBeenCalledWith(channel);
+    expect(teardownChannelMock).toHaveBeenCalledWith(channel);
 
     // A post-reset event lands on a torn-down channel — the handler is gone
     // with it, so no refetch can leak out of the logged-out world.
@@ -510,5 +524,48 @@ describe('report event routing (Epic 12)', () => {
     expect(loadJobsMock).toHaveBeenCalledWith(undefined, undefined, { force: true });
     expect(loadReportsMock).not.toHaveBeenCalled();
     expect(unreadCountMock).toHaveBeenCalled();
+  });
+});
+
+describe('technician event routing (Story 14-3)', () => {
+  beforeEach(async () => {
+    mockSession = { role: 'technician' };
+    await mountProbe();
+    broadcastCb = channel.on.mock.calls[0][2] as BroadcastCallback;
+  });
+
+  afterEach(() => {
+    mockSession = { role: 'owner' };
+  });
+
+  it('force-refetches the shared notification stores and never touches owner stores or the banner', async () => {
+    await ReactTestRenderer.act(async () => {
+      // A job-step-shaped event: whatever the type, the technician branch
+      // treats every broadcast the same (no job events are emitted to
+      // technicians today — the inbox is the consumer).
+      broadcastCb?.({
+        id: 'evt-t1',
+        table: 'notifications',
+        operation: 'INSERT',
+        record: {
+          id: 'n1',
+          event_type: 'on_my_way',
+          payload: { job_number: 'JOB-1042', step: 'on_my_way', technician_name: 'Priya' },
+        },
+      });
+      await Promise.resolve();
+    });
+
+    // The inbox refreshes: the list store's wire call ran (deleting the
+    // technician branch — or no-op-ing it — fails this) and the badge too.
+    expect(listMock).toHaveBeenCalled();
+    expect(unreadCountMock).toHaveBeenCalled();
+    // The owner pipeline is untouched: no jobs/profile/reports refetch, and
+    // no "Job status updated" banner (falling through to the owner branch
+    // would set one — this pins the early return).
+    expect(loadJobsMock).not.toHaveBeenCalled();
+    expect(loadMyProfileMock).not.toHaveBeenCalled();
+    expect(loadReportsMock).not.toHaveBeenCalled();
+    expect(probe?.banner).toBeNull();
   });
 });

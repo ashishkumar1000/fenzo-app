@@ -22,14 +22,14 @@ import { Avatar, Button } from '../../../components/ui';
 import { colors, radius, shadow, spacing, typography } from '../../../theme';
 import { relativeTime } from '../../../utils';
 import { CARD_FALLBACK_TITLE, cardTitle, stepStatusKey } from '../notificationCardModel';
-import type { NotificationListItem } from '../reportNotificationModel';
+import type { TappableNotificationListItem } from '../reportNotificationModel';
 import { notificationStepLabel } from '../notificationBannerModel';
 import { StageStepper } from './StageStepper';
 import { ReportNotificationCard } from './ReportNotificationCard';
 
 interface NotificationCardProps {
-  card: NotificationListItem;
-  onPress: (card: NotificationListItem) => void;
+  card: TappableNotificationListItem;
+  onPress: (card: TappableNotificationListItem) => void;
 }
 
 export function NotificationCard({ card, onPress }: NotificationCardProps) {

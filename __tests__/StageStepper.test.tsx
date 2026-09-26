@@ -51,6 +51,8 @@ function makeNotification(id: string, step: string, createdAt: string): ApiNotif
     id,
     jobId: 'job-1',
     eventType: step,
+    entityType: null,
+    entityId: null,
     payload: { job_number: 'JB-1', step, technician_name: 'Priya' },
     readAt: null,
     createdAt,

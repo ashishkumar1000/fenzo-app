@@ -19,7 +19,16 @@ module.exports = {
   // react-native-image-viewing (Story 9-1) publishes ESM under dist/.
   // react-native-nitro-geolocation (Story 7-10) publishes raw ESM at the
   // `/compat` subpath that features/technicianApp/geolocation.ts imports.
+  // lucide-react-native (2026-09-26): 1.48.0 resolves its "react-native"
+  // export condition to a raw-ESM .mjs build — jest must transform it, or
+  // every suite that imports an icon crashes at parse. transformIgnorePatterns
+  // alone is NOT enough: the RN preset's transform table covers only
+  // .js/.ts/.tsx, so .mjs files match NO transformer and load raw. This extra
+  // entry routes them through babel-jest.
+  transform: {
+    '^.+\\.mjs$': 'babel-jest',
+  },
   transformIgnorePatterns: [
-    'node_modules/(?!(react-native|@react-native|@react-navigation|react-native-safe-area-context|react-native-reanimated|react-native-worklets|@react-native-community/datetimepicker|react-native-image-picker|react-native-signature-canvas|react-native-webview|@lodev09|react-native-url-polyfill|react-native-image-viewing|react-native-nitro-geolocation)/)',
+    'node_modules/(?!(react-native|@react-native|@react-navigation|react-native-safe-area-context|react-native-reanimated|react-native-worklets|@react-native-community/datetimepicker|react-native-image-picker|react-native-signature-canvas|react-native-webview|@lodev09|react-native-url-polyfill|react-native-image-viewing|react-native-nitro-geolocation|lucide-react-native)/)',
   ],
 };

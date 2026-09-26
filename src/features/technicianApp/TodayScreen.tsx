@@ -10,6 +10,12 @@
  * technician is themselves) and no customer name (list rows don't carry
  * one pre-sync — the service-type label is the title line).
  *
+ * The header bell (Story 14-3) is the technician's notifications entry
+ * point — visible from day one regardless of attendance/tracked status
+ * (FR-27): same IconButton + unread badge as the owner's Jobs-header bell,
+ * opening the shared notifications screen. The unread count comes from the
+ * same `useNotifications` store, refetched on focus.
+ *
  * No earnings card, no jobs-left count, no date strip — those all need
  * backend support (payments, a jobs-left computation, multi-day job data)
  * that doesn't exist yet; adding them now would just be UI over no data.
@@ -19,12 +25,14 @@ import { ActivityIndicator, RefreshControl, SectionList, StyleSheet, Text, View 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { CalendarCheck } from 'lucide-react-native';
-import { Button, EmptyState, Eyebrow, InlineError } from '../../components/ui';
+import { Bell, CalendarCheck } from 'lucide-react-native';
+import { Button, EmptyState, Eyebrow, IconButton, InlineError } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import { useNow } from '../../hooks';
 import { firstName, useMyProfile } from '../profile';
 import { JobCard } from '../jobs/components/JobCard';
+import { loadUnreadCount, useNotifications } from '../notifications';
+import { bellBadgeLabel } from '../notifications/bellBadge';
 import type { ApiJob } from '../jobs/types';
 import { buildTodaySections } from './todaySections';
 import { loadToday, useTechnicianJobs } from './useTechnicianJobs';
@@ -34,6 +42,8 @@ export default function TodayScreen() {
   const { profile } = useMyProfile();
   const { today, isLoadingToday, errorToday, hasLoadedToday, refreshToday } =
     useTechnicianJobs();
+  // Story 14-3: the bell badge — same shared store the owner's bells read.
+  const { unreadCount } = useNotifications();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const navigation = useNavigation<NativeStackNavigationProp<TechnicianRootStackParamList>>();
 
@@ -46,9 +56,11 @@ export default function TodayScreen() {
 
   // Refetch on every focus — the store throttles (skips within 15s of a
   // success), so tab-hopping and returning from a completed job stay cheap.
+  // The bell's unread count rides the same focus pass (its own TTL).
   useFocusEffect(
     useCallback(() => {
       void loadToday();
+      void loadUnreadCount();
     }, []),
   );
 
@@ -65,6 +77,10 @@ export default function TodayScreen() {
     [navigation],
   );
 
+  const handleOpenNotifications = useCallback(() => {
+    navigation.navigate('Notifications');
+  }, [navigation]);
+
   const sections = buildTodaySections(today);
   // The urgency rail's clock — one 60s tick for the sectioned list.
   const now = useNow();
@@ -75,7 +91,21 @@ export default function TodayScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.greeting}>{name ? `Good morning, ${name}` : 'Good morning'}</Text>
+        <Text style={styles.greeting} numberOfLines={1}>
+          {name ? `Good morning, ${name}` : 'Good morning'}
+        </Text>
+        <IconButton
+          variant="ghost"
+          size="md"
+          label="Notifications"
+          onPress={handleOpenNotifications}>
+          <Bell size={22} color={colors.textStrong} strokeWidth={2} />
+          {unreadCount !== null && unreadCount > 0 ? (
+            <View style={styles.bellBadge}>
+              <Text style={styles.bellBadgeText}>{bellBadgeLabel(unreadCount)}</Text>
+            </View>
+          ) : null}
+        </IconButton>
       </View>
 
       {isLoadingToday && !hasLoadedToday ? (
@@ -146,6 +176,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfacePage,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.s2,
     paddingHorizontal: spacing.s4,
     paddingTop: spacing.s2,
     paddingBottom: spacing.s3,
@@ -154,6 +188,25 @@ const styles = StyleSheet.create({
     ...typography.title,
     fontSize: 24,
     color: colors.textStrong,
+    flexShrink: 1,
+  },
+  // The bell badge — same pill as the owner's Jobs-header bell
+  // (JobsScreen styles are the reference; tokens only).
+  bellBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 0,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    backgroundColor: colors.danger,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bellBadgeText: {
+    ...typography.captionStrong,
+    color: colors.onPrimary,
   },
   // The eyebrow treatment itself (type, tracking, caps, muted) lives in the
   // DS `Eyebrow` — this only positions it inside the list.

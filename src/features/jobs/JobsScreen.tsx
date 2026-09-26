@@ -44,19 +44,13 @@ import type { MainTabParamList, RootStackParamList } from '../../navigation/type
 import { loadMyProfile, useMyProfile } from '../profile';
 import { useCustomers } from '../customers';
 import { useNotifications } from '../notifications';
+import { bellBadgeLabel } from '../notifications/bellBadge';
 import { JobCard } from './components/JobCard';
 import { StatusFilterBar } from './components/StatusFilterBar';
 import { DispatchTip } from './components/DispatchTip';
 import { useJobs } from './useJobs';
 import { filterForScope, HISTORY_FILTERS } from './scopeFilters';
 import type { ApiJob, JobFilter, JobScope } from './types';
-
-/**
- * Bell badge text, capped at 99+ so a runaway count can't blow the pill out.
- * Shared vocabulary with Home's bell badge (Story 3.4).
- */
-const BELL_BADGE_CAP = 99;
-const bellBadgeLabel = (count: number) => (count > BELL_BADGE_CAP ? '99+' : String(count));
 
 /** Scope selector labels — the four timeline buckets. */
 const SCOPES: { value: JobScope; label: string; badge?: number }[] = [

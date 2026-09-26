@@ -27,6 +27,8 @@ function makeReportNotification(
     id,
     jobId: null,
     eventType: 'report_ready',
+    entityType: null,
+    entityId: null,
     payload: {
       reportId: `report-${id}`,
       reportType: 'technician_job_activity',
@@ -41,7 +43,7 @@ function makeReportNotification(
 }
 
 function makeCard(n: ApiNotification): ReportNotificationCardData {
-  return buildReportCards([n])[0];
+  return buildReportCards([n], 'owner')[0];
 }
 
 function mountCard(card: ReportNotificationCardData) {
@@ -98,6 +100,8 @@ it('a failed card shows "Report failed", the "Failed" banner and the friendly er
   const card = makeCard(
     makeReportNotification('r2', {
       eventType: 'report_failed',
+      entityType: null,
+      entityId: null,
       payload: {
         reportId: 'report-r2',
         reportType: 'technician_job_activity',

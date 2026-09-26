@@ -39,38 +39,16 @@ let cached: { token: string; expiresAtMs: number } | null = null;
 let pending: Promise<string | null> | null = null;
 
 /**
- * Check if the current user is a technician by decoding the auth token.
- * Realtime is owner-only, so technicians should skip the token exchange.
- */
-function isCurrentUserTechnician(token: string | null): boolean {
-  if (!token) return false;
-
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return false;
-    const payload = JSON.parse(atob(parts[1]));
-    return payload.role === 'technician';
-  } catch (err) {
-    console.warn('[realtimeToken] malformed auth token:', err);
-    return false;
-  }
-}
-
-/**
- * Returns a current realtime token, or `null` when logged out, when the
- * exchange fails, or when the user is a technician (realtime is owner-only).
- * Cheap when the cache is fresh — only expiry proximity (or a cold cache)
- * hits the network, and concurrent callers share one exchange.
+ * Returns a current realtime token, or `null` when logged out or when the
+ * exchange fails. Both roles exchange — Story 14-2 opened the endpoint to
+ * technicians (their token is scoped to their own notifications topic
+ * server-side). Cheap when the cache is fresh — only expiry proximity (or a
+ * cold cache) hits the network, and concurrent callers share one exchange.
  */
 export function getRealtimeToken(): Promise<string | null> {
   const authToken = getAuthToken();
 
   if (!authToken) return Promise.resolve(null);
-
-  if (isCurrentUserTechnician(authToken)) {
-    console.debug('[realtimeToken] technician skipping realtime token exchange');
-    return Promise.resolve(null);
-  }
 
   if (cached && Date.now() < cached.expiresAtMs - REFRESH_MARGIN_MS) {
     return Promise.resolve(cached.token);

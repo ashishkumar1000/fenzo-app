@@ -12,7 +12,7 @@ import { Avatar } from './ui/Avatar';
 import { Badge } from './ui/Badge';
 import { colors, layout, spacing } from '../theme';
 import { StatusBanner } from './StatusBanner';
-import type { OwnerNotificationBanner } from '../features/notifications/useOwnerNotifications';
+import type { OwnerNotificationBanner } from '../features/notifications/useRealtimeNotifications';
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 47, bottom: 34, left: 0, right: 0 }),

@@ -22,7 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from './ui/Avatar';
 import { Badge } from './ui/Badge';
 import { colors, layout, radius, shadow, spacing, typography } from '../theme';
-import type { OwnerNotificationBanner } from '../features/notifications/useOwnerNotifications';
+import type { OwnerNotificationBanner } from '../features/notifications/useRealtimeNotifications';
 
 interface StatusBannerProps {
   /** `null` → render nothing (banner dismissed / no event yet). */

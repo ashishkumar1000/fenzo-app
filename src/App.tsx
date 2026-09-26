@@ -15,7 +15,7 @@ import TechnicianRootNavigator from './navigation/TechnicianRootNavigator';
 import { navigationRef } from './navigation/navigationRef';
 import { OnboardingScreen, useOnboarding } from './features/onboarding';
 import { AuthFlow, useAuth, expireSession } from './features/auth';
-import { OwnerRealtimeBridge } from './features/notifications/OwnerRealtimeBridge';
+import { RealtimeBridge } from './features/notifications/RealtimeBridge';
 import { runAllResets, setOnUnauthorized } from './services';
 
 function App() {
@@ -58,20 +58,25 @@ function App() {
   } else if (session?.role === 'technician') {
     // Separate nav tree from the owner side — a technician never needs
     // MainTabs' Jobs/Customers/More routes or RootNavigator's Technicians stack.
+    // Story 14-3: the technician branch mounts the same RealtimeBridge —
+    // one bridge for both roles (the hook routes per role inside; the
+    // technician's socket listens on their own topic only).
     content = (
       <NavigationContainer ref={navigationRef}>
         <TechnicianRootNavigator />
+        <RealtimeBridge />
       </NavigationContainer>
     );
   } else {
-    // Owner session. OwnerRealtimeBridge mounts the Realtime hook + banner
-    // here (Story 3.3) — NEVER at App() top level: the role gate is a
-    // conditional render chain, so a top-level hook would open a socket for
-    // technicians too. The bridge re-checks the role internally as well.
+    // Owner session. RealtimeBridge mounts the Realtime hook + owner banner
+    // here (Story 3.3; technician branch mounts it too since Story 14-3) —
+    // NEVER at App() top level: the role gate is a conditional render chain,
+    // so a top-level hook would run Realtime code for unsigned users too.
+    // The bridge re-checks the session internally as well.
     content = (
       <NavigationContainer ref={navigationRef}>
         <RootNavigator />
-        <OwnerRealtimeBridge />
+        <RealtimeBridge />
       </NavigationContainer>
     );
   }
