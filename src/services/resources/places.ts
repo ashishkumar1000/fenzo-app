@@ -88,4 +88,34 @@ async function resolve(
 export const placesService = {
   autosuggest,
   resolve,
+  reverse,
 };
+
+/**
+ * Reverse-geocoded address (Story 15.4's map-picker pin row). Every field
+ * is `null` when the point has no address (open water) — the caller falls
+ * back to the raw coordinates; only an upstream failure surfaces as an
+ * `ApiError` (502).
+ */
+export interface ReverseGeocodedAddress {
+  formattedAddress: string | null;
+  city: string | null;
+  pincode: string | null;
+}
+
+/**
+ * `GET /places/reverse?lat=&lng=` — resolves raw coordinates into an
+ * address. No session token (the Geocoding API is billed per call; the
+ * per-endpoint rate limit bounds abuse). Owner-only.
+ */
+async function reverse(
+  latitude: number,
+  longitude: number,
+  signal?: AbortSignal,
+): Promise<ReverseGeocodedAddress> {
+  const res = await apiClient.get<ReverseGeocodedAddress>('/places/reverse', {
+    params: { lat: latitude, lng: longitude },
+    ...(signal ? { signal } : {}),
+  });
+  return res.data;
+}

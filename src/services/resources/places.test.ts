@@ -4,9 +4,10 @@
  * `AbortSignal` passed through only when the caller supplies one), and how
  * each unwraps its response — `autosuggest` reads `res.data.suggestions`
  * (defensively falling back to `[]` when that field is missing/malformed),
- * `resolve` returns `res.data` untouched.
+ * `resolve` returns `res.data` untouched, and `reverse` GETs the raw
+ * `lat`/`lng` params with no session token.
  */
-jest.mock('./../api/apiClient', () => ({
+jest.mock('../api/apiClient', () => ({
   apiClient: {
     get: jest.fn(),
   },
@@ -94,6 +95,46 @@ describe('placesService.resolve', () => {
     // path segment or the start of a query string.
     expect(get).toHaveBeenCalledWith('/places/resolve/place%2Fwith%3Funsafe', {
       params: { sessionToken: 'session-token-1' },
+    });
+  });
+});
+
+describe('placesService.reverse', () => {
+  it('GETs /places/reverse with the raw lat/lng params and returns the body untouched', async () => {
+    const place = {
+      formattedAddress: 'Andheri West, Mumbai, Maharashtra 400058, India',
+      city: 'Mumbai',
+      pincode: '400058',
+    };
+    get.mockResolvedValueOnce({ data: place });
+
+    const returned = await placesService.reverse(19.1364, 72.8296);
+
+    expect(returned).toBe(place);
+    expect(get).toHaveBeenCalledWith('/places/reverse', {
+      params: { lat: 19.1364, lng: 72.8296 },
+    });
+  });
+
+  it('passes the AbortSignal through when the caller supplies one', async () => {
+    get.mockResolvedValueOnce({ data: { formattedAddress: null, city: null, pincode: null } });
+    const controller = new AbortController();
+
+    await placesService.reverse(28.6139, 77.209, controller.signal);
+
+    expect(get).toHaveBeenCalledWith('/places/reverse', {
+      params: { lat: 28.6139, lng: 77.209 },
+      signal: controller.signal,
+    });
+  });
+
+  it('does not send a signal when the caller supplies none', async () => {
+    get.mockResolvedValueOnce({ data: { formattedAddress: null, city: null, pincode: null } });
+
+    await placesService.reverse(12.9716, 77.5946);
+
+    expect(get).toHaveBeenCalledWith('/places/reverse', {
+      params: { lat: 12.9716, lng: 77.5946 },
     });
   });
 });

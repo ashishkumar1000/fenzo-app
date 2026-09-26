@@ -161,6 +161,16 @@ describe('MoreScreen wiring', () => {
       customersRow?.props.onPress();
     });
     expect(mockNavigate).toHaveBeenCalledWith('Customers');
+
+    // The offices row is the attendance feature's only entry point — it
+    // must navigate to its own (plural) route, not a dead-end.
+    const officesRow = root
+      .findAllByType(MoreRow)
+      .find(t => t.props.title === 'Offices');
+    act(() => {
+      officesRow?.props.onPress();
+    });
+    expect(mockNavigate).toHaveBeenCalledWith('AttendanceOffices');
   });
 
   it('logs out only through the confirm dialog, running the forced-logout flow', () => {

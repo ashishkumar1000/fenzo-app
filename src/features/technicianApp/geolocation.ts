@@ -97,21 +97,34 @@ export async function getCurrentPosition(timeout: number = 15000): Promise<Geolo
       },
       (error) => {
         clearTimeout(timeoutId);
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        console.error('[geolocation] error:', errorMsg);
+        // The compat layer passes a plain CompatGeolocationError — { code:
+        // 1|2|3, message } — NOT an Error instance: String(error) printed
+        // "[object Object]" and a message-only classification never
+        // matched. Log the fields, and classify on the numeric
+        // geolocation-spec code (1 PERMISSION_DENIED, 2
+        // POSITION_UNAVAILABLE, 3 TIMEOUT) with the string matches kept
+        // for any Error-shaped input.
+        const raw =
+          error instanceof Error
+            ? error.message
+            : `${error.message} (code ${error.code})`;
+        console.error('[geolocation] error:', raw);
 
         let finalError: Error;
-        if (errorMsg.includes('PERMISSION_DENIED')) {
+        if (error.code === 1 || raw.includes('PERMISSION_DENIED')) {
           finalError = new Error('Location permission denied');
-        } else if (errorMsg.includes('POSITION_UNAVAILABLE')) {
+        } else if (error.code === 2 || raw.includes('POSITION_UNAVAILABLE')) {
           finalError = new Error('Location services unavailable');
-        } else if (errorMsg.includes('TIMEOUT')) {
+        } else if (error.code === 3 || raw.includes('TIMEOUT')) {
           finalError = new Error('Location request timed out');
         } else {
-          finalError = new Error('Failed to get location: ' + errorMsg);
+          finalError = new Error('Failed to get location: ' + raw);
         }
         reject(finalError);
       },
+      // Fresh, high-accuracy fix — never a cached one: the office pin and
+      // step verification both depend on where the device actually is.
+      { enableHighAccuracy: true, maximumAge: 0, timeout },
     );
   });
 }

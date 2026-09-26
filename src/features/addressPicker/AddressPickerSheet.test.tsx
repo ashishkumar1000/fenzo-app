@@ -351,3 +351,24 @@ describe('manual-entry mode (no-results fallback)', () => {
     expect(hasSearchInput(root)).toBe(true);
   });
 });
+
+describe('without onManualAddress (the office map picker)', () => {
+  it('renders the no-results empty state WITHOUT the "Enter manually" CTA', () => {
+    // The office map picker supplies no onManualAddress (it stores
+    // coordinates only, no manual address entry) — the CTA whose submit
+    // path would throw must not render.
+    mockHook({ phase: 'no-results', query: 'zzz' });
+    const { root } = renderSheet({ onManualAddress: undefined });
+
+    const empty = root.findByType(EmptyState);
+    expect(empty.props.ctaLabel).toBeUndefined();
+    expect(empty.props.onPressCta).toBeUndefined();
+  });
+
+  it('keeps the "Enter manually" CTA when onManualAddress is present (positive control)', () => {
+    mockHook({ phase: 'no-results', query: 'zzz' });
+    const { root } = renderSheet();
+
+    expect(root.findByType(EmptyState).props.ctaLabel).toBe('Enter manually');
+  });
+});

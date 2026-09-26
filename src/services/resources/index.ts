@@ -18,7 +18,17 @@ export type {
 } from './attachments';
 export { technicianService } from './technicians';
 export { placesService } from './places';
-export type { PlaceSuggestion, ResolvedPlace } from './places';
+export type { PlaceSuggestion, ResolvedPlace, ReverseGeocodedAddress } from './places';
+export { officesService } from './offices';
+export type {
+  CreateOfficeRequest,
+  Office,
+  OfficeArchiveBlocker,
+  OfficeDetail,
+  OfficeRule,
+  PickedOfficeLocation,
+  UpdateOfficeRequest,
+} from './offices';
 export { customerService } from './customers';
 export type {
   ApiCustomer,

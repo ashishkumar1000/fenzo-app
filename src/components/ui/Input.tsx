@@ -25,6 +25,8 @@ export type InputProps = {
   onChangeText?: (text: string) => void;
   placeholder?: string;
   leadingIcon?: ReactNode;
+  /** Trailing adornment inside the field row — a unit suffix ("mins", "hrs"). */
+  trailingAdornment?: ReactNode;
   helper?: string;
   error?: string;
   disabled?: boolean;
@@ -52,6 +54,7 @@ export const Input = forwardRef<TextInputInstance, InputProps>(function Input({
   onChangeText,
   placeholder,
   leadingIcon = null,
+  trailingAdornment = null,
   helper = '',
   error = '',
   disabled = false,
@@ -114,6 +117,7 @@ export const Input = forwardRef<TextInputInstance, InputProps>(function Input({
           style={[styles.input, rest.multiline ? styles.inputMultiline : null]}
           {...rest}
         />
+        {trailingAdornment ? <View style={styles.trailing}>{trailingAdornment}</View> : null}
       </View>
 
       {helper || error ? (
@@ -162,6 +166,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.s3,
   },
   leading: {
+    justifyContent: 'center',
+  },
+  trailing: {
     justifyContent: 'center',
   },
   input: {

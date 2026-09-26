@@ -12,7 +12,11 @@ import { NotificationsScreen } from '../features/notifications';
 import { ReportsScreen } from '../features/reports';
 import { CustomerDetailScreen } from '../features/customerDetail';
 import { AddCustomerScreen } from '../features/customers';
-import MapSpikeScreen from '../screens/MapSpikeScreen'; // SPIKE 15.1 — delete with the story
+import {
+  OfficesScreen,
+  OfficeFormScreen,
+  OfficeMapPickerScreen,
+} from '../features/attendance/offices';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -25,14 +29,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
  */
 export default function RootNavigator() {
   return (
-    // SPIKE 15.1: reachable from Today's map-spike button; remove the
-    // registration with the story (15.4).
     <Stack.Navigator initialRouteName="MainTabs">
-      <Stack.Screen
-        name="MapSpike"
-        component={MapSpikeScreen}
-        options={{ headerShown: false }}
-      />
       <Stack.Screen
         name="MainTabs"
         component={MainTabs}
@@ -86,6 +83,22 @@ export default function RootNavigator() {
       <Stack.Screen
         name="AddCustomer"
         component={AddCustomerScreen}
+        options={{ headerShown: false }}
+      />
+      {/* Story 15-4 — attendance offices (owner-only, FR-5). */}
+      <Stack.Screen
+        name="AttendanceOffices"
+        component={OfficesScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="OfficeForm"
+        component={OfficeFormScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="OfficeMapPicker"
+        component={OfficeMapPickerScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

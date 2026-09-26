@@ -19,7 +19,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Bell, FileText, HardHat, LogOut, Pencil, Phone, ShieldCheck, Users } from 'lucide-react-native';
+import { Bell, Building2, FileText, HardHat, LogOut, Pencil, Phone, ShieldCheck, Users } from 'lucide-react-native';
 import { Avatar, Badge, Card, IconButton } from '../../components/ui';
 import { colors, radius, spacing, typography } from '../../theme';
 import { runAllResets } from '../../services';
@@ -189,6 +189,15 @@ export default function MoreScreen({ navigation }: Props) {
           title="Reports"
           subtitle="Job reports (PDF)"
           onPress={() => navigation.navigate('Reports')}
+        />
+
+        {/* Story 15-4 — attendance offices (FR-5, owner-only). */}
+        <MoreRow
+          icon={<Building2 size={20} color={colors.status.scheduled.solid} strokeWidth={1.5} />}
+          iconBg={colors.status.scheduled.bg}
+          title="Offices"
+          subtitle="Locations & timing rules"
+          onPress={() => navigation.navigate('AttendanceOffices')}
         />
 
         <MoreRow

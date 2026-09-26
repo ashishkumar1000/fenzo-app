@@ -9,6 +9,7 @@
  */
 
 import type { JobScope, WorkflowTemplateStep } from '../services';
+import type { PickedOfficeLocation } from '../types/office';
 
 export type MainTabParamList = {
   Home: undefined;
@@ -35,12 +36,6 @@ export type TechnicianTabParamList = {
 
 export type RootStackParamList = {
   MainTabs: undefined;
-  /**
-   * SPIKE (Story 15.1) — disposable react-native-maps validation screen.
-   * Temporarily the initial route; delete the type, registration and
-   * `initialRouteName` once Story 15.4 lands.
-   */
-  MapSpike: undefined;
   /**
    * `autoOpenAdd` — Home's "Add technician" quick action pushes this route
    * with the Add sheet already open, mirroring the one-tap intent (a plain
@@ -110,6 +105,33 @@ export type RootStackParamList = {
    * `AddCustomerScreen`'s file doc.
    */
   AddCustomer: { returnRouteName: AddCustomerReturnRouteName };
+  /**
+   * Owner's attendance offices (Story 15-4, FR-5) — opened from the More
+   * tab's "Offices" row. No params.
+   */
+  AttendanceOffices: undefined;
+  /**
+   * Add/edit an attendance office. `officeId` present = edit mode. The map
+   * picker returns its confirmed pin via navigate-back-with-params
+   * (`pickedLocation`, the SelectSkills pattern) — a search result only
+   * moves the map; the final pin position is what the save carries.
+   */
+  OfficeForm: {
+    officeId?: string;
+    pickedLocation?: PickedOfficeLocation;
+  } | undefined;
+  /**
+   * Full-screen office map picker behind the form's location row. Opens
+   * with the office's current pin (if any) and the radius to start from.
+   * The params object itself is optional (the form always supplies one) —
+   * `radiusM` is required WITHIN it, and the picker falls back to 100 m
+   * if it is ever absent.
+   */
+  OfficeMapPicker: {
+    initialLatitude?: number;
+    initialLongitude?: number;
+    radiusM: number;
+  } | undefined;
 };
 
 /**
@@ -139,9 +161,6 @@ export type TechnicianRootStackParamList = {
    * links route per role (job cards → TechJobDetail here).
    */
   Notifications: undefined;
-  // SPIKE 15.1 — temporary map-validation screen, pushed from Today's test
-  // button; delete with the story (15.4 replaces it with the real picker).
-  MapSpike: undefined;
 };
 
 declare global {

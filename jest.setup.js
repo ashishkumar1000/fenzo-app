@@ -76,6 +76,29 @@ jest.mock('react-native-nitro-geolocation', () => ({
   requestPermission: jest.fn(async () => 'granted'),
 }));
 
+// react-native-maps is a native Fabric component — it cannot boot in jest,
+// and any suite that transitively imports the app tree (App.test) reaches
+// the Story 15-4 map picker's `import MapView from 'react-native-maps'`,
+// which dies at parse ("Cannot use import statement outside a module").
+// Sub-components the app uses (Circle, Marker) render as plain Views; suites
+// that need to drive the map override the mock locally.
+jest.mock('react-native-maps', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  const MockComponent = (props) => <View {...props} testID={props.testID} />;
+  const MockMapView = React.forwardRef((props, _ref) => <View {...props} />);
+  return {
+    __esModule: true,
+    default: MockMapView,
+    Circle: MockComponent,
+    Marker: MockComponent,
+    Polyline: MockComponent,
+    Polygon: MockComponent,
+    Overlay: MockComponent,
+    Callout: MockComponent,
+  };
+});
+
 // Pin the test timezone: the screens format dates with toLocaleDateString
 // ('en-IN', …) on UTC timestamps, which shifts a day in behind-UTC timezones
 // — assertions like "12 Aug 2026" must not depend on the host TZ. IST is the

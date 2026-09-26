@@ -39,8 +39,10 @@ type Props = {
   retry: () => void;
   /** A resolved suggestion tap — the sheet owns the resolve call. */
   onSelect: (placeId: string) => void;
-  /** The no-results fallback's CTA — swaps the sheet into manual-entry mode. */
-  onEnterManual: () => void;
+  /** The no-results fallback's CTA — swaps the sheet into manual-entry mode.
+   *  Optional since Story 15-4: absent (office map picker) hides the CTA —
+   *  a hand-typed address has no coordinates, so it cannot move a pin. */
+  onEnterManual?: () => void;
 };
 
 export function SearchPhaseBody({
@@ -96,9 +98,9 @@ export function SearchPhaseBody({
           icon={<MapPin size={36} color={colors.primary} strokeWidth={1.5} />}
           title="No matching address"
           description={`We couldn't find a match for "${query.trim()}".`}
-          ctaLabel="Enter manually"
-          ctaVariant="secondary"
-          onPressCta={onEnterManual}
+          {...(onEnterManual
+            ? { ctaLabel: 'Enter manually', ctaVariant: 'secondary' as const, onPressCta: onEnterManual }
+            : {})}
         />
       );
 

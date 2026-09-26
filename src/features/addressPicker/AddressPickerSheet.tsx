@@ -51,8 +51,12 @@ type Props = {
    *  this component never closes itself. */
   onResolved: (place: ResolvedPlace) => void;
   /** Fires on "Use this address" from the manual-entry form (no-results
-   *  fallback). Same close-the-sheet-yourself contract as `onResolved`. */
-  onManualAddress: (entry: ManualAddressEntry) => void;
+   *  fallback). Same close-the-sheet-yourself contract as `onResolved`.
+   *  Optional since Story 15-4: when absent the manual-entry fallback is
+   *  hidden entirely (the office map picker — a hand-typed address has no
+   *  coordinates, so it cannot move a pin). `AddCustomerScreen` keeps
+   *  passing it, so its behaviour is unchanged. */
+  onManualAddress?: (entry: ManualAddressEntry) => void;
 };
 
 export default function AddressPickerSheet({
@@ -123,8 +127,10 @@ export default function AddressPickerSheet({
 
   // Manual mode replaces the whole search UI — the hook's phase/query are
   // untouched underneath, so "Back to search" restores the no-results view
-  // the user came from.
-  if (mode === 'manual') {
+  // the user came from. Manual mode is only reachable when `onManualAddress`
+  // is provided (the entry CTA is hidden otherwise), so the fallback keeps
+  // ManualAddressForm's required `onUse` satisfied.
+  if (mode === 'manual' && onManualAddress) {
     return (
       <Sheet
         visible={visible}
@@ -166,7 +172,7 @@ export default function AddressPickerSheet({
           resolvingPlaceId={resolvingPlaceId}
           retry={retry}
           onSelect={handleSelect}
-          onEnterManual={() => setMode('manual')}
+          {...(onManualAddress ? { onEnterManual: () => setMode('manual') } : {})}
         />
       </View>
     </Sheet>

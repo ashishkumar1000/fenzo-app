@@ -11,6 +11,7 @@ export { typography, fontSize, weight, leading, letterSpacing } from './typograp
 export { fontFamily, monoFamily, INTER_LINKED } from './fonts';
 export { spacing, touch, layout } from './spacing';
 export { radius, shadow, motion } from './radius';
+export { LIGHT_MAP_STYLE } from './mapStyle';
 
 import { colors, palette } from './colors';
 import { typography, fontSize, weight, leading, letterSpacing } from './typography';
