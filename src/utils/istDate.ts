@@ -38,6 +38,24 @@ function defaultNowIso(): string {
 }
 
 /**
+ * Today's calendar date on the IST wall clock, `YYYY-MM-DD` — the day
+ * `istDayIndex` counts, rendered as the string every Fenzit API speaks.
+ *
+ * This is the FE's mirror of the BE's tenant-aware "today" (attendance's
+ * `attendance_today`, jobs' IST scopes). The server computes that day in the
+ * tenant's own timezone, and the FE can read neither that timezone nor the
+ * date itself — no endpoint returns either — so the product's home timezone
+ * is the assumption (it is also `tenants.timezone`'s default). What this
+ * must NOT be is the device's local date: a device set to another timezone
+ * would group a holiday into the wrong section and offer the wrong floor on
+ * the date pickers.
+ */
+export function istTodayDate(nowIso: string = defaultNowIso()): string {
+  const shifted = new Date(Date.parse(nowIso) + IST_OFFSET_MS);
+  return shifted.toISOString().slice(0, 10);
+}
+
+/**
  * Epoch milliseconds of IST midnight (00:00 IST) on the day of `nowIso`.
  * Used by tests to build fixtures at a controlled IST day — add multiples of
  * 86_400_000 to step days.

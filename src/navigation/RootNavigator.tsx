@@ -17,6 +17,12 @@ import {
   OfficeFormScreen,
   OfficeMapPickerScreen,
 } from '../features/attendance/offices';
+import { AttendanceHomeScreen } from '../features/attendance/home';
+import {
+  SettingsScreen,
+  WeeklyOffScreen,
+  HolidaysScreen,
+} from '../features/attendance/settings';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -89,6 +95,27 @@ export default function RootNavigator() {
       <Stack.Screen
         name="AttendanceOffices"
         component={OfficesScreen}
+        options={{ headerShown: false }}
+      />
+      {/* Story 15-6 — attendance home shim + settings surface. */}
+      <Stack.Screen
+        name="AttendanceHome"
+        component={AttendanceHomeScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="AttendanceSettings"
+        component={SettingsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="AttendanceWeeklyOff"
+        component={WeeklyOffScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="AttendanceHolidays"
+        component={HolidaysScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen

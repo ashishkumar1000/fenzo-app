@@ -49,6 +49,11 @@ type Props = NativeStackScreenProps<RootStackParamList, 'SelectTechnicians'>;
 
 const CIRCLE = 26;
 
+// Where Apply/Clear may pop back to — hoisted to module scope (15-6 review
+// iteration 1: it was rebuilt per render inside the component).
+const RETURN_TO_TARGETS = ['NewJob', 'AttendanceWeeklyOff'] as const;
+type PopToTarget = (typeof RETURN_TO_TARGETS)[number];
+
 export default function SelectTechniciansScreen({ navigation, route }: Props) {
   // The id the caller came in with — tap rows to replace it, "Clear" to
   // empty it. Only Apply sends it back.
@@ -58,14 +63,37 @@ export default function SelectTechniciansScreen({ navigation, route }: Props) {
   const [query, setQuery] = useState('');
 
   const { profile, isLoading, error, refresh } = useMyProfile();
+  const activeOnly = route.params?.activeOnly === true;
+  // `activeOnly` (15-6 review iteration 1): the override flow filters the
+  // roster to status === 'active' BEFORE search — an invited employee must
+  // not even be offerable, because the caller cannot resolve their pick.
   const technicians = useMemo(
-    () => profile?.technicians ?? [],
-    [profile?.technicians],
+    () =>
+      activeOnly
+        ? (profile?.technicians ?? []).filter((t) => t.status === 'active')
+        : (profile?.technicians ?? []),
+    [activeOnly, profile?.technicians],
   );
 
   // Read-only context from the caller: which skill the job carries, so
   // matching rows can be marked. Never used to filter.
   const skillId = route.params?.skillId;
+  // The picker is reused for the weekly-off override flow (Story 15-6) —
+  // `returnTo` names where Apply/Clear should pop back to. The param type
+  // is now the two-target union (navigation/types.ts), and the value is
+  // STILL re-checked at runtime against the allowlist: route params are
+  // plain strings at runtime. ABSENT keeps the new-job flow's `'NewJob'`
+  // default; an out-of-allowlist value does NOT `popTo('NewJob')` — popping
+  // to a target not beneath us makes StackRouter REPLACE this picker with a
+  // fresh New Job, stranding the flow; a plain `goBack()` recovers without
+  // rewriting the stack.
+  const rawReturnTo = route.params?.returnTo;
+  const returnTo: PopToTarget | null =
+    rawReturnTo === undefined
+      ? 'NewJob'
+      : RETURN_TO_TARGETS.includes(rawReturnTo as PopToTarget)
+        ? (rawReturnTo as PopToTarget)
+        : null;
 
   const trimmedQuery = query.trim();
 
@@ -75,27 +103,36 @@ export default function SelectTechniciansScreen({ navigation, route }: Props) {
   );
 
   const apply = () => {
-    // NewJob sits directly beneath this screen, so popTo pops us off the
-    // stack and merges the param onto it. React Navigation 7's plain
-    // `navigate` no longer goes back to an existing screen — it PUSHES a new
-    // one, which left the picker stranded in the stack (it resurfaced after
-    // New Job's post-create goBack).
-    navigation.popTo(
-      'NewJob',
-      { selectedTechnicianId: pendingId },
-      { merge: true },
-    );
+    // popTo pops us off the stack and merges the param onto the caller.
+    // React Navigation 7's plain `navigate` no longer goes back to an
+    // existing screen — it PUSHES a new one, which left the picker
+    // stranded in the stack (it resurfaced after New Job's post-create
+    // goBack). Same reasoning applies to the override flow: the caller
+    // (AttendanceWeeklyOff) is always directly beneath us.
+    if (returnTo) {
+      navigation.popTo(
+        returnTo,
+        { selectedTechnicianId: pendingId },
+        { merge: true },
+      );
+    } else {
+      navigation.goBack();
+    }
   };
 
   // Only reachable with a pending selection (disabled otherwise): dropping
   // the technician is a decision too, so it applies straight away instead of
   // leaving the user stuck on a screen whose Apply button is now disabled.
   const clearAndReturn = () => {
-    navigation.popTo(
-      'NewJob',
-      { selectedTechnicianId: null },
-      { merge: true },
-    );
+    if (returnTo) {
+      navigation.popTo(
+        returnTo,
+        { selectedTechnicianId: null },
+        { merge: true },
+      );
+    } else {
+      navigation.goBack();
+    }
   };
 
   const renderRow = ({ item }: { item: ProfileTechnician }) => {
@@ -229,10 +266,14 @@ export default function SelectTechniciansScreen({ navigation, route }: Props) {
             ListEmptyComponent={
               // An empty roster and an empty search result are different
               // states — the copy must not assume a search is active (and
-              // the empty-roster one aligns with NewJobScreen's own).
+              // the empty-roster one aligns with NewJobScreen's own). The
+              // active-only roster has its own copy: "no ACTIVE employees"
+              // is not the same fact as "no technicians at all".
               <Text style={styles.empty}>
                 {technicians.length === 0
-                  ? 'No technicians yet. A job has to be assigned to someone, so add a technician before creating one.'
+                  ? activeOnly
+                    ? 'No active employees yet. Employees appear here once they accept their invite.'
+                    : 'No technicians yet. A job has to be assigned to someone, so add a technician before creating one.'
                   : `No technicians match "${query.trim()}"`}
               </Text>
             }

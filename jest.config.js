@@ -29,6 +29,6 @@ module.exports = {
     '^.+\\.mjs$': 'babel-jest',
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(react-native|@react-native|@react-navigation|react-native-safe-area-context|react-native-reanimated|react-native-worklets|@react-native-community/datetimepicker|react-native-image-picker|react-native-signature-canvas|react-native-webview|@lodev09|react-native-url-polyfill|react-native-image-viewing|react-native-nitro-geolocation|lucide-react-native)/)',
+    'node_modules/(?!(react-native|@react-native|@react-navigation|react-native-safe-area-context|react-native-reanimated|react-native-worklets|@react-native-community/datetimepicker|react-native-image-picker|react-native-signature-canvas|react-native-webview|@lodev09|react-native-url-polyfill|react-native-image-viewing|react-native-nitro-geolocation|lucide-react-native|react-native-ui-datepicker)/)',
   ],
 };

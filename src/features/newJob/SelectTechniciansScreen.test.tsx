@@ -77,6 +77,10 @@ const mountedRenderers: ReactTestRenderer.ReactTestRenderer[] = [];
 function renderScreen(
   selectedTechnicianId?: string | null,
   skillId?: string,
+  // Typed wide on purpose: route params are plain strings at runtime, and
+  // the allowlist-fallback test below passes a value outside the union.
+  returnTo?: string,
+  activeOnly?: boolean,
 ) {
   const navigation: NavigationSpy = {
     goBack: jest.fn(),
@@ -85,13 +89,18 @@ function renderScreen(
   };
   const route = {
     params:
-      selectedTechnicianId === undefined && skillId === undefined
+      selectedTechnicianId === undefined &&
+      skillId === undefined &&
+      returnTo === undefined &&
+      activeOnly === undefined
         ? undefined
         : {
             ...(selectedTechnicianId === undefined
               ? {}
               : { selectedTechnicianId }),
             ...(skillId === undefined ? {} : { skillId }),
+            ...(returnTo === undefined ? {} : { returnTo }),
+            ...(activeOnly === undefined ? {} : { activeOnly }),
           },
   };
   let renderer!: ReactTestRenderer.ReactTestRenderer;
@@ -329,6 +338,112 @@ it('keeps Clear disabled until a selection exists, then pops back with null', ()
   });
   expect(navigation.popTo).toHaveBeenCalledWith(
     'NewJob',
+    { selectedTechnicianId: null },
+    { merge: true },
+  );
+});
+
+it('pops back to returnTo (AttendanceWeeklyOff) when the caller passes one', () => {
+  // Story 15-6 reuses this picker for the per-employee override flow.
+  // Apply must pop back to the override sheet's host (AttendanceWeeklyOff)
+  // and write `selectedTechnicianId` onto its params — never to NewJob.
+  const { root, navigation } = renderScreen(undefined, undefined, 'AttendanceWeeklyOff');
+  act(() => {
+    rows(root)[0].props.onPress();
+  });
+  act(() => {
+    applyButton(root)?.props.onPress();
+  });
+  expect(navigation.popTo).toHaveBeenCalledWith(
+    'AttendanceWeeklyOff',
+    { selectedTechnicianId: 't-1' },
+    { merge: true },
+  );
+});
+
+it('an out-of-allowlist returnTo falls back to a plain goBack (never popTo)', () => {
+  // 15-6 review iteration 1: `popTo` with a target NOT beneath this screen
+  // makes StackRouter REPLACE the picker with a fresh instance of the
+  // target, stranding the flow — the old "falls back to the new-job caller"
+  // behaviour was the harmful branch. A plain goBack recovers without
+  // rewriting the stack. Route params are strings at runtime, so a value
+  // outside the (now two-target) type union must still be handled.
+  const { root, navigation } = renderScreen(
+    undefined,
+    undefined,
+    'AttendanceHolidays',
+  );
+  act(() => {
+    rows(root)[0].props.onPress();
+  });
+  act(() => {
+    applyButton(root)?.props.onPress();
+  });
+  expect(navigation.goBack).toHaveBeenCalledTimes(1);
+  expect(navigation.popTo).not.toHaveBeenCalled();
+});
+
+it('activeOnly offers ONLY active employees (the override flow)', () => {
+  // 15-6 review iteration 1: the hook filtered to active employees, but the
+  // picker listed everyone — picking an invited employee handed back an id
+  // the capture effect could not resolve, and the pick was silently dropped.
+  useMyProfileMock.mockReturnValue({
+    profile: {
+      technicians: [
+        { ...TECHNICIANS[0], status: 'invited' },
+        TECHNICIANS[1],
+      ],
+    },
+    isLoading: false,
+    error: null,
+    refresh: jest.fn(),
+  } satisfies MockProfileState as never);
+
+  const { root } = renderScreen(undefined, undefined, undefined, true);
+  expect(rows(root)).toHaveLength(1);
+  expect(hasText(root, 'Anita Sharma')).toBe(true);
+  expect(hasText(root, 'Ravi Kumar')).toBe(false);
+  // The count chip tells the truth about the filtered pool.
+  expect(hasText(root, '1 total')).toBe(true);
+});
+
+it('activeOnly with nobody active explains the active-only roster (not the job copy)', () => {
+  useMyProfileMock.mockReturnValue({
+    profile: {
+      technicians: [{ ...TECHNICIANS[0], status: 'invited' }],
+    },
+    isLoading: false,
+    error: null,
+    refresh: jest.fn(),
+  } satisfies MockProfileState as never);
+
+  const { root } = renderScreen(undefined, undefined, undefined, true);
+  expect(
+    hasText(
+      root,
+      'No active employees yet. Employees appear here once they accept their invite.',
+    ),
+  ).toBe(true);
+  expect(
+    hasText(
+      root,
+      'No technicians yet. A job has to be assigned to someone, so add a technician before creating one.',
+    ),
+  ).toBe(false);
+});
+
+it('Clear in the override flow pops back to AttendanceWeeklyOff with null', () => {
+  const { root, navigation } = renderScreen(
+    't-2',
+    undefined,
+    'AttendanceWeeklyOff',
+  );
+  expect(clearButton(root).props.disabled).toBe(false);
+  act(() => {
+    clearButton(root).props.onPress();
+  });
+  expect(navigation.popTo).toHaveBeenCalledWith(
+    'AttendanceWeeklyOff',
     { selectedTechnicianId: null },
     { merge: true },
   );

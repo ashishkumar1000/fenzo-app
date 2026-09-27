@@ -162,15 +162,16 @@ describe('MoreScreen wiring', () => {
     });
     expect(mockNavigate).toHaveBeenCalledWith('Customers');
 
-    // The offices row is the attendance feature's only entry point — it
-    // must navigate to its own (plural) route, not a dead-end.
-    const officesRow = root
+    // The Attendance row is the entry point for the attendance surface
+    // (Offices + Settings + later the dashboard). It must navigate to the
+    // Attendance Home route, not a dead-end.
+    const attendanceRow = root
       .findAllByType(MoreRow)
-      .find(t => t.props.title === 'Offices');
+      .find(t => t.props.title === 'Attendance');
     act(() => {
-      officesRow?.props.onPress();
+      attendanceRow?.props.onPress();
     });
-    expect(mockNavigate).toHaveBeenCalledWith('AttendanceOffices');
+    expect(mockNavigate).toHaveBeenCalledWith('AttendanceHome');
   });
 
   it('logs out only through the confirm dialog, running the forced-logout flow', () => {

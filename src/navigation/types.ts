@@ -72,16 +72,36 @@ export type RootStackParamList = {
    */
   SelectCustomers: { selectedCustomerId?: string | null } | undefined;
   /**
-   * Full-screen technician browser behind New Job's "Browse all" link — the
-   * customer picker's twin. Opens with the currently assigned technician (if
-   * any) plus the job's `skillId` (read-only: it marks rows whose `skillIds`
-   * include it, it never filters). Apply navigates back to `NewJob` with
-   * `selectedTechnicianId` — a string to pick it, `null` after "Clear", and
-   * `undefined` (param absent) when the caller should change nothing.
+   * Full-screen technician browser behind New Job's "Browse all" link —
+   * also reused as the employee picker in the weekly-off override sheet
+   * (Story 15-6). Opens with the currently assigned technician (if any)
+   * plus the job's `skillId` (read-only: it marks rows whose `skillIds`
+   * include it, it never filters). Apply navigates back to `returnTo`
+   * (default `'NewJob'`) with `selectedTechnicianId` — a string to pick
+   * it, `null` after "Clear", and `undefined` (param absent) when the
+   * caller should change nothing.
    */
   SelectTechnicians: {
     selectedTechnicianId?: string | null;
     skillId?: string;
+    /**
+     * Route to `popTo` on Apply/Clear — narrowed to the two screens that
+     * actually push this picker (15-6 review iteration 1: a
+     * `keyof RootStackParamList` admitted ~20 routes while the runtime
+     * allowlist takes 2). Defaults to `'NewJob'` for the new-job flow; the
+     * weekly-off override sheet passes `'AttendanceWeeklyOff'`. Must be a
+     * route already in the stack (the caller pushes the picker on top of
+     * itself).
+     */
+    returnTo?: 'NewJob' | 'AttendanceWeeklyOff';
+    /**
+     * Offer only ACTIVE employees (15-6 review iteration 1): the override
+     * flow sets `activeOnly: true` so an invited (never-activated)
+     * employee cannot be picked and then silently dropped when the
+     * capture effect cannot resolve the id. The new-job flow omits it and
+     * sees the full roster, exactly as today.
+     */
+    activeOnly?: boolean;
   } | undefined;
   /** Owner/technician job detail — opened with the job's uuid. */
   JobDetail: { jobId: string };
@@ -132,6 +152,22 @@ export type RootStackParamList = {
     initialLongitude?: number;
     radiusM: number;
   } | undefined;
+  /**
+   * Story 15-6 — Attendance Home shim (the owner entry into all
+   * attendance settings). Two tiles (Offices + Settings); future stories
+   * replace this with a real dashboard.
+   */
+  AttendanceHome: undefined;
+  /** Story 15-6 — Attendance Settings landing (Weekly off + Holidays). */
+  AttendanceSettings: undefined;
+  /** Story 15-6 — tenant-default weekly-off screen + per-employee overrides.
+   *  `selectedTechnicianId` is set by `SelectTechniciansScreen` via
+   *  navigate-back-with-params (the new-job picker pattern) when the owner
+   *  picks an employee for the override flow. Read once on focus + cleared
+   *  so a stale pick can't re-fire. */
+  AttendanceWeeklyOff: { selectedTechnicianId?: string | null } | undefined;
+  /** Story 15-6 — holidays list + add/edit sheet. */
+  AttendanceHolidays: undefined;
 };
 
 /**

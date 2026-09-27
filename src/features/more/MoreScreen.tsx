@@ -191,13 +191,16 @@ export default function MoreScreen({ navigation }: Props) {
           onPress={() => navigation.navigate('Reports')}
         />
 
-        {/* Story 15-4 — attendance offices (FR-5, owner-only). */}
+        {/* Story 15-6 — Attendance Home shim (FR-5 + FR-18/19/20). Routes
+            through the Home shim so the Settings tile is reachable; the
+            offices tile inside the shim is what actually navigates to
+            AttendanceOffices. */}
         <MoreRow
           icon={<Building2 size={20} color={colors.status.scheduled.solid} strokeWidth={1.5} />}
           iconBg={colors.status.scheduled.bg}
-          title="Offices"
-          subtitle="Locations & timing rules"
-          onPress={() => navigation.navigate('AttendanceOffices')}
+          title="Attendance"
+          subtitle="Offices, weekly off & holidays"
+          onPress={() => navigation.navigate('AttendanceHome')}
         />
 
         <MoreRow

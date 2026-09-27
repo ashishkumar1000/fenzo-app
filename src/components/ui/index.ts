@@ -41,11 +41,20 @@ export type { EmptyStateProps } from './EmptyState';
 export { InlineError } from './InlineError';
 export type { InlineErrorProps } from './InlineError';
 
+export { InlineNotice } from './InlineNotice';
+export type { InlineNoticeProps, InlineNoticeTone } from './InlineNotice';
+
 export { SegmentedControl } from './SegmentedControl';
 export type { SegmentOption } from './SegmentedControl';
 
 export { Sheet } from './Sheet';
 export type { SheetProps } from './Sheet';
+
+export { Calendar } from './Calendar';
+export type { CalendarProps } from './Calendar';
+
+export { DatePickerField } from './DatePickerField';
+export type { DatePickerFieldProps } from './DatePickerField';
 
 export { Eyebrow } from './Eyebrow';
 export type { EyebrowProps } from './Eyebrow';

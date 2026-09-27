@@ -29,6 +29,21 @@ export type {
   PickedOfficeLocation,
   UpdateOfficeRequest,
 } from './offices';
+export { weeklyOffsService } from './weeklyOffs';
+export type {
+  IsoWeekday,
+  SetWeeklyOffRequest,
+  WeeklyOffDefaultResponse,
+  WeeklyOffOverrideResponse,
+  WeeklyOffView,
+} from './weeklyOffs';
+export { holidaysService } from './holidays';
+export type {
+  CreateHolidayRequest,
+  Holiday,
+  HolidayImpactResponse,
+  UpdateHolidayRequest,
+} from './holidays';
 export { customerService } from './customers';
 export type {
   ApiCustomer,
