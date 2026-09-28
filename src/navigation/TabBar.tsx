@@ -16,6 +16,7 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
+  CalendarCheck,
   ClipboardList,
   History,
   Home as HomeIcon,
@@ -37,6 +38,8 @@ const ICONS: Record<string, LucideIcon> = {
   // Technician tabs (TechnicianTabParamList)
   Today: Sun,
   History: History,
+  // 15-10 — mounted conditionally by TechnicianTabs (FR-3 access gate).
+  Attendance: CalendarCheck,
   Profile: User,
 };
 

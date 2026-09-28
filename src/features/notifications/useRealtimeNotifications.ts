@@ -55,6 +55,10 @@ import { loadReports } from '../reports/useReports';
 // branch — the inbox is a technician's only consumer of these events.
 import { loadNotifications, loadUnreadCount } from './useNotifications';
 import {
+  emitAttendanceAccessRefresh,
+  isAttendanceEventType,
+} from '../../services/attendanceAccessEvents';
+import {
   getRealtimeToken,
   getUserChannel,
   registerReset,
@@ -168,6 +172,14 @@ export function useRealtimeNotifications(
     // their TTLs so a burst can't be throttled away. No banner, no
     // owner-store refetches. Later epics' event types need nothing here.
     if (roleRef.current !== 'owner') {
+      // Story 15-10: an attendance.* event also refreshes the entry-point
+      // gate (AD-19: every attendance notification refetches access), via
+      // the neutral seam — the module boundary forbids importing the
+      // attendance feature from here. The inbox loads below are unchanged.
+      const evtType = notificationEventType(message);
+      if (evtType !== null && isAttendanceEventType(evtType)) {
+        emitAttendanceAccessRefresh();
+      }
       void loadNotifications({ force: true });
       void loadUnreadCount({ force: true });
       return;

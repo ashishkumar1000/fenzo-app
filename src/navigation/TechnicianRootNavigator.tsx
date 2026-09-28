@@ -14,6 +14,7 @@ import TechJobDetailScreen from '../features/technicianApp/TechJobDetailScreen';
 import SignatureScreen from '../features/technicianApp/SignatureScreen';
 import { LocationCaptureScreen } from '../features/technicianApp/LocationCaptureScreen';
 import { NotificationsScreen } from '../features/notifications';
+import { AttendanceIntroScreen } from '../features/attendance/me';
 import type { TechnicianRootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<TechnicianRootStackParamList>();
@@ -29,6 +30,8 @@ export default function TechnicianRootNavigator() {
       <Stack.Screen name="LocationCapture" component={LocationCaptureScreen} options={{ headerShown: false }} />
       {/* 14.3 — the shared notification inbox, behind the Today bell. */}
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: false }} />
+      {/* 15-10 — the FR-4 intro, pushed over the tabs by the Attendance tab's gate. */}
+      <Stack.Screen name="AttendanceIntro" component={AttendanceIntroScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }

@@ -20,7 +20,11 @@ import type { ApiNotification } from '../../services';
 import type { StatusKey } from '../../theme';
 import { failedReportCopy } from '../reports/reportModel';
 import type { NotificationCardData } from './notificationCardModel';
-import type { GenericNotificationCardData, SessionRole } from './notificationEventRegistry';
+import type {
+  AttendanceNotificationCardData,
+  GenericNotificationCardData,
+  SessionRole,
+} from './notificationEventRegistry';
 
 /** Event types the report worker writes (Epic 12). */
 export const REPORT_READY_EVENT = 'report_ready';
@@ -81,16 +85,18 @@ export interface ReportNotificationCardData {
 export type NotificationListItem =
   | NotificationCardData
   | ReportNotificationCardData
+  | AttendanceNotificationCardData
   | GenericNotificationCardData;
 
 /**
  * The tappable card kinds — the `NotificationCard` component's contract.
- * The registry's generic card (Story 14-3) is inert (no deep link, no tap),
- * so it is excluded here.
+ * The registry's generic card (Story 14-3) is inert (no deep link, no tap)
+ * and the attendance card (15-10) carries its own tap guard in the screen,
+ * so both are excluded here.
  */
 export type TappableNotificationListItem = Exclude<
   NotificationListItem,
-  { kind: 'generic' }
+  { kind: 'generic' } | { kind: 'attendance' }
 >;
 
 /**
@@ -159,8 +165,9 @@ export function mergeNotificationCards(
   jobCards: NotificationCardData[],
   reportCards: ReportNotificationCardData[],
   genericCards: GenericNotificationCardData[] = [],
+  attendanceCards: AttendanceNotificationCardData[] = [],
 ): NotificationListItem[] {
-  return [...genericCards, ...reportCards, ...jobCards].sort(
+  return [...genericCards, ...attendanceCards, ...reportCards, ...jobCards].sort(
     (a, b) => Date.parse(b.latestCreatedAt) - Date.parse(a.latestCreatedAt),
   );
 }

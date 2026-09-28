@@ -31,6 +31,14 @@ export type MainTabParamList = {
 export type TechnicianTabParamList = {
   Today: undefined;
   History: undefined;
+  /**
+   * Story 15-10 — the technician's own attendance surfaces. The tab is
+   * REGISTERED conditionally: `TechnicianTabs` mounts it only while the
+   * access store resolves `attendanceAccess !== 'none'` (FR-3: no
+   * attendance UI anywhere for `none`), so this route legitimately may not
+   * exist at runtime — deep links must tap-guard through the access seam.
+   */
+  Attendance: undefined;
   Profile: undefined;
 };
 
@@ -216,7 +224,15 @@ export type AddCustomerReturnRouteName = 'Customers' | 'NewJob' | 'Home';
  * above, which stays the owner-side list.
  */
 export type TechnicianRootStackParamList = {
-  TechnicianTabs: undefined;
+  /**
+   * Nested-navigation delegation (Story 15-10): deep links from the
+   * root-stack Notifications screen must use
+   * `navigate('TechnicianTabs', { screen: 'Attendance' })` — a plain
+   * `navigate('Attendance')` from the root stack is NOT handled (the tab
+   * route lives one navigator down; device-found). Params optional so
+   * plain `navigate('TechnicianTabs')` call sites keep typechecking.
+   */
+  TechnicianTabs: { screen: keyof TechnicianTabParamList } | undefined;
   TechJobDetail: { jobId: string };
   /** Registered in Story 3.5 — the type is declared now so nav params are stable. */
   Signature: { jobId: string; stepKey: string; steps: WorkflowTemplateStep[] };
@@ -228,6 +244,11 @@ export type TechnicianRootStackParamList = {
    * links route per role (job cards → TechJobDetail here).
    */
   Notifications: undefined;
+  /**
+   * Story 15-10 — the FR-4 first-entry intro, pushed OVER the tabs from
+   * the Attendance tab's intro gate (active/upcoming + never onboarded).
+   */
+  AttendanceIntro: undefined;
 };
 
 declare global {

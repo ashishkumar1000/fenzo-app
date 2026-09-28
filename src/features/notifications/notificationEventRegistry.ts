@@ -22,10 +22,12 @@
  * or the job card pipeline.
  */
 import type { ApiNotification } from '../../services';
+import { isAttendanceEventType } from '../../services/attendanceAccessEvents';
+import { formatLongDate } from '../../utils/formatLongDate';
 import { isReportNotification } from './reportNotificationModel';
 
 /** What a notification row renders as on the shared inbox. */
-export type NotificationEventAction = 'job' | 'report' | 'generic';
+export type NotificationEventAction = 'job' | 'report' | 'attendance' | 'generic';
 
 /** The signed-in session's role (`useAuth`) — the registry's second key. */
 export type SessionRole = 'owner' | 'technician';
@@ -41,6 +43,11 @@ export function notificationEventAction(
   role: SessionRole,
 ): NotificationEventAction {
   if (role === 'owner' && isReportNotification(n)) return 'report';
+  // Story 15-10: attendance.* rows are a technician surface — they carry
+  // composed copy (the payload is display DATA, not display text) and a
+  // tap-guarded deep link to the Attendance tab (the seam decides whether
+  // that tab currently exists).
+  if (role === 'technician' && isAttendanceEventType(n.eventType)) return 'attendance';
   if (n.jobId !== null) return 'job';
   return 'generic';
 }
@@ -81,6 +88,59 @@ export interface GenericNotificationCardData {
    */
   latestCreatedAt: string;
   isUnread: boolean;
+}
+
+/**
+ * One attendance notification's card (Story 15-10) — one row = one card,
+ * same contract as generic cards PLUS a tap guard: the screen only
+ * navigates when the access seam says the Attendance tab exists
+ * (`attendanceAccess !== 'none'`), so a card from an enrolment since
+ * revoked can never open a route that is not registered (FR-3).
+ */
+export interface AttendanceNotificationCardData {
+  kind: 'attendance';
+  /** The notification row's id — the FlatList key. */
+  key: string;
+  /** Composed copy — e.g. "Holiday added" / "Diwali — Sat, 8 Nov 2026". */
+  title: string;
+  message: string | null;
+  latestCreatedAt: string;
+  isUnread: boolean;
+  unreadIds: string[];
+}
+
+/** Composed copy per shipped attendance event; unknown sub-types humanize. */
+const ATTENDANCE_EVENT_TITLES: Record<string, string> = {
+  'attendance.holiday_added': 'Holiday added',
+  'attendance.holiday_removed': 'Holiday removed',
+};
+
+/** Builds one card per attendance row, preserving the list's newest-first order. */
+export function buildAttendanceCards(
+  items: ApiNotification[],
+  role: SessionRole,
+): AttendanceNotificationCardData[] {
+  if (role !== 'technician') return [];
+  return items
+    .filter(n => notificationEventAction(n, role) === 'attendance')
+    .map(n => {
+      const payload = (n.payload ?? {}) as Record<string, unknown>;
+      const holidayName = isText(payload.holidayName) ? payload.holidayName : null;
+      const holidayDate =
+        isText(payload.holidayDate) && payload.holidayDate.length >= 10
+          ? formatLongDate(payload.holidayDate.slice(0, 10))
+          : null;
+      const parts = [holidayName, holidayDate].filter((v): v is string => v !== null);
+      return {
+        kind: 'attendance' as const,
+        key: n.id,
+        title: ATTENDANCE_EVENT_TITLES[n.eventType] ?? humanizeEventType(n.eventType),
+        message: parts.length > 0 ? parts.join(' — ') : null,
+        latestCreatedAt: n.createdAt,
+        isUnread: n.readAt === null,
+        unreadIds: n.readAt === null ? [n.id] : [],
+      };
+    });
 }
 
 /** Builds one card per generic row, preserving the list's newest-first order. */

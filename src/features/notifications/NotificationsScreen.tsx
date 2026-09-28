@@ -52,6 +52,7 @@ import type {
   MainTabParamList,
   RootStackParamList,
   TechnicianRootStackParamList,
+  TechnicianTabParamList,
 } from '../../navigation/types';
 import { useAuth } from '../auth/useAuth';
 import {
@@ -70,9 +71,11 @@ import {
   mergeNotificationCards,
 } from './reportNotificationModel';
 import {
+  buildAttendanceCards,
   buildGenericCards,
   type SessionRole,
 } from './notificationEventRegistry';
+import { isAttendanceReachable } from '../../services/attendanceAccessEvents';
 import { useJobTemplateCache } from './useJobTemplateCache';
 import type { NotificationFilter } from './notificationCardModel';
 import type {
@@ -93,7 +96,8 @@ import type {
  */
 type SharedRoutes = RootStackParamList &
   TechnicianRootStackParamList &
-  MainTabParamList;
+  MainTabParamList &
+  TechnicianTabParamList;
 
 type Props = NativeStackScreenProps<SharedRoutes, 'Notifications'>;
 
@@ -195,10 +199,13 @@ export default function NotificationsScreen({ navigation }: Props) {
   // row, under "All" only. Owner job/report rows are classified exactly as
   // before, so this is additive.
   const genericCards = useMemo(() => buildGenericCards(items, role), [items, role]);
+  // Story 15-10: attendance.* rows (technician) — composed-copy cards whose
+  // tap is guarded by the access seam (no Attendance tab for `none`).
+  const attendanceCards = useMemo(() => buildAttendanceCards(items, role), [items, role]);
   // Interleaved by recency under "All"; the job buckets (below) stay job-only.
   const listCards = useMemo(
-    () => mergeNotificationCards(cards, reportCards, genericCards),
-    [cards, reportCards, genericCards],
+    () => mergeNotificationCards(cards, reportCards, genericCards, attendanceCards),
+    [cards, reportCards, genericCards, attendanceCards],
   );
   const [filter, setFilter] = useState<NotificationFilter>('all');
   // Active/Completed are JOB-status buckets — report and generic
@@ -213,21 +220,44 @@ export default function NotificationsScreen({ navigation }: Props) {
   // reports + generic).
   const counts = useMemo(
     () => ({
-      all: cards.length + reportCards.length + genericCards.length,
+      all: cards.length + reportCards.length + genericCards.length + attendanceCards.length,
       active: filterCards(cards, 'active').length,
       completed: filterCards(cards, 'completed').length,
     }),
-    [cards, reportCards, genericCards],
+    [cards, reportCards, genericCards, attendanceCards],
+  );
+
+  // 15-10: attendance taps mark the row read, then deep link ONLY when the
+  // access seam says the Attendance tab exists — a card from an enrolment
+  // since revoked must never navigate to a route that is not registered
+  // (FR-3; the seam mirrors the store's `attendanceAccess !== 'none'`).
+  const handleAttendanceCardPress = useCallback(
+    (card: { unreadIds: string[] }) => {
+      // The guard consults FIRST: for a `none` employee the tap is a
+      // no-op (frozen matrix) — no navigation AND no read-mark mutation.
+      if (!isAttendanceReachable()) return;
+      for (const id of card.unreadIds) void markNotificationRead(id);
+      // The Attendance route is a TAB inside TechnicianTabs — invisible
+      // to the root stack's plain navigate (device-found: "The action
+      // 'NAVIGATE' … was not handled"). Delegate through the tabs route.
+      navigation.navigate('TechnicianTabs', { screen: 'Attendance' });
+    },
+    [markNotificationRead, navigation],
   );
 
   const renderCard = useCallback(
     ({ item }: { item: NotificationListItem }) =>
       item.kind === 'generic' ? (
         <GenericNotificationCard card={item} />
+      ) : item.kind === 'attendance' ? (
+        <GenericNotificationCard
+          card={item}
+          onPress={() => handleAttendanceCardPress(item)}
+        />
       ) : (
         <NotificationCard card={item} onPress={handleCardPress} />
       ),
-    [handleCardPress],
+    [handleAttendanceCardPress, handleCardPress],
   );
 
   const hasData = items.length > 0;

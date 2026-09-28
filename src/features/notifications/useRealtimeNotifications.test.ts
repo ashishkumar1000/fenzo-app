@@ -24,6 +24,16 @@ jest.mock('../auth/useAuth', () => ({
 
 jest.mock('../jobs/useJobs', () => ({ loadJobs: jest.fn() }));
 
+// Story 15-10: attendance.* events also refresh the entry-point gate via
+// the neutral seam — mocked here to assert the bridge's routing decision
+// (isAttendanceEventType stays the REAL pure predicate via requireActual).
+jest.mock('../../services/attendanceAccessEvents', () => ({
+  emitAttendanceAccessRefresh: jest.fn(),
+  isAttendanceEventType: jest.requireActual(
+    '../../services/attendanceAccessEvents',
+  ).isAttendanceEventType,
+}));
+
 // Epic 12: report terminal events route to the reports store instead of the
 // job-status banner — pinned on the (mocked) loader wire call.
 jest.mock('../reports/useReports', () => ({ loadReports: jest.fn() }));
@@ -44,6 +54,8 @@ jest.mock('../../services', () => ({
   },
 }));
 
+import { emitAttendanceAccessRefresh } from '../../services/attendanceAccessEvents';
+const emitAttendanceAccessRefreshMock = emitAttendanceAccessRefresh as jest.Mock;
 import { loadJobs } from '../jobs/useJobs';
 import { loadReports } from '../reports/useReports';
 import { loadMyProfile } from '../profile/useMyProfile';
@@ -524,6 +536,56 @@ describe('report event routing (Epic 12)', () => {
     expect(loadJobsMock).toHaveBeenCalledWith(undefined, undefined, { force: true });
     expect(loadReportsMock).not.toHaveBeenCalled();
     expect(unreadCountMock).toHaveBeenCalled();
+  });
+});
+
+describe('technician event routing — attendance seam (Story 15-10)', () => {
+  beforeEach(async () => {
+    mockSession = { role: 'technician' };
+    await mountProbe();
+    broadcastCb = channel.on.mock.calls[0][2] as BroadcastCallback;
+  });
+
+  afterEach(() => {
+    mockSession = { role: 'owner' };
+    emitAttendanceAccessRefreshMock.mockClear();
+  });
+
+  it('an attendance.* event emits the access refresh (AD-19) alongside the inbox loads', async () => {
+    await ReactTestRenderer.act(async () => {
+      broadcastCb?.({
+        id: 'evt-a1',
+        table: 'notifications',
+        operation: 'INSERT',
+        record: {
+          id: 'na1',
+          event_type: 'attendance.holiday_added',
+          payload: { holidayName: 'Diwali', holidayDate: '2026-11-08' },
+        },
+      });
+      await Promise.resolve();
+    });
+    expect(emitAttendanceAccessRefreshMock).toHaveBeenCalledTimes(1);
+    expect(listMock).toHaveBeenCalled();
+    expect(unreadCountMock).toHaveBeenCalled();
+  });
+
+  it('a non-attendance event does NOT emit the access refresh', async () => {
+    await ReactTestRenderer.act(async () => {
+      broadcastCb?.({
+        id: 'evt-a2',
+        table: 'notifications',
+        operation: 'INSERT',
+        record: {
+          id: 'na2',
+          event_type: 'on_my_way',
+          payload: { job_number: 'JOB-1042', step: 'on_my_way' },
+        },
+      });
+      await Promise.resolve();
+    });
+    expect(emitAttendanceAccessRefreshMock).not.toHaveBeenCalled();
+    expect(listMock).toHaveBeenCalled();
   });
 });
 

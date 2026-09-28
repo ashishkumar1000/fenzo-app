@@ -46,6 +46,12 @@ export type {
 } from './holidays';
 export { attendanceSetupService } from './attendanceSetup';
 export type { SetupState, SetupStep } from './attendanceSetup';
+export { attendanceMeService } from './attendanceMe';
+export type {
+  AttendanceAccess,
+  AttendanceAccessState,
+  AttendanceSummary,
+} from './attendanceMe';
 export { enrolmentsService } from './enrolments';
 export type { EnrolmentOverview, EnrolmentWriteState } from './enrolments';
 export { customerService } from './customers';

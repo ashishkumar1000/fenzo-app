@@ -8,23 +8,31 @@
  * Same card anatomy family as `ReportNotificationCard` (icon + title +
  * message + relative time + unread dot), minus every interactive element.
  */
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, Pressable } from 'react-native';
 import { BellRing } from 'lucide-react-native';
 import { colors, radius, shadow, spacing, typography } from '../../../theme';
 import { relativeTime } from '../../../utils';
-import type { GenericNotificationCardData } from '../notificationEventRegistry';
+import type {
+  AttendanceNotificationCardData,
+  GenericNotificationCardData,
+} from '../notificationEventRegistry';
 
+/**
+ * `onPress` — Story 15-10: attendance cards render through this component
+ * and ARE tappable (the screen's tap guard decides whether the deep link
+ * goes anywhere). Without an `onPress` the card stays inert exactly as
+ * before — the generic fallback's contract is unchanged.
+ */
 interface GenericNotificationCardProps {
-  card: GenericNotificationCardData;
+  card: GenericNotificationCardData | AttendanceNotificationCardData;
+  onPress?: () => void;
 }
 
-export function GenericNotificationCard({ card }: GenericNotificationCardProps) {
+export function GenericNotificationCard({ card, onPress }: GenericNotificationCardProps) {
   const time = relativeTime(card.latestCreatedAt);
 
-  return (
-    <View
-      accessibilityLabel={`${card.isUnread ? 'Unread. ' : ''}${card.title}${time ? `, ${time}` : ''}`}
-      style={styles.card}>
+  const body = (
+    <>
       {/* Unread marker — the other cards' static primary dot. */}
       {card.isUnread ? <View style={styles.unreadDot} /> : null}
 
@@ -46,7 +54,30 @@ export function GenericNotificationCard({ card }: GenericNotificationCardProps) 
       ) : null}
 
       <Text style={styles.time}>{time}</Text>
-    </View>
+    </>
+  );
+
+  // Inert cards render a plain View (the pre-15-10 contract): a Pressable
+  // with `disabled` would merge `disabled: true` into accessibilityState and
+  // announce every generic card as disabled to screen readers.
+  if (!onPress) {
+    return (
+      <View
+        accessibilityLabel={`${card.isUnread ? 'Unread. ' : ''}${card.title}${time ? `, ${time}` : ''}`}
+        style={styles.card}>
+        {body}
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${card.isUnread ? 'Unread. ' : ''}${card.title}${time ? `, ${time}` : ''}`}
+      onPress={onPress}
+      style={styles.card}>
+      {body}
+    </Pressable>
   );
 }
 

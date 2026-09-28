@@ -24,6 +24,7 @@ import { registerReset } from '../../services/resetRegistry';
 import type { ApiError, MyProfile } from '../../services';
 import { FOCUS_REFRESH_TTL_MS } from '../../constants';
 import { hydrateTechnicianRoster } from '../technicians/useTechnicians';
+import { seedAccessFromProfile } from '../attendance/me/attendanceAccessStore';
 
 export interface MyProfileState {
   profile: MyProfile | null;
@@ -114,6 +115,7 @@ async function fetchProfile(): Promise<void> {
     // focus (or pull-to-refresh) can retry immediately if it wants to.
     setState({ profile, isLoading: false, error: null, lastLoadedAt: Date.now() });
     syncTechnicianRoster(profile);
+    seedAccessFromProfile(profile);
   } catch (error) {
     console.warn('[useMyProfile] GET /users/me failed →', error);
     if (seq !== requestSeq) return;

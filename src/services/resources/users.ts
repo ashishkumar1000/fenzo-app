@@ -19,6 +19,7 @@
  */
 import { apiClient } from '../api/apiClient';
 import type { UserRole } from './authApi';
+import type { AttendanceAccessState } from './attendanceMe';
 import type { ApiJob } from './jobs';
 
 export type { Paginated } from '../api/pagination';
@@ -158,6 +159,17 @@ export interface MyProfile {
    * Optional: the backend only issues it on owner-role profiles.
    */
   customerCount?: number;
+  /**
+   * AD-17 attendance mirror (Story 15-7): the four fields the app reads on
+   * FIRST LOAD to seed the entry-point gate — refetches go through the
+   * light `GET /attendance/me/access`, never a full profile pull. Optional:
+   * owners have no attendance state, and the store treats an
+   * absent/malformed mirror as `none` (tab hidden until proven otherwise).
+   */
+  attendanceEnabled?: boolean;
+  attendanceAccess?: AttendanceAccessState;
+  attendanceStartDate?: string | null;
+  onboardedAt?: string | null;
   customers: Paginated<unknown>;
   jobs: Paginated<ProfileJob>;
   jobCounts: JobCounts;

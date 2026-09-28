@@ -30,5 +30,13 @@ export {
 } from './supabaseRealtime';
 export { storage } from './storage';
 export { currentResetEpoch, registerReset, runAllResets } from './resetRegistry';
+export {
+  emitAttendanceAccessRefresh,
+  isAttendanceEventType,
+  isAttendanceReachable,
+  registerAttendanceAccessRefresh,
+  resetAttendanceAccessEvents,
+  setAttendanceReachable,
+} from './attendanceAccessEvents';
 export * from './resources';
 
