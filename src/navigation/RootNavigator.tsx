@@ -24,6 +24,8 @@ import {
   HolidaysScreen,
 } from '../features/attendance/settings';
 import { SetupWizardScreen } from '../features/attendance/setup';
+import RosterScreen from '../features/attendance/enrolments/RosterScreen';
+import DatePickerScreen from '../features/attendance/enrolments/DatePickerScreen';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -107,6 +109,16 @@ export default function RootNavigator() {
       <Stack.Screen
         name="AttendanceSettings"
         component={SettingsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="AttendanceEnrolments"
+        component={RosterScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="DatePicker"
+        component={DatePickerScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen

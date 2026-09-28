@@ -44,7 +44,7 @@ import {
 } from './wizardModel';
 import type { StepGateSnapshot } from './wizardModel';
 import { useSetupWizard } from './useSetupWizard';
-import { useEnrolments } from './useEnrolments';
+import { useEnrolments } from '../enrolments/useEnrolments';
 import { WizardStepFrame } from './WizardStepFrame';
 import { WizardFooter } from './WizardFooter';
 import { WizardBanners } from './WizardBanners';
@@ -65,7 +65,7 @@ export default function SetupWizardScreen({ navigation }: Props) {
   const offices = useOffices();
   const weeklyOffs = useWeeklyOffs();
   const holidays = useHolidays();
-  const roster = useEnrolments({ onOfficeArchived: offices.refresh });
+  const roster = useEnrolments({ today, onOfficeArchived: offices.refresh });
 
   // A 422 ATTENDANCE_SETUP_INCOMPLETE means the server's gates saw less
   // than the client mirror did — refetch both sides of the gate.

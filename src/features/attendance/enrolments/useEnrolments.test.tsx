@@ -1,11 +1,13 @@
 /**
- * Hook tests for `useEnrolments` (Story 15-8): the useOffices tri-state
- * contract (first-load spinner / first-load error / stale banner over kept
- * rows), the per-row write lifecycle (server-truth merges — never an
- * optimistic flip), the per-row latch, and the two special error branches
- * (404 EMPLOYEE_NOT_FOUND → roster refetch; 409 OFFICE_ARCHIVED → the
- * host's onOfficeArchived). Services are mocked at the barrel; the focus
- * effect is captured and fired manually, same convention as
+ * Hook tests for `useEnrolments` (Story 15-8, extended by 15-9): the
+ * useOffices tri-state contract (first-load spinner / first-load error /
+ * stale banner over kept rows), the per-row write lifecycle (server-truth
+ * merges — never an optimistic flip), the per-row latch, the special error
+ * branches (404 EMPLOYEE_NOT_FOUND + 422 ASSIGNMENT_NOT_ENROLLED → roster
+ * refetch; 409 OFFICE_ARCHIVED → the host's onOfficeArchived), and 15-9's
+ * reassignment moves (future-dated commits record the scheduled move;
+ * enable/disable supersede it). Services are mocked at the barrel; the
+ * focus effect is captured and fired manually, same convention as
  * `useOffices.test.tsx`.
  *
  * The write mocks resolve with the BE's REAL response shape — the 7-field
@@ -20,6 +22,7 @@ jest.mock('../../../services', () => ({
   enrolmentsService: {
     list: jest.fn(),
     enable: jest.fn(),
+    reassign: jest.fn(),
     disable: jest.fn(),
   },
 }));
@@ -33,8 +36,11 @@ import { useEnrolments } from './useEnrolments';
 
 const list = enrolmentsService.list as jest.Mock;
 const enable = enrolmentsService.enable as jest.Mock;
+const reassign = enrolmentsService.reassign as jest.Mock;
 const disable = enrolmentsService.disable as jest.Mock;
 const useFocusEffectMock = useFocusEffect as jest.Mock;
+
+const TODAY = '2026-09-28';
 
 function row(overrides: Partial<EnrolmentOverview> = {}): EnrolmentOverview {
   return {
@@ -80,7 +86,7 @@ function Probe({
 }: {
   options?: Parameters<typeof useEnrolments>[0];
 }) {
-  probe = useEnrolments(options ?? {});
+  probe = useEnrolments(options ?? { today: TODAY });
   return null;
 }
 
@@ -185,7 +191,7 @@ describe('enable — toggle-on', () => {
       committed = await probe.enable('e1', 'o1');
     });
 
-    expect(enable).toHaveBeenCalledWith('e1', 'o1');
+    expect(enable).toHaveBeenCalledWith('e1', 'o1', undefined);
     expect(committed).toBe(true);
     // The row UPDATED in place — no nameless ghost appended.
     expect(probe.roster).toHaveLength(1);
@@ -256,7 +262,7 @@ describe('enable — toggle-on', () => {
       status: 409,
       code: 'ATTENDANCE_OFFICE_ARCHIVED',
     });
-    renderProbe({ onOfficeArchived });
+    renderProbe({ today: TODAY, onOfficeArchived });
     await focusAndFlush();
 
     await act(async () => {
@@ -273,7 +279,7 @@ describe('enable — toggle-on', () => {
     const onOfficeArchived = jest.fn();
     list.mockResolvedValue([PRIYA]);
     enable.mockRejectedValue({ status: 500, code: 'SERVER_ERROR' });
-    renderProbe({ onOfficeArchived });
+    renderProbe({ today: TODAY, onOfficeArchived });
     await focusAndFlush();
 
     await act(async () => {
@@ -388,7 +394,7 @@ describe('per-row latch', () => {
     });
 
     expect(enable).toHaveBeenCalledTimes(2);
-    expect(enable).toHaveBeenCalledWith('e2', 'o1');
+    expect(enable).toHaveBeenCalledWith('e2', 'o1', undefined);
     // Both merges landed on their own rows (identity preserved).
     expect(probe.roster.map((r) => r.employeeName)).toEqual(['Priya', 'Ramesh']);
     expect(probe.roster.every((r) => r.attendanceEnabled)).toBe(true);
@@ -400,7 +406,7 @@ describe('row errors', () => {
     list.mockResolvedValue([PRIYA]);
     enable
       .mockRejectedValueOnce({ status: 500, code: 'SERVER_ERROR' })
-      .mockResolvedValueOnce(writeState({ officeId: 'o1', officeName: 'HQ' }));
+      .mockResolvedValueOnce(writeState({ attendanceStartDate: TODAY, officeId: 'o1', officeName: 'HQ' }));
     renderProbe();
     await focusAndFlush();
 
@@ -430,5 +436,132 @@ describe('row errors', () => {
 
     expect(probe.rowError('e1')?.code).toBe('ATTENDANCE_OFFICE_ARCHIVED');
     expect(probe.rowError('e2')).toBeNull();
+  });
+});
+
+describe('enable — the 15-9 start date', () => {
+  it('a picked future date rides on the PUT; an undefined pick omits the param (server-default today)', async () => {
+    list.mockResolvedValue([PRIYA]);
+    enable.mockResolvedValue(writeState({ attendanceStartDate: '2026-11-01' }));
+    renderProbe();
+    await focusAndFlush();
+
+    await act(async () => {
+      await probe.enable('e1', 'o1', '2026-11-01');
+      await probe.enable('e1', 'o1', undefined);
+    });
+
+    expect(enable).toHaveBeenNthCalledWith(1, 'e1', 'o1', '2026-11-01');
+    expect(enable).toHaveBeenNthCalledWith(2, 'e1', 'o1', undefined);
+  });
+});
+
+describe('reassign — FR-6 with an explicit effective date (15-9)', () => {
+  const COVERING = row({
+    attendanceStartDate: TODAY,
+    officeId: 'o1',
+    officeName: 'HQ',
+  });
+
+  it('merges the post-write state and records a SCHEDULED MOVE for a future effectiveFrom', async () => {
+    list.mockResolvedValue([COVERING]);
+    // A future move's write response still carries the CURRENT covering
+    // office (the view cannot see the future) — that is why the note exists.
+    reassign.mockResolvedValue(writeState({ attendanceStartDate: TODAY, officeId: 'o1', officeName: 'HQ' }));
+    renderProbe();
+    await focusAndFlush();
+
+    let committed = false;
+    await act(async () => {
+      committed = await probe.reassign('e1', 'o2', '2026-11-01');
+    });
+
+    expect(reassign).toHaveBeenCalledWith('e1', 'o2', '2026-11-01');
+    expect(committed).toBe(true);
+    expect(probe.scheduledMove('e1')).toEqual({
+      officeId: 'o2',
+      effectiveFrom: '2026-11-01',
+    });
+  });
+
+  it('a today-dated reassign records NO move (row truth updates from the merge)', async () => {
+    list.mockResolvedValue([COVERING]);
+    reassign.mockResolvedValue(writeState({ attendanceStartDate: TODAY, officeId: 'o2', officeName: 'Branch' }));
+    renderProbe();
+    await focusAndFlush();
+
+    await act(async () => {
+      await probe.reassign('e1', 'o2', TODAY);
+    });
+
+    expect(probe.scheduledMove('e1')).toBeNull();
+    expect(probe.roster[0]).toMatchObject({ officeId: 'o2', officeName: 'Branch' });
+  });
+
+  it('the move clears once a refetch shows its office covering today (it took effect)', async () => {
+    list.mockResolvedValueOnce([COVERING]);
+    reassign.mockResolvedValue(writeState({ attendanceStartDate: TODAY, officeId: 'o1' }));
+    renderProbe();
+    await focusAndFlush();
+    await act(async () => {
+      await probe.reassign('e1', 'o2', '2026-11-01');
+    });
+    expect(probe.scheduledMove('e1')).not.toBeNull();
+
+    // The move date has passed; the next focus refetch shows office o2
+    // covering today — the note is now redundant (the row says it itself).
+    list.mockResolvedValue([
+      row({ attendanceStartDate: TODAY, officeId: 'o2', officeName: 'Branch' }),
+    ]);
+    await focusAndFlush();
+    expect(probe.scheduledMove('e1')).toBeNull();
+  });
+
+  it('a later enable or disable supersedes the move', async () => {
+    list.mockResolvedValue([COVERING]);
+    reassign.mockResolvedValue(writeState({ attendanceStartDate: TODAY, officeId: 'o1' }));
+    enable.mockResolvedValue(writeState({ attendanceStartDate: TODAY }));
+    renderProbe();
+    await focusAndFlush();
+
+    await act(async () => {
+      await probe.reassign('e1', 'o2', '2026-11-01');
+    });
+    expect(probe.scheduledMove('e1')).not.toBeNull();
+
+    await act(async () => {
+      await probe.enable('e1', 'o2');
+    });
+    expect(probe.scheduledMove('e1')).toBeNull();
+
+    await act(async () => {
+      await probe.reassign('e1', 'o2', '2026-11-01');
+    });
+    expect(probe.scheduledMove('e1')).not.toBeNull();
+
+    await act(async () => {
+      await probe.disable('e1');
+    });
+    expect(probe.scheduledMove('e1')).toBeNull();
+  });
+
+  it('422 ASSIGNMENT_NOT_ENROLLED records the row error AND refetches (the enrolment moved under the write)', async () => {
+    list.mockResolvedValueOnce([COVERING]);
+    list.mockResolvedValueOnce([]);
+    reassign.mockRejectedValueOnce({
+      status: 422,
+      code: 'ATTENDANCE_ASSIGNMENT_NOT_ENROLLED',
+    });
+    renderProbe();
+    await focusAndFlush();
+
+    await act(async () => {
+      await probe.reassign('e1', 'o2', TODAY);
+    });
+
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(probe.rowError('e1')?.code).toBe('ATTENDANCE_ASSIGNMENT_NOT_ENROLLED');
+    expect(probe.isRowPending('e1')).toBe(false);
+    expect(probe.scheduledMove('e1')).toBeNull();
   });
 });

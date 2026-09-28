@@ -1,15 +1,16 @@
 /**
  * SettingsScreen — the Attendance Settings landing (Story 15-6).
  *
- * Owner-only. Two tiles (Weekly off + Holidays) that navigate to the
- * dedicated screens. Mirrors the AttendanceHomeScreen tile pattern
- * (both consume the shared `Tile` component — 15-6 review finding P14);
- * kept minimal — wizard deep-links (15-8) bypass this and push the
- * individual routes directly.
+ * Owner-only. Three tiles (Weekly off, Holidays, Team enrolment) that
+ * navigate to the dedicated screens. Mirrors the AttendanceHomeScreen tile
+ * pattern (both consume the shared `Tile` component — 15-6 review finding
+ * P14); kept minimal — wizard deep-links (15-8) bypass this and push the
+ * individual routes directly. The Team enrolment tile is 15-9's roster
+ * entry (the ongoing FR-2/FR-6 management surface outside the wizard).
  */
 import { useCallback } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
-import { CalendarDays, Calendar } from 'lucide-react-native';
+import { CalendarDays, Calendar, Users } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { colors, spacing } from '../../../theme';
@@ -38,6 +39,13 @@ export default function SettingsScreen({ navigation }: Props) {
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}>
+        <Tile
+          icon={<Users size={20} color={colors.primary} strokeWidth={1.5} />}
+          iconBg={colors.surfacePage}
+          title="Team enrolment"
+          subtitle="Start dates, offices & tracking per employee"
+          onPress={() => navigation.navigate('AttendanceEnrolments')}
+        />
         <Tile
           icon={<CalendarDays size={20} color={colors.status.scheduled.solid} strokeWidth={1.5} />}
           iconBg={colors.status.scheduled.bg}

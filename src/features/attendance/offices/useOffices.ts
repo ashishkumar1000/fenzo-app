@@ -27,7 +27,7 @@ export interface UseOfficesResult {
   isLoading: boolean;
   hasLoaded: boolean;
   error: ApiError | null;
-  refresh: () => void;
+  refresh: () => Promise<void>;
 }
 
 export function useOffices(): UseOfficesResult {
@@ -55,9 +55,7 @@ export function useOffices(): UseOfficesResult {
     }
   }, []);
 
-  const refresh = useCallback(() => {
-    void fetchList();
-  }, [fetchList]);
+  const refresh = useCallback(() => fetchList(), [fetchList]);
 
   // Focus always refetches — returning from the form re-fetches so a
   // create/edit/archive is visible without a manual pull.

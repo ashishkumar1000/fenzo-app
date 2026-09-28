@@ -160,6 +160,28 @@ export type RootStackParamList = {
   AttendanceHome: undefined;
   /** Story 15-6 — Attendance Settings landing (Weekly off + Holidays). */
   AttendanceSettings: undefined;
+  /** Story 15-9 — the Team enrolment roster (start dates, offices &
+   *  tracking per employee), entered from the Attendance settings tile.
+   *  `pickedDate`/`context` arrive merged from the full-screen DatePicker
+   *  (navigate-back-with-params, the SelectTechniciansScreen pattern);
+   *  read once and clear. */
+  AttendanceEnrolments: {
+    pickedDate?: string | null;
+    context?: string | null;
+  } | undefined;
+  /** Story 15-9 — full-screen date selection (user-directed: a calendar
+   *  PAGE, not an inline modal — inline calendars collide with pinned
+   *  sheet footers). Day tap pops back to `returnTo` merging
+   *  { pickedDate, context }; the opener owns what the date means. */
+  DatePicker: {
+    title: string;
+    value: string | null;
+    today: string;
+    minDate?: string;
+    maxDate?: string;
+    returnTo: 'AttendanceEnrolments';
+    context: string;
+  };
   /** Story 15-6 — tenant-default weekly-off screen + per-employee overrides.
    *  `selectedTechnicianId` is set by `SelectTechniciansScreen` via
    *  navigate-back-with-params (the new-job picker pattern) when the owner

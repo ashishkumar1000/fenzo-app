@@ -1,25 +1,28 @@
 /**
- * OfficesScreen — the owner's attendance offices (Story 15-4, FR-5).
+ * OfficesScreen — the owner's attendance offices (Story 15-4, reshaped to
+ * the user-approved sample design 2026-09-28): a segmented All/Active/
+ * Archived filter with counts, sample cards (OfficeListRow), and a
+ * full-width primary "Add new office" CTA (top of the list — user request
+ * 2026-09-28: it now leads the screen, above the segment tabs).
  *
- * Entry point: the More tab's "Offices" row. Full list fetch (no pagination
- * — locked scope decision), split into active rows and archived rows behind
- * an "Archived" disclosure. A client-side name filter appears once the
- * ACTIVE list exceeds ~8 rows (offices are physical branches — tens per
- * tenant, so a filter box before that is clutter).
- *
- * A tap on an active row opens the edit form; "Add office" opens the form
- * empty. First-run owners (a 15-2 setup needs at least one office) land on
- * the empty state, whose CTA is the same Add.
+ * Behaviour unchanged from the reviewed 15-4 screen: full list fetch (no
+ * pagination), a client-side name filter once ACTIVE rows exceed ~8, taps
+ * on active rows open the edit form, archived rows stay read-only (15-3:
+ * archived offices never unarchive — the sample's Restore button has no
+ * backend), and first-run owners land on the empty state.
  */
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
-  ScrollView,
+  FlatList,
+  Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { ChevronDown, ChevronUp, MapPin, Search, Plus } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, MapPin, Plus, Search } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../../navigation/types';
@@ -30,7 +33,7 @@ import {
   InlineError,
   Input,
 } from '../../../components/ui';
-import { colors, spacing, typography } from '../../../theme';
+import { colors, radius, spacing, typography } from '../../../theme';
 import { useOffices } from './useOffices';
 import OfficeListRow from './OfficeListRow';
 import ScreenHeader from './ScreenHeader';
@@ -38,11 +41,14 @@ import ScreenHeader from './ScreenHeader';
 /** The name filter appears only past this many ACTIVE rows. */
 const SEARCH_THRESHOLD = 8;
 
+import { OfficeSegmentTabs, type OfficeSegment } from './OfficeSegmentTabs';
+
 type Props = NativeStackScreenProps<RootStackParamList, 'AttendanceOffices'>;
 
 export default function OfficesScreen({ navigation }: Props) {
   const { activeOffices, archivedOffices, isLoading, hasLoaded, error, refresh } =
     useOffices();
+  const [segment, setSegment] = useState<OfficeSegment>('all');
   const [query, setQuery] = useState('');
   const [showArchived, setShowArchived] = useState(false);
 
@@ -68,6 +74,19 @@ export default function OfficesScreen({ navigation }: Props) {
 
   const openForm = (officeId?: string) =>
     navigation.navigate('OfficeForm', { officeId });
+
+  // Pull-to-refresh (the 15-6 idiom) — announced to screen readers.
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await refresh();
+      AccessibilityInfo.announceForAccessibility('Offices updated');
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refresh, refreshing]);
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
@@ -104,64 +123,102 @@ export default function OfficesScreen({ navigation }: Props) {
           />
         </View>
       ) : (
-        <ScrollView
+        <FlatList
           contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}>
-          {showSearch ? (
-            <Input
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search offices..."
-              autoCapitalize="none"
-              autoCorrect={false}
-              leadingIcon={<Search size={18} color={colors.textMuted} strokeWidth={2} />}
-            />
-          ) : null}
-
-          {filteredActive.length === 0 && needle ? (
-            <Text style={styles.emptyFilter}>No offices match "{query.trim()}"</Text>
-          ) : (
-            filteredActive.map((office) => (
+          showsVerticalScrollIndicator={false}
+          // Virtualized rows: the ACTIVE list is the growth axis (branches
+          // accumulate over time); the archived block stays behind its
+          // disclosure in the footer, where hand-scale rendering is fine.
+          data={segment === 'archived' ? filteredArchived : filteredActive}
+          keyExtractor={(office) => office.id}
+          renderItem={({ item }) =>
+            segment === 'archived' ? (
+              <OfficeListRow office={item} />
+            ) : (
               <OfficeListRow
-                key={office.id}
-                office={office}
-                onPress={() => openForm(office.id)}
+                office={item}
+                onPress={() => openForm(item.id)}
               />
-            ))
-          )}
+            )
+          }
+          ListEmptyComponent={
+            needle ? (
+              <Text style={styles.emptyFilter}>
+                No {segment === 'archived' ? 'archived ' : ''}offices match "{query.trim()}"
+              </Text>
+            ) : (
+              <></>
+            )
+          }
+          ListHeaderComponent={
+            <View style={styles.listHeader}>
+              {/* The sample's full-width primary CTA. */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Add new office"
+                onPress={() => openForm()}
+                style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}>
+                <View style={styles.ctaIcon}>
+                  <Plus size={20} color={colors.primary} strokeWidth={2.2} />
+                </View>
+                <View style={styles.ctaTexts}>
+                  <Text style={styles.ctaTitle}>Add new office</Text>
+                  <Text style={styles.ctaSubtitle}>Configure geofence &amp; shift hours</Text>
+                </View>
+              </Pressable>
+              <OfficeSegmentTabs
+                segment={segment}
+                activeCount={activeOffices.length}
+                archivedCount={archivedOffices.length}
+                onSelect={setSegment}
+              />
 
-          {archivedOffices.length > 0 ? (
-            <View style={styles.archivedBlock}>
-              <Text style={styles.sectionLabel}>Archived</Text>
-              <IconButton
-                variant="ghost"
-                size="sm"
-                label={showArchived ? 'Hide archived offices' : 'Show archived offices'}
-                onPress={() => setShowArchived((shown) => !shown)}>
-                {showArchived ? (
-                  <ChevronUp size={16} color={colors.textMuted} strokeWidth={2} />
-                ) : (
-                  <ChevronDown size={16} color={colors.textMuted} strokeWidth={2} />
-                )}
-              </IconButton>
+              {showSearch ? (
+                <Input
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Search offices..."
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  leadingIcon={<Search size={18} color={colors.textMuted} strokeWidth={2} />}
+                />
+              ) : null}
             </View>
-          ) : null}
-          {showArchived
-            ? filteredArchived.map((office) => (
-                <OfficeListRow key={office.id} office={office} />
-              ))
-            : null}
-          {showArchived && filteredArchived.length === 0 && needle ? (
-            <Text style={styles.emptyFilter}>No archived offices match "{query.trim()}"</Text>
-          ) : null}
+          }
+          ListFooterComponent={
+            <View style={styles.listFooter}>
+              {segment === 'all' && archivedOffices.length > 0 ? (
+                <>
+                  <View style={styles.archivedBlock}>
+                    <Text style={styles.sectionLabel}>
+                      Archived ({archivedOffices.length})
+                    </Text>
+                    <IconButton
+                      variant="ghost"
+                      size="sm"
+                      label={showArchived ? 'Hide archived offices' : 'Show archived offices'}
+                      onPress={() => setShowArchived((shown) => !shown)}>
+                      {showArchived ? (
+                        <ChevronUp size={16} color={colors.textMuted} strokeWidth={2} />
+                      ) : (
+                        <ChevronDown size={16} color={colors.textMuted} strokeWidth={2} />
+                      )}
+                    </IconButton>
+                  </View>
+                  {showArchived
+                    ? filteredArchived.map((office) => (
+                        <OfficeListRow key={office.id} office={office} />
+                      ))
+                    : null}
+                </>
+              ) : null}
 
-          <Button
-            variant="secondary"
-            leadingIcon={<Plus size={16} color={colors.primary} strokeWidth={2} />}
-            onPress={() => openForm()}>
-            Add office
-          </Button>
-        </ScrollView>
+            </View>
+          }
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        />
       )}
     </SafeAreaView>
   );
@@ -179,6 +236,12 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.s4,
+    gap: spacing.s3,
+  },
+  listHeader: {
+    gap: spacing.s3,
+  },
+  listFooter: {
     gap: spacing.s3,
   },
   noticeWrap: {
@@ -201,5 +264,39 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textMuted,
     flex: 1,
+  },
+  cta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s3,
+    backgroundColor: colors.primary,
+    borderRadius: radius.lg,
+    padding: spacing.s4,
+    marginTop: spacing.s2,
+  },
+  ctaPressed: {
+    opacity: 0.9,
+  },
+  ctaIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ctaTexts: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  ctaTitle: {
+    ...typography.heading,
+    color: colors.onPrimary,
+  },
+  ctaSubtitle: {
+    ...typography.caption,
+    color: colors.onPrimary,
+    opacity: 0.8,
   },
 });

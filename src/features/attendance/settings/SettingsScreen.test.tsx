@@ -63,12 +63,14 @@ describe('SettingsScreen', () => {
     expect(texts).toContain('Tenant-wide holiday list');
   });
 
-  it('renders exactly two tiles, in order (the ordered label list)', () => {
+  it('renders exactly three tiles, in order (the ordered label list)', () => {
     // 15-6 review iteration 1: the old assertion deduped through a Set,
     // which still passed if a tile rendered twice or a third appeared.
     // Filtering to the Pressable (the only node carrying `onPress`) gives
     // one node per control IN RENDER ORDER — the header's back control and
-    // exactly the two tiles, nothing else.
+    // exactly the tiles, nothing else. The third tile is 15-9's roster
+    // entry (Team enrolment) — placed first as the most consequential
+    // attendance setting.
     const { renderer } = renderSettings();
     const buttons = renderer.root.findAll(
       (node) =>
@@ -78,9 +80,27 @@ describe('SettingsScreen', () => {
     );
     expect(buttons.map((node) => node.props.accessibilityLabel)).toEqual([
       'Go back',
+      'Team enrolment',
       'Weekly off',
       'Holidays',
     ]);
+  });
+
+  it('renders the Team enrolment tile with its subtitle', () => {
+    const { renderer } = renderSettings();
+    const texts = renderer.root
+      .findAll((node) => typeof node.props.children === 'string')
+      .map((node) => node.props.children as string);
+    expect(texts).toContain('Team enrolment');
+    expect(texts).toContain('Start dates, offices & tracking per employee');
+  });
+
+  it('tapping "Team enrolment" navigates to AttendanceEnrolments', () => {
+    const { renderer, navigation } = renderSettings();
+    act(() => {
+      findTile(renderer, 'Team enrolment').props.onPress();
+    });
+    expect(navigation.navigate).toHaveBeenCalledWith('AttendanceEnrolments');
   });
 
   it('tapping "Weekly off" navigates to AttendanceWeeklyOff', () => {

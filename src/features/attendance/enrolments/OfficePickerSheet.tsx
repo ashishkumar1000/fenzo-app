@@ -1,10 +1,11 @@
 /**
- * OfficePickerSheet — the inline office picker of the Employees step
- * (Story 15-8). Opens the moment a switch is toggled on for an employee
- * with no office (UX-DR9: the switch does not commit until an office is
- * chosen — cancelling changes nothing); the options are LIVE offices only
- * (`archivedAt == null` — the completion gate counts only these, so the
- * picker may never offer a row the gate would reject).
+ * OfficePickerSheet — the inline office picker (Story 15-8, moved in 15-9
+ * to the enrolments home it now shares with the roster screen). Opens the
+ * moment a switch is toggled on for an employee with no office (UX-DR9:
+ * the switch does not commit until an office is chosen — cancelling
+ * changes nothing); the options are LIVE offices only
+ * (`archivedAt == null` — every consumer counts only these, so the picker
+ * may never offer an archived row).
  *
  * A controlled DS `Sheet` with plain pressable rows (not the `Select`
  * component) so the pick can open programmatically on toggle and each row
@@ -22,6 +23,9 @@ type Props = {
    *  accessible label. */
   employeeName: string | null;
   offices: Office[];
+  /** Empty-state copy — each surface speaks its own context (the wizard
+   *  points at its Offices step, the roster at the settings screen). */
+  emptyMessage?: string;
   onClose: () => void;
   onPick: (officeId: string) => void;
 };
@@ -30,6 +34,7 @@ export function OfficePickerSheet({
   visible,
   employeeName,
   offices,
+  emptyMessage = 'No offices yet — add one from Attendance offices first.',
   onClose,
   onPick,
 }: Props) {
@@ -45,9 +50,7 @@ export function OfficePickerSheet({
           a nested FlatList trips RN's nesting warning on device; office
           lists are hand-scale (15-9 owns any roster-scale virtualizing). */}
       {offices.length === 0 ? (
-        <Text style={styles.empty}>
-          No offices yet. Add one from the Offices step first.
-        </Text>
+        <Text style={styles.empty}>{emptyMessage}</Text>
       ) : (
         offices.map((office) => (
           <Pressable

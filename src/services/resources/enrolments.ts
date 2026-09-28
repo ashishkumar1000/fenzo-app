@@ -16,21 +16,26 @@
  * fidelity but deliberately unread by the FE (15-10 owns the technician
  * surfaces).
  *
- * Deliberately absent: `PUT /attendance/enrolments/:employeeId/office`
- * (reassignment, FR-6) and `startDate` on enable — 15-9 owns the full
- * roster UX (UX-DR9's start-date field); the wizard writes today-dated
- * enrolments only (the server default).
+ * Added by 15-9 (the full roster UX, UX-DR9's complete contract): an
+ * optional `startDate` on enable (today default via omission, any future
+ * date for new joiners — the server clamps past dates, never a 422) and
+ * `reassign` (FR-6, `PUT /:employeeId/office` with an explicit
+ * `effectiveFrom` — the wire always records the date the owner confirmed).
  *
  * Documented failures the FE relies on:
  *   - Every endpoint → 404 `ATTENDANCE_TENANT_NOT_FOUND` for an unknown/
- *     stale tenant. The list itself is 200 `[]` when nobody is enrolled —
- *     never a 404.
+ *     stale tenant. The list itself is 200 `[]` when the tenant has no
+ *     technicians — never a 404 (and never empty merely because nobody is
+ *     enrolled: every technician gets a row).
  *   - PUT with an unknown employee id → 404 `ATTENDANCE_EMPLOYEE_NOT_FOUND`;
  *     with an unknown office → 404 `ATTENDANCE_OFFICE_NOT_FOUND`.
  *   - PUT with an archived office → 409 `ATTENDANCE_OFFICE_ARCHIVED`
  *     (enrol with a live office) — the row banner + offices refetch branch.
- *   - PUT rejected by the coverage trigger at COMMIT → 422
+ *   - PUT enable rejected by the coverage trigger at COMMIT → 422
  *     `ATTENDANCE_ASSIGNMENT_GAP`.
+ *   - Reassign when no enrolment covers `effectiveFrom` → 422
+ *     `ATTENDANCE_ASSIGNMENT_NOT_ENROLLED` (banner + roster refetch — the
+ *     enrolment moved under the sheet).
  *   - DELETE is idempotent (a never-enrolled or already-disabled employee
  *     is an unchanged 200).
  */
@@ -138,22 +143,49 @@ async function list(): Promise<EnrolmentOverview[]> {
 }
 
 /**
- * `PUT /attendance/enrolments/:employeeId` with `{ officeId }` — enables
- * attendance and writes the office assignment in one transaction. The
- * start date is omitted so the server default (today) applies; past dates
- * would be clamped anyway (never a 422). Returns the post-write access
- * state (see `EnrolmentWriteState` — identity fields are the caller's).
- * Failures: 404 `ATTENDANCE_EMPLOYEE_NOT_FOUND` /
+ * `PUT /attendance/enrolments/:employeeId` with `{ officeId, startDate? }`
+ * — enables attendance and writes the office assignment in one transaction,
+ * or re-states a future start date for an already-upcoming employee. The
+ * start date is omitted for the server default (today; the wizard's
+ * today-dated enables and the roster's untouched-chip fast path both rely
+ * on this); a future date pre-dates the enrolment (FR-2's new joiner).
+ * Returns the post-write access state (see `EnrolmentWriteState` — identity
+ * fields are the caller's). Failures: 404 `ATTENDANCE_EMPLOYEE_NOT_FOUND` /
  * `ATTENDANCE_OFFICE_NOT_FOUND` / `ATTENDANCE_TENANT_NOT_FOUND`, 409
  * `ATTENDANCE_OFFICE_ARCHIVED`, 422 `ATTENDANCE_ASSIGNMENT_GAP`.
  */
 async function enable(
   employeeId: string,
   officeId: string,
+  startDate?: string,
 ): Promise<EnrolmentWriteState> {
   const res = await apiClient.put<EnrolmentWriteState>(
     `/attendance/enrolments/${encodeURIComponent(employeeId)}`,
-    { officeId },
+    startDate ? { officeId, startDate } : { officeId },
+  );
+  return normalizeWriteState(res.data);
+}
+
+/**
+ * `PUT /attendance/enrolments/:employeeId/office` with
+ * `{ officeId, effectiveFrom }` — FR-6 reassignment (assignments only; the
+ * enrolment period is untouched). `effectiveFrom` is sent explicitly ALWAYS
+ * so the wire records the date the owner confirmed: today for a covering
+ * employee (past dates would clamp silently), their enrolment start for an
+ * upcoming one (the only in-enrolment dates; a later date is a legitimate
+ * scheduled move — the view keeps reporting the CURRENT office until the
+ * date arrives, so a future move is invisible to reads). Failures: the
+ * enable set above plus 422 `ATTENDANCE_ASSIGNMENT_NOT_ENROLLED` (no
+ * enrolment covers `effectiveFrom` — the roster moved under the caller).
+ */
+async function reassign(
+  employeeId: string,
+  officeId: string,
+  effectiveFrom: string,
+): Promise<EnrolmentWriteState> {
+  const res = await apiClient.put<EnrolmentWriteState>(
+    `/attendance/enrolments/${encodeURIComponent(employeeId)}/office`,
+    { officeId, effectiveFrom },
   );
   return normalizeWriteState(res.data);
 }
@@ -174,5 +206,6 @@ async function disable(employeeId: string): Promise<EnrolmentWriteState> {
 export const enrolmentsService = {
   list,
   enable,
+  reassign,
   disable,
 };

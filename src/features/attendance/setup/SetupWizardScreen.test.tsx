@@ -530,7 +530,7 @@ describe('the Employees step (enrolment-lite)', () => {
     });
 
     expect(enable).toHaveBeenCalledTimes(1);
-    expect(enable).toHaveBeenCalledWith('e1', 'o1');
+    expect(enable).toHaveBeenCalledWith('e1', 'o1', undefined);
     // The row shows the server's returned assignment.
     expect(hasText(wizard.root, 'Office: HQ')).toBe(true);
     expect(hasText(wizard.root, 'Where does Priya work?')).toBe(false);

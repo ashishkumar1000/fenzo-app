@@ -12,6 +12,10 @@
  * row keeps its pre-write server state (per-row retry = toggle again).
  *
  * Future start dates, reassignment and bulk-enable are 15-9's roster UI.
+ * 15-9's one guard here: an UPCOMING row's switch is disabled with a hint
+ * — a bare enable PUT clamps the start date to today and deletes the
+ * future period (AD-8), so the wizard may never silently cancel a
+ * future-dated enrolment; adjust it from the Team enrolment screen.
  */
 import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
@@ -27,7 +31,7 @@ import { colors, spacing, typography } from '../../../theme';
 import type { ApiError, EnrolmentOverview } from '../../../services';
 import type { Office } from '../../../types/office';
 import { enrolmentCoversToday } from './wizardModel';
-import { OfficePickerSheet } from './OfficePickerSheet';
+import { OfficePickerSheet } from '../enrolments/OfficePickerSheet';
 
 type Props = {
   roster: EnrolmentOverview[];
@@ -85,6 +89,12 @@ export function EmployeesStep({
 
   const onToggle = (row: EnrolmentOverview, nextValue: boolean) => {
     if (isRowPending(row.employeeId)) return;
+    // Upcoming rows: the disabled switch already blocks this; the guard
+    // keeps the "never silently cancel a future start" invariant local
+    // (a bare enable clamps the start to today and deletes the period).
+    const upcoming =
+      row.attendanceStartDate !== null && !enrolmentCoversToday(row, today);
+    if (nextValue && upcoming) return;
     if (!nextValue) {
       void onDisable(row.employeeId);
       return;
@@ -145,12 +155,22 @@ export function EmployeesStep({
                         : 'Not tracking attendance'}
                   </Text>
                 </View>
+                {/* In-flight write feedback: the switch is disabled while
+                    the write is pending — the spinner makes the wait
+                    legible (matches the 15-9 roster rows). */}
+                {isRowPending(row.employeeId) ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : null}
               </View>
               <Switch
                 value={coversToday}
                 onValueChange={(nextValue) => onToggle(row, nextValue)}
-                label={`Track attendance for ${row.employeeName}`}
-                disabled={isRowPending(row.employeeId)}
+                label={
+                  upcomingStart !== null
+                    ? `Starts ${upcomingStart} \u00B7 tracking begins then — adjust from Team enrolment`
+                    : `Track attendance for ${row.employeeName}`
+                }
+                disabled={isRowPending(row.employeeId) || upcomingStart !== null}
               />
               {rowErr ? (
                 <View style={styles.rowError}>
@@ -166,6 +186,7 @@ export function EmployeesStep({
         visible={pickerEmployee !== null}
         employeeName={pickerEmployee?.employeeName ?? null}
         offices={liveOffices}
+        emptyMessage="No offices yet. Add one from the Offices step first."
         onClose={() => setPickingId(null)}
         onPick={onPickOffice}
       />
@@ -184,8 +205,14 @@ const styles = StyleSheet.create({
   },
   rowHead: {
     marginBottom: spacing.s2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.s2,
   },
   rowIdentity: {
+    flex: 1,
+    minWidth: 0,
     gap: 2,
   },
   rowName: {

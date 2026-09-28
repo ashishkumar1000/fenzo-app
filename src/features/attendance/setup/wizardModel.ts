@@ -97,13 +97,14 @@ export function liveOffices(offices: Office[]): Office[] {
  * `attendanceStartDate`: the current enrolment's start (`<= today` =
  * covers today; `> today` = upcoming; `null` = not enrolled — null does
  * NOT mean "covers today"). Found live on device, story 15-8 walkthrough.
+ *
+ * 15-9 moved the implementation to `enrolmentsModel` (the roster surfaces'
+ * home) — imported here and re-exported so the wizard's import shape and
+ * tests are untouched.
  */
-export function enrolmentCoversToday(
-  row: Pick<EnrolmentOverview, 'attendanceStartDate'>,
-  today: string,
-): boolean {
-  return row.attendanceStartDate !== null && row.attendanceStartDate <= today;
-}
+import { enrolmentCoversToday } from '../enrolments/enrolmentsModel';
+
+export { enrolmentCoversToday };
 
 /** One-line rule summary for a step-2 row — "09:00–18:00 · late after 15 min · 8 h full day". */
 export function describeOfficeRule(rule: OfficeRule): string {
