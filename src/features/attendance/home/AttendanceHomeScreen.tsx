@@ -1,18 +1,30 @@
 /**
- * AttendanceHomeScreen — the owner entry into attendance (Story 15-6).
+ * AttendanceHomeScreen — the owner entry into attendance (Story 15-6,
+ * gated by the 15-8 setup wizard).
  *
- * For 15-6 this is a minimal shim: two tiles (Offices + Settings) so the
- * Settings landing is reachable through a real Home, matching the IA
- * diagram (`Attendance Home (Owner) ├─ …`). The real dashboard (15-8
- * setup wizard + 19+ employee/insights surface) extends this screen
- * without breaking 15-6's nav.
+ * For 15-6 this was a minimal shim: two tiles (Offices + Settings). 15-8
+ * adds the ENTRY GATE: on every focus, an affirmative 200 from
+ * `GET /attendance/setup` whose `setupCompletedAt` is still null
+ * `replace`s this screen with the wizard (FR-3: the tile opens the wizard,
+ * not an empty dashboard — `replace` so the back stack stays honest and
+ * the two routes can never sit on the stack together, which is what makes
+ * the loop guard trivial: the wizard never redirects into itself, it only
+ * ever replaces BACK to this screen, whose gate then sees a completed
+ * setup and renders the shim). Any gate failure — network error, or a
+ * technician's 403 — means NO redirect: the shim renders exactly as
+ * today, so a failure can never start a redirect loop and the full
+ * nav-guard stays with the 15-6 D1 deferral story.
+ *
+ * The tiles below are the post-setup surface (Epic 16 replaces them with a
+ * real dashboard without breaking 15-6's nav).
  */
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 import { Building2, Settings as SettingsIcon } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { colors, spacing } from '../../../theme';
+import { attendanceSetupService } from '../../../services';
 import { Tile } from '../../../components/Tile';
 import ScreenHeader from '../offices/ScreenHeader';
 import type { RootStackParamList } from '../../../navigation/types';
@@ -30,6 +42,43 @@ export default function AttendanceHomeScreen({ navigation }: Props) {
       navigation.navigate('MainTabs');
     }
   }, [navigation]);
+
+  // The setup gate — one light GET per focus, consistent with the
+  // attendance screens' focus-refetch contract. Latest-wins: a slow stale
+  // response must never redirect after a newer focus decided otherwise.
+  const gateSeqRef = useRef(0);
+  const runGate = useCallback(() => {
+    const seq = ++gateSeqRef.current;
+    void (async () => {
+      try {
+        const state = await attendanceSetupService.getSetup();
+        if (seq !== gateSeqRef.current) return;
+        // Only redirect while THIS screen is still focused: a late answer
+        // landing after the owner pushed a tile would REPLACE THE FOCUSED
+        // ROUTE (a screen-dispatched replace without target acts on the
+        // current index), stacking the wizard on top of the pushed screen —
+        // and device-back would pop to AttendanceHome whose gate replaces
+        // again. The focused check breaks that loop at the source.
+        if (state.setupCompletedAt === null && navigation.isFocused()) {
+          // A never-started setup counts as not completed: the owner lands
+          // in the wizard, whose mount POSTs the start (matrix row 1). Only
+          // a COMPLETED setup keeps the shim.
+          navigation.replace('AttendanceSetupWizard');
+        }
+      } catch {
+        // Gate GET failed or was forbidden — never surface, never
+        // redirect; the wizard is owner-only by affirmative 200.
+      }
+    })();
+  }, [navigation]);
+
+  // Subscribed imperatively rather than via `useFocusEffect` so the screen
+  // keeps rendering outside a navigator (the optional calls are real
+  // no-ops there; the navigator always provides both methods).
+  useEffect(() => {
+    const unsubscribe = navigation.addListener?.('focus', runGate);
+    return () => unsubscribe?.();
+  }, [navigation, runGate]);
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>

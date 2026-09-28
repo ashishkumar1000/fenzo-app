@@ -18,6 +18,10 @@
  *    which is typically in the past and would make the first Save a
  *    reschedule the BE silently clamps (AD-8). A date-only reschedule of
  *    a scheduled edit is therefore a dirty, saveable change.
+ *  - Save gating is MODE-SPLIT (15-8's fix for the device-reported add-mode
+ *    dead end): add mode saves on TOUCHED + valid (a set equal to the
+ *    Sunday baseline is savable — see `isOverrideSaveDisabled`); edit mode
+ *    stays dirty-vs-saved so a no-op toggle never re-PUTs.
  *  - An EMPTY day set is a valid save: the BE stores a works-all-week
  *    marker override (15-5's locked decision), so only the all-7-days
  *    rule (FR-18) blocks here. "Remove weekly off" is the separate "stop
@@ -42,7 +46,12 @@ import { WeeklyOffDayPicker } from './WeeklyOffDayPicker';
 import WeeklyOffOverrideEmployeeField from './WeeklyOffOverrideEmployeeField';
 import WeeklyOffOverrideSheetFooter from './WeeklyOffOverrideSheetFooter';
 import { useOverrideRemove } from './useOverrideRemove';
-import { isWeeklyOffDirty, isValidIsoDate, SUNDAY } from './weeklyOffModel';
+import {
+  isOverrideSaveDisabled,
+  isWeeklyOffDirty,
+  isValidIsoDate,
+  SUNDAY,
+} from './weeklyOffModel';
 
 export type WeeklyOffOverrideSheetProps = {
   visible: boolean;
@@ -153,14 +162,22 @@ export default function WeeklyOffOverrideSheet({
     canonicalDays: baselineSorted,
   });
 
-  // An empty day set does NOT block (it saves a works-all-week override);
-  // the all-7-days rule (FR-18) still does.
+  // The dirty predicate is the model's (15-6 review iteration 1: the sheet
+  // used to carry an inline copy of it). Save gating is MODE-SPLIT (the
+  // 15-8 add-mode fix, see `isOverrideSaveDisabled`): add mode saves on
+  // touched + valid — a set equal to the Sunday baseline (the device-
+  // reported dead end: a Sunday-only override was unsavable) now saves —
+  // while edit mode keeps dirty-vs-saved so a no-op toggle never re-PUTs.
   const saveDisabled =
     !employeeId ||
-    !dirty ||
-    sevenSelected ||
-    !dateValid ||
-    isSaving;
+    isOverrideSaveDisabled({
+      isEdit,
+      hasTouched,
+      dirty,
+      workingDays,
+      dateValid,
+      isSaving,
+    });
 
   const onDayToggle = (next: IsoWeekday[]) => {
     setHasTouched(true);

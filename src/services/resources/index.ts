@@ -44,6 +44,10 @@ export type {
   HolidayImpactResponse,
   UpdateHolidayRequest,
 } from './holidays';
+export { attendanceSetupService } from './attendanceSetup';
+export type { SetupState, SetupStep } from './attendanceSetup';
+export { enrolmentsService } from './enrolments';
+export type { EnrolmentOverview, EnrolmentWriteState } from './enrolments';
 export { customerService } from './customers';
 export type {
   ApiCustomer,

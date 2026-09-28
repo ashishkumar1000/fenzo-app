@@ -168,6 +168,15 @@ export type RootStackParamList = {
   AttendanceWeeklyOff: { selectedTechnicianId?: string | null } | undefined;
   /** Story 15-6 — holidays list + add/edit sheet. */
   AttendanceHolidays: undefined;
+  /**
+   * Story 15-8 — the first-run attendance setup wizard. AttendanceHome's
+   * focus gate `replace`es here until setup completes; the wizard itself
+   * never redirects into itself (completion/already-completed bounce back
+   * to AttendanceHome via replace — exactly one of the two routes is ever
+   * on the stack). Steps are component state inside the screen, not
+   * navigator routes; editing pushes the existing attendance routes.
+   */
+  AttendanceSetupWizard: undefined;
 };
 
 /**

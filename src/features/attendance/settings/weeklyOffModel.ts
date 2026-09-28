@@ -113,3 +113,40 @@ export function isWeeklyOffSaveDisabled({
 }): boolean {
   return !dirty || workingDays.length === 7 || !dateValid || isSaving;
 }
+
+/**
+ * Save gating for the PER-EMPLOYEE OVERRIDE sheet — split by mode (the
+ * 15-8 fix for the add-mode dead end reported on device 2026-09-28):
+ *
+ *  - ADD mode — the baseline was the visual Sunday preselection, so a
+ *    deliberate set EQUAL to the default could never satisfy
+ *    dirty-vs-baseline: toggling Sunday off and back on restored the
+ *    baseline and re-disabled Save, making e.g. a Sunday-only override
+ *    unsavable. Per the 15-6 review decision ("toggle off and back on
+ *    enables Save" — shipped without its test), Save now needs only
+ *    TOUCHED + a valid override: not all 7 days (FR-18; an EMPTY set is
+ *    the works-all-week override and saves), a parseable date, and no
+ *    write in flight. The picked-employee requirement stays at the call
+ *    site (it is about the target, not the form).
+ *
+ *  - EDIT mode — unchanged: dirty-vs-current-saved-rule, so a no-op
+ *    toggle cannot re-PUT the existing rule.
+ */
+export function isOverrideSaveDisabled({
+  isEdit,
+  hasTouched,
+  dirty,
+  workingDays,
+  dateValid,
+  isSaving,
+}: {
+  isEdit: boolean;
+  hasTouched: boolean;
+  dirty: boolean;
+  workingDays: IsoWeekday[];
+  dateValid: boolean;
+  isSaving: boolean;
+}): boolean {
+  if (workingDays.length === 7 || !dateValid || isSaving) return true;
+  return isEdit ? !dirty : !hasTouched;
+}

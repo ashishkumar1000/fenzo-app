@@ -16,6 +16,7 @@
 import type { IsoWeekday } from '../../../services';
 import {
   describeDays,
+  isOverrideSaveDisabled,
   isValidIsoDate,
   isWeeklyOffDirty,
   isWeeklyOffSaveDisabled,
@@ -165,5 +166,71 @@ describe('isWeeklyOffSaveDisabled', () => {
     expect(
       isWeeklyOffSaveDisabled({ ...base, workingDays: [7], isSaving: true }),
     ).toBe(true);
+  });
+});
+
+describe('isOverrideSaveDisabled — the 15-8 add-mode fix', () => {
+  // The add sheet's baseline is the visual Sunday preselect, so a set equal
+  // to [SUNDAY] is exactly the device-reported dead end: toggle-off→on
+  // restored the baseline and the old dirty-vs-baseline gate re-disabled
+  // Save forever. Add mode now needs only TOUCHED + valid; edit mode keeps
+  // dirty-vs-saved.
+  const add = (overrides: Partial<Parameters<typeof isOverrideSaveDisabled>[0]> = {}) =>
+    isOverrideSaveDisabled({
+      isEdit: false,
+      hasTouched: true,
+      dirty: false, // a set equal to the baseline is NOT dirty — add mode must not care
+      workingDays: [SUNDAY],
+      dateValid: true,
+      isSaving: false,
+      ...overrides,
+    });
+
+  it('add mode: untouched is disabled (the Sunday preselect alone is not a save)', () => {
+    expect(add({ hasTouched: false })).toBe(true);
+  });
+
+  it('add mode: touched + a set EQUAL to the Sunday baseline is ENABLED (the fixed dead end)', () => {
+    // Reported on device 2026-09-28: a deliberate Sunday-only override was
+    // unsavable because restoring the baseline un-dirtied the form.
+    expect(add()).toBe(false);
+  });
+
+  it('add mode: touched + empty set is ENABLED (the works-all-week override)', () => {
+    expect(add({ workingDays: [] })).toBe(false);
+  });
+
+  it('add mode: touched + a diverging set is ENABLED (dirty irrelevant in add mode)', () => {
+    expect(add({ dirty: true, workingDays: [6] })).toBe(false);
+  });
+
+  it('edit mode: a no-op toggle (not dirty) stays disabled — it must not re-PUT', () => {
+    expect(
+      add({ isEdit: true, dirty: false, hasTouched: true }),
+    ).toBe(true);
+  });
+
+  it('edit mode: a real divergence (dirty) enables', () => {
+    expect(
+      add({ isEdit: true, dirty: true, workingDays: [5, 7] }),
+    ).toBe(false);
+  });
+
+  it('BOTH modes: an all-7-days set blocks (FR-18)', () => {
+    const seven = [1, 2, 3, 4, 5, 6, 7] as IsoWeekday[];
+    expect(add({ workingDays: seven })).toBe(true);
+    expect(
+      add({ isEdit: true, dirty: true, workingDays: seven }),
+    ).toBe(true);
+  });
+
+  it('BOTH modes: an impossible date blocks', () => {
+    expect(add({ dateValid: false })).toBe(true);
+    expect(add({ isEdit: true, dirty: true, dateValid: false })).toBe(true);
+  });
+
+  it('BOTH modes: a save already in flight blocks', () => {
+    expect(add({ isSaving: true })).toBe(true);
+    expect(add({ isEdit: true, dirty: true, isSaving: true })).toBe(true);
   });
 });

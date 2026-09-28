@@ -154,6 +154,20 @@ describe('WeeklyOffOverrideSheet — edit mode', () => {
     expect(findButton(root, 'Save').props.disabled).toBe(true);
   });
 
+  it('toggling a saved day OFF and back ON keeps Save disabled (no net change, no re-PUT)', () => {
+    // The edit-mode half of the 15-8 mode-split: the baseline is the SAVED
+    // rule, so a touch that restores it is not dirty — Save must not
+    // re-PUT the unchanged rule.
+    const { root } = renderSheet({ override });
+    act(() => {
+      findPill(root, 5).props.onPress(); // off
+    });
+    act(() => {
+      findPill(root, 5).props.onPress(); // back on — net no change
+    });
+    expect(findButton(root, 'Save').props.disabled).toBe(true);
+  });
+
   it('Save PUTs the sorted working days for that employee and closes', async () => {
     const saveOverride = jest.fn().mockResolvedValue({});
     const onClose = jest.fn();
@@ -365,6 +379,22 @@ describe('WeeklyOffOverrideSheet — add mode', () => {
     const { root } = renderSheet({ pickedEmployee: RAMESH });
     act(() => {
       findPill(root, 5).props.onPress();
+    });
+    expect(findButton(root, 'Save').props.disabled).toBe(false);
+  });
+
+  it('toggling the Sunday preselect OFF and back ON leaves Save ENABLED (the fixed dead end)', () => {
+    // The add-mode half of the 15-8 mode-split, distinguishing the FIXED
+    // gating from the old dirty-vs-baseline rule: restoring the [SUNDAY]
+    // baseline leaves the set untouched AND not dirty, yet the owner has
+    // deliberately touched it — under the old gating this was exactly the
+    // device-reported unsavable Sunday-only override.
+    const { root } = renderSheet({ pickedEmployee: RAMESH });
+    act(() => {
+      findPill(root, 7).props.onPress(); // off
+    });
+    act(() => {
+      findPill(root, 7).props.onPress(); // back on — the baseline again
     });
     expect(findButton(root, 'Save').props.disabled).toBe(false);
   });

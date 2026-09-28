@@ -23,6 +23,7 @@ import {
   WeeklyOffScreen,
   HolidaysScreen,
 } from '../features/attendance/settings';
+import { SetupWizardScreen } from '../features/attendance/setup';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -126,6 +127,13 @@ export default function RootNavigator() {
       <Stack.Screen
         name="OfficeMapPicker"
         component={OfficeMapPickerScreen}
+        options={{ headerShown: false }}
+      />
+      {/* Story 15-8 — the first-run attendance setup wizard (owner-only;
+          AttendanceHome's focus gate replaces into it until completion). */}
+      <Stack.Screen
+        name="AttendanceSetupWizard"
+        component={SetupWizardScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>
