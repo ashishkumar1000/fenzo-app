@@ -31,11 +31,13 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../../components/ui';
 import { colors, fontSize, spacing } from '../../../theme';
 import {
+  refreshAttendanceAccessNow,
   refreshAttendanceAccessOnFocus,
   useAttendanceAccess,
 } from './attendanceAccessStore';
 import { useAttendanceSummary } from './useAttendanceSummary';
 import { AttendanceSummaryView } from './AttendanceSummaryView';
+import { AttendanceTodayView } from '../today/AttendanceTodayView';
 import {
   formatStartsOnCopy,
   shouldShowIntro,
@@ -53,7 +55,8 @@ export default function AttendanceTabScreen({ navigation }: Props) {
   const { status, access } = useAttendanceAccess();
   const accessState = access?.attendanceAccess ?? null;
   const summaryEnabled = accessState === 'active' || accessState === 'upcoming';
-  const summary = useAttendanceSummary(summaryEnabled);
+  const { state: summaryState, refresh: refreshSummary, refreshNow: refreshSummaryNow } =
+    useAttendanceSummary(summaryEnabled);
 
   // Focus: the store's min-gap decides whether a refetch actually fires.
   useFocusEffect(
@@ -113,7 +116,7 @@ export default function AttendanceTabScreen({ navigation }: Props) {
     }
   }, [accessState, navigation]);
 
-  const onRetrySummary = summary.refresh;
+  const onRetrySummary = refreshSummary;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -155,7 +158,16 @@ export default function AttendanceTabScreen({ navigation }: Props) {
                   </Text>
                 </View>
               )}
-              <AttendanceSummaryView state={summary.state} onRetry={onRetrySummary} />
+              {/* The Today check-in section (16-4): active only — upcoming
+                  renders no check-in control (absent, not disabled). */}
+              {accessState === 'active' && (
+                <AttendanceTodayView
+                  summary={{ state: summaryState, refresh: refreshSummary }}
+                  refreshSummaryNow={refreshSummaryNow}
+                  refreshAccessNow={refreshAttendanceAccessNow}
+                />
+              )}
+              <AttendanceSummaryView state={summaryState} onRetry={onRetrySummary} />
               {accessState === 'upcoming' && shouldShowIntro(access) && (
                 <Button variant="secondary" size="md" onPress={openIntro}>
                   Finish the intro now

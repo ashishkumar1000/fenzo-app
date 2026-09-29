@@ -30,6 +30,8 @@ function state(overrides: Partial<AttendanceSummaryState>): AttendanceSummarySta
       endTime: '20:00',
       lateCutOffMinutes: 15,
       weeklyOffDays: [7],
+      officeLatitude: 12.97,
+      officeLongitude: 77.59,
     },
     isLoading: false,
     error: null,

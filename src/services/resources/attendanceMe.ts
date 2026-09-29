@@ -61,7 +61,30 @@ export interface AttendanceAccess {
 /**
  * `GET /attendance/me/summary` — the FR-4 summary (office, timings, late
  * cut-off, weekly offs) for `active`/`upcoming`; honestly empty otherwise.
+ * 16-4 adds the Today extension: office pin, today's day facts and today's
+ * record — `today`/`todayRecord` exist ONLY for active employees (null
+ * otherwise); `todayRecord` is null until the first check-in. Instants
+ * carry the tenant offset — format wall-clock parts, never convert.
  */
+export interface AttendanceTodayFacts {
+  /** `YYYY-MM-DD` tenant-local (the server's today — never the device's). */
+  date: string;
+  isWeeklyOff: boolean;
+  isHoliday: boolean;
+  holidayName: string | null;
+  isWorkingDay: boolean;
+}
+
+export interface AttendanceTodayRecord {
+  checkinAt: string;
+  checkoutAt: string | null;
+  lateMinutes: number | null;
+  isLate: boolean;
+  workedMinutes: number | null;
+  earlyCheckout: boolean | null;
+  earlyCheckoutMinutes: number | null;
+}
+
 export interface AttendanceSummary {
   officeId: string | null;
   officeName: string | null;
@@ -71,6 +94,16 @@ export interface AttendanceSummary {
   lateCutOffMinutes: number | null;
   /** ISO weekday numbers 1=Mon..7=Sun, sorted; [] = no weekly offs. */
   weeklyOffDays: number[];
+  /** Office pin (display-only distance hint input; null when no office). */
+  officeLatitude: number | null;
+  officeLongitude: number | null;
+  /** Active only; null otherwise (upcoming's anchor is a future date).
+   *  `undefined` = the field was ABSENT on the wire (a pre-16-4 backend) —
+   *  the Today screen's legacy-mode signal, never treated as facts. */
+  today?: AttendanceTodayFacts | null;
+  /** Active only; null when no record yet today. Undefined = absent on the
+   *  wire (pre-16-4 backend). */
+  todayRecord?: AttendanceTodayRecord | null;
 }
 
 /** Defensive unwrap: a malformed access body degrades to `none`, never a
@@ -103,6 +136,58 @@ function normalizeSummary(raw: Partial<AttendanceSummary> | null | undefined): A
     weeklyOffDays: Array.isArray(raw?.weeklyOffDays)
       ? raw.weeklyOffDays.filter((d): d is number => typeof d === 'number').sort((a, b) => a - b)
       : [],
+    // 16-4 Today extension — defensively absent (a not-yet-deployed backend)
+    // means "unknown", NOT "facts say working day": undefined keeps the
+    // legacy-mode distinction the Today screen's gate relies on.
+    officeLatitude:
+      typeof raw?.officeLatitude === 'number' && Number.isFinite(raw.officeLatitude)
+        ? raw.officeLatitude
+        : null,
+    officeLongitude:
+      typeof raw?.officeLongitude === 'number' && Number.isFinite(raw.officeLongitude)
+        ? raw.officeLongitude
+        : null,
+    today: raw?.today === undefined ? undefined : normalizeTodayFacts(raw.today),
+    todayRecord:
+      raw?.todayRecord === undefined ? undefined : normalizeTodayRecord(raw.todayRecord),
+  };
+}
+
+function normalizeTodayFacts(
+  raw: Partial<AttendanceTodayFacts> | null,
+): AttendanceTodayFacts | null {
+  if (!raw || typeof raw.date !== 'string') return null;
+  return {
+    date: raw.date,
+    isWeeklyOff: raw.isWeeklyOff === true,
+    isHoliday: raw.isHoliday === true,
+    holidayName: typeof raw.holidayName === 'string' ? raw.holidayName : null,
+    isWorkingDay: raw.isWorkingDay === true,
+  };
+}
+
+function normalizeTodayRecord(
+  raw: Partial<AttendanceTodayRecord> | null,
+): AttendanceTodayRecord | null {
+  if (!raw || typeof raw.checkinAt !== 'string') return null;
+  return {
+    checkinAt: raw.checkinAt,
+    checkoutAt: typeof raw.checkoutAt === 'string' ? raw.checkoutAt : null,
+    lateMinutes:
+      typeof raw.lateMinutes === 'number' && Number.isFinite(raw.lateMinutes)
+        ? raw.lateMinutes
+        : null,
+    isLate: raw.isLate === true,
+    workedMinutes:
+      typeof raw.workedMinutes === 'number' && Number.isFinite(raw.workedMinutes)
+        ? raw.workedMinutes
+        : null,
+    earlyCheckout: typeof raw.earlyCheckout === 'boolean' ? raw.earlyCheckout : null,
+    earlyCheckoutMinutes:
+      typeof raw.earlyCheckoutMinutes === 'number' &&
+      Number.isFinite(raw.earlyCheckoutMinutes)
+        ? raw.earlyCheckoutMinutes
+        : null,
   };
 }
 

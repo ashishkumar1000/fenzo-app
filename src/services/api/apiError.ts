@@ -34,6 +34,14 @@ export interface ApiError {
   message: string;
   /** Raw response body from the backend, if any. Use this when a screen needs field-level validation errors rather than just the top-line message. */
   details?: unknown;
+  /**
+   * The `Retry-After` response header, in whole seconds, when the server
+   * sent one (attendance rate limiting, 16-1 AD-15: the filter strips the
+   * body field into this header, so headers are the only wire source).
+   * Integer-seconds form only; a date-form or unparseable value stays
+   * `undefined` so callers fall back to their own window constant.
+   */
+  retryAfterSeconds?: number;
 }
 
 /**
@@ -129,7 +137,23 @@ export function toApiError(error: AxiosError, onUnauthorized?: () => void): ApiE
     code: payload?.error_code ?? defaultCodeForStatus(status),
     message: flattenErrorMessage(payload?.message) ?? defaultMessageForStatus(status),
     details: data,
+    ...(status >= 400 && { retryAfterSeconds: parseRetryAfterSeconds(error.response.headers) }),
   };
+}
+
+/**
+ * The `Retry-After` header as integer seconds, or undefined. HTTP also
+ * allows a date-form value — anything that isn't a clean positive integer
+ * stays undefined (callers fall back to their own window constant; a NaN
+ * countdown must never render).
+ */
+function parseRetryAfterSeconds(headers: unknown): number | undefined {
+  const raw = (headers as Record<string, unknown> | undefined)?.[
+    'retry-after'
+  ] as string | number | undefined;
+  if (raw === undefined || raw === null) return undefined;
+  const seconds = typeof raw === 'number' ? raw : Number(String(raw).trim());
+  return Number.isInteger(seconds) && seconds > 0 ? seconds : undefined;
 }
 
 /**

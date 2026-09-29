@@ -74,6 +74,17 @@ jest.mock('react-native-nitro-geolocation/compat', () => ({
 jest.mock('react-native-nitro-geolocation', () => ({
   __esModule: true,
   requestPermission: jest.fn(async () => 'granted'),
+  // Story 16-3/16-4 attendance modules import the main API's named
+  // functions; incidental imports get inert stubs — suites that drive
+  // capture/permission override these locally.
+  getCurrentPosition: jest.fn(),
+  checkPermission: jest.fn(async () => 'granted'),
+  getAccuracyAuthorization: jest.fn(async () => 'full'),
+  getProviderStatus: jest.fn(async () => ({
+    locationServicesEnabled: true,
+    backgroundModeEnabled: false,
+  })),
+  hasServicesEnabled: jest.fn(async () => true),
 }));
 
 // react-native-maps is a native Fabric component — it cannot boot in jest,

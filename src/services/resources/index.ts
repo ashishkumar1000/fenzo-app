@@ -52,6 +52,12 @@ export type {
   AttendanceAccessState,
   AttendanceSummary,
 } from './attendanceMe';
+export { attendanceCheckInService } from './attendanceCheckIn';
+export type {
+  CheckInResponse,
+  CheckOutResponse,
+  DayContextFlags,
+} from './attendanceCheckIn';
 export { enrolmentsService } from './enrolments';
 export type { EnrolmentOverview, EnrolmentWriteState } from './enrolments';
 export { customerService } from './customers';

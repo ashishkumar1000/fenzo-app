@@ -52,6 +52,8 @@ function summary(
     endTime: '18:00',
     lateCutOffMinutes: 15,
     weeklyOffDays: [6, 7],
+    officeLatitude: 19.076,
+    officeLongitude: 72.8777,
     ...overrides,
   };
 }

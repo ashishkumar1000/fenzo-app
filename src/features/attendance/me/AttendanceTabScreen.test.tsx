@@ -25,6 +25,7 @@ jest.mock('@react-navigation/native', () => ({
 jest.mock('./attendanceAccessStore', () => ({
   useAttendanceAccess: jest.fn(),
   refreshAttendanceAccessOnFocus: jest.fn(),
+  refreshAttendanceAccessNow: jest.fn(),
 }));
 
 jest.mock('./useAttendanceSummary', () => ({
@@ -55,6 +56,8 @@ const SUMMARY: AttendanceSummary = {
   endTime: '18:00',
   lateCutOffMinutes: 15,
   weeklyOffDays: [6, 7],
+  officeLatitude: 19.076,
+  officeLongitude: 72.8777,
 };
 
 function access(
@@ -270,14 +273,22 @@ describe('the state router', () => {
     expect(refreshOnFocusMock).toHaveBeenCalled();
   });
 
-  it('no check-in control exists in ANY state, and the header is never bare "Today"', () => {
-    for (const state of [UNKNOWN, NONE, ACTIVE, ready('upcoming'), HISTORY_ONLY]) {
+  // UPDATED for Story 16-4: the check-in control EXISTS in the active
+  // state now (that story owns it); it stays ABSENT — not disabled — in
+  // every other state, and the header is never bare "Today".
+  it('the check-in control is active-only (absent everywhere else), and the header is never bare "Today"', () => {
+    for (const state of [UNKNOWN, NONE, ready('upcoming'), HISTORY_ONLY]) {
       const screen = renderScreen(state);
       expect(textContaining(screen.root, 'Check in')).toHaveLength(0);
       expect(textContaining(screen.root, 'Check out')).toHaveLength(0);
       expect(textNodes(screen.root, 'Today')).toHaveLength(0);
       expect(textNodes(screen.root, 'Attendance').length).toBe(1); // the header
     }
+    // Active: the Today section renders the check-in CTA.
+    const active = renderScreen(ACTIVE);
+    expect(textContaining(active.root, 'Check in').length).toBeGreaterThan(0);
+    expect(textNodes(active.root, 'Today')).toHaveLength(0);
+    expect(textNodes(active.root, 'Attendance').length).toBe(1); // the header
   });
 });
 

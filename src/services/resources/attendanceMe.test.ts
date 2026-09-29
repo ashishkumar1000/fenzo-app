@@ -181,7 +181,7 @@ describe('attendanceMeService.getSummary', () => {
     const returned = await attendanceMeService.getSummary();
 
     expect(get).toHaveBeenCalledWith('/attendance/me/summary');
-    expect(returned).toEqual(payload);
+    expect(returned).toEqual({ ...payload, officeLatitude: null, officeLongitude: null, today: undefined, todayRecord: undefined });
   });
 
   it('weeklyOffDays keeps only numbers and sorts NUMERICALLY (not lexicographically)', async () => {
@@ -240,6 +240,10 @@ describe('attendanceMeService.getSummary', () => {
       endTime: null,
       lateCutOffMinutes: null,
       weeklyOffDays: [],
+      officeLatitude: null,
+      officeLongitude: null,
+      today: undefined,
+      todayRecord: undefined,
     });
   });
 

@@ -226,3 +226,12 @@ export function useAttendanceAccessLifecycle(): void {
 export function refreshAttendanceAccessOnFocus(): void {
   void refreshAccess();
 }
+
+/**
+ * Forced, gap-bypassing access refresh (16-4): a 403 NOT_TRACKED from a
+ * check-in means the owner disabled the employee mid-session — the tab
+ * must catch the flip NOW, not after the min-gap expires.
+ */
+export function refreshAttendanceAccessNow(): void {
+  void refreshAccess(true);
+}
