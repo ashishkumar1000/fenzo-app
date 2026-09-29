@@ -25,9 +25,18 @@ import type { ApiNotification } from '../../services';
 import { isAttendanceEventType } from '../../services/attendanceAccessEvents';
 import { formatLongDate } from '../../utils/formatLongDate';
 import { isReportNotification } from './reportNotificationModel';
+import {
+  isLeaveEmployeeEvent,
+  isLeaveOwnerEvent,
+} from './leaveNotificationModel';
 
 /** What a notification row renders as on the shared inbox. */
-export type NotificationEventAction = 'job' | 'report' | 'attendance' | 'generic';
+export type NotificationEventAction =
+  | 'job'
+  | 'report'
+  | 'attendance'
+  | 'leave'
+  | 'generic';
 
 /** The signed-in session's role (`useAuth`) — the registry's second key. */
 export type SessionRole = 'owner' | 'technician';
@@ -48,6 +57,12 @@ export function notificationEventAction(
   // tap-guarded deep link to the Attendance tab (the seam decides whether
   // that tab currently exists).
   if (role === 'technician' && isAttendanceEventType(n.eventType)) return 'attendance';
+  // Story 17-6: the leave cards — role-keyed ENUMERATED classifications of
+  // exactly the 8 shipped events (wire-truth F6). `leave.pending_reminder`
+  // (story 19-1) is deliberately NOT in either list: it stays on the
+  // generic card instead of composing broken copy from a missing payload.
+  if (role === 'owner' && isLeaveOwnerEvent(n.eventType)) return 'leave';
+  if (role === 'technician' && isLeaveEmployeeEvent(n.eventType)) return 'leave';
   if (n.jobId !== null) return 'job';
   return 'generic';
 }

@@ -42,7 +42,16 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Bell, Check, ChevronLeft } from 'lucide-react-native';
+import {
+  Bell,
+  CalendarOff,
+  CalendarX,
+  Check,
+  CheckCircle2,
+  ChevronLeft,
+  Undo2,
+  XCircle,
+} from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -75,6 +84,11 @@ import {
   buildGenericCards,
   type SessionRole,
 } from './notificationEventRegistry';
+import {
+  buildLeaveCards,
+  type LeaveCardIconName,
+  type LeaveNotificationCardData,
+} from './leaveNotificationModel';
 import { isAttendanceReachable } from '../../services/attendanceAccessEvents';
 import { useJobTemplateCache } from './useJobTemplateCache';
 import type { NotificationFilter } from './notificationCardModel';
@@ -100,6 +114,27 @@ type SharedRoutes = RootStackParamList &
   TechnicianTabParamList;
 
 type Props = NativeStackScreenProps<SharedRoutes, 'Notifications'>;
+
+/**
+ * The D5 card glyph map — the model's icon names to lucide components,
+ * styled exactly like the generic card's default bell (same slot, same
+ * size/stroke).
+ */
+const LEAVE_CARD_ICONS: Record<
+  LeaveCardIconName,
+  typeof CalendarOff
+> = {
+  CalendarOff,
+  CalendarX,
+  CheckCircle2,
+  XCircle,
+  Undo2,
+};
+
+function LeaveCardIcon({ name }: { name: LeaveCardIconName }) {
+  const Icon = LEAVE_CARD_ICONS[name];
+  return <Icon size={18} color={colors.textStrong} strokeWidth={2} />;
+}
 
 export default function NotificationsScreen({ navigation }: Props) {
   const { session } = useAuth();
@@ -202,10 +237,14 @@ export default function NotificationsScreen({ navigation }: Props) {
   // Story 15-10: attendance.* rows (technician) — composed-copy cards whose
   // tap is guarded by the access seam (no Attendance tab for `none`).
   const attendanceCards = useMemo(() => buildAttendanceCards(items, role), [items, role]);
+  // Story 17-6: the leave cards — role-keyed, composed copy per the D5
+  // table, each with its own glyph and tap target.
+  const leaveCards = useMemo(() => buildLeaveCards(items, role), [items, role]);
   // Interleaved by recency under "All"; the job buckets (below) stay job-only.
   const listCards = useMemo(
-    () => mergeNotificationCards(cards, reportCards, genericCards, attendanceCards),
-    [cards, reportCards, genericCards, attendanceCards],
+    () =>
+      mergeNotificationCards(cards, reportCards, genericCards, attendanceCards, leaveCards),
+    [cards, reportCards, genericCards, attendanceCards, leaveCards],
   );
   const [filter, setFilter] = useState<NotificationFilter>('all');
   // Active/Completed are JOB-status buckets — report and generic
@@ -220,11 +259,16 @@ export default function NotificationsScreen({ navigation }: Props) {
   // reports + generic).
   const counts = useMemo(
     () => ({
-      all: cards.length + reportCards.length + genericCards.length + attendanceCards.length,
+      all:
+        cards.length +
+        reportCards.length +
+        genericCards.length +
+        attendanceCards.length +
+        leaveCards.length,
       active: filterCards(cards, 'active').length,
       completed: filterCards(cards, 'completed').length,
     }),
-    [cards, reportCards, genericCards, attendanceCards],
+    [cards, reportCards, genericCards, attendanceCards, leaveCards],
   );
 
   // 15-10: attendance taps mark the row read, then deep link ONLY when the
@@ -245,6 +289,30 @@ export default function NotificationsScreen({ navigation }: Props) {
     [markNotificationRead, navigation],
   );
 
+  // 17-6: leave-card taps. Owner cards land on the Leave surface's right
+  // segment (leave.applied → Pending — the actionable queue; every other
+  // owner event → All). Employee cards reuse the 15-10 guarded attendance
+  // tap: the guard consults FIRST, so a card about an employee whose
+  // tracking was since disabled (cancelled_by_disable's exact audience)
+  // no-ops — the tab no longer exists for them.
+  const handleLeaveCardPress = useCallback(
+    (card: LeaveNotificationCardData) => {
+      if (card.tap === 'attendance-guarded') {
+        if (!isAttendanceReachable()) return;
+        for (const id of card.unreadIds) void markNotificationRead(id);
+        // Delegate through the tabs route (device-found: the Attendance tab
+        // is invisible to the root stack's plain navigate).
+        navigation.navigate('TechnicianTabs', { screen: 'Attendance' });
+        return;
+      }
+      for (const id of card.unreadIds) void markNotificationRead(id);
+      navigation.navigate('OwnerLeave', {
+        tab: card.tap === 'owner-pending' ? 'pending' : 'all',
+      });
+    },
+    [markNotificationRead, navigation],
+  );
+
   const renderCard = useCallback(
     ({ item }: { item: NotificationListItem }) =>
       item.kind === 'generic' ? (
@@ -254,10 +322,16 @@ export default function NotificationsScreen({ navigation }: Props) {
           card={item}
           onPress={() => handleAttendanceCardPress(item)}
         />
+      ) : item.kind === 'leave' ? (
+        <GenericNotificationCard
+          card={item}
+          icon={<LeaveCardIcon name={item.icon} />}
+          onPress={() => handleLeaveCardPress(item)}
+        />
       ) : (
         <NotificationCard card={item} onPress={handleCardPress} />
       ),
-    [handleAttendanceCardPress, handleCardPress],
+    [handleAttendanceCardPress, handleCardPress, handleLeaveCardPress],
   );
 
   const hasData = items.length > 0;

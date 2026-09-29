@@ -29,6 +29,7 @@ import { Button } from '../../../components/ui';
 import { colors, radius, spacing, typography } from '../../../theme';
 import ScreenHeader from '../offices/ScreenHeader';
 import type {
+  ApplyOnBehalfParams,
   LeaveApplyParams,
   RootStackParamList,
   TechnicianRootStackParamList,
@@ -95,6 +96,18 @@ export default function DatePickerScreen({ navigation, route }: Props) {
           pickedDate: selected,
           context: context as LeaveApplyParams['context'],
         } as LeaveApplyParams,
+        { merge: true },
+      );
+    } else if (returnTo === 'ApplyOnBehalf') {
+      // Same channel for the owner's on-behalf form (17-6 review P1): the
+      // identity params (employeeId/employeeName/officeName) survive the
+      // shallow merge by being omitted, exactly like `today` above.
+      navigation.popTo(
+        'ApplyOnBehalf',
+        {
+          pickedDate: selected,
+          context: context as ApplyOnBehalfParams['context'],
+        } as ApplyOnBehalfParams,
         { merge: true },
       );
     } else {

@@ -18,6 +18,8 @@ import {
   OfficeMapPickerScreen,
 } from '../features/attendance/offices';
 import { AttendanceHomeScreen } from '../features/attendance/home';
+import OwnerLeaveScreen from '../features/attendance/leave/OwnerLeaveScreen';
+import ApplyOnBehalfScreen from '../features/attendance/leave/ApplyOnBehalfScreen';
 import {
   SettingsScreen,
   WeeklyOffScreen,
@@ -146,6 +148,18 @@ export default function RootNavigator() {
       <Stack.Screen
         name="AttendanceSetupWizard"
         component={SetupWizardScreen}
+        options={{ headerShown: false }}
+      />
+      {/* Story 17-6 — the owner's Leave surface (pending queue + history). */}
+      <Stack.Screen
+        name="OwnerLeave"
+        component={OwnerLeaveScreen}
+        options={{ headerShown: false }}
+      />
+      {/* Story 17-6 — apply on behalf (FR-16, born approved). */}
+      <Stack.Screen
+        name="ApplyOnBehalf"
+        component={ApplyOnBehalfScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

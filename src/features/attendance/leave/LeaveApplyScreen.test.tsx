@@ -30,6 +30,17 @@ jest.mock('../me/attendanceAccessStore', () => ({
   refreshAttendanceAccessNow: jest.fn(),
 }));
 
+// Story 17-6: this suite renders AttendanceTabScreen (the entry-row pins
+// below), whose Leave section now fetches the history. The suite renders
+// SYNCHRONOUSLY, so the GET is armed PENDING — a resolving promise would
+// settle after the tests and its setState would land outside act.
+jest.mock('../../../services', () => ({
+  ...jest.requireActual('../../../services'),
+  attendanceLeaveService: {
+    listMyLeave: jest.fn(() => new Promise(() => undefined)),
+  },
+}));
+
 jest.mock('../me/useAttendanceSummary', () => ({
   useAttendanceSummary: jest.fn(),
 }));

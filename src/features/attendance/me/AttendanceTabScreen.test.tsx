@@ -32,6 +32,18 @@ jest.mock('./useAttendanceSummary', () => ({
   useAttendanceSummary: jest.fn(),
 }));
 
+// Story 17-6: the Leave section now embeds the history rows — their list
+// GET is mocked to an empty first page (the real barrel stays for the
+// rest of the tree).
+jest.mock('../../../services', () => ({
+  ...jest.requireActual('../../../services'),
+  attendanceLeaveService: {
+    listMyLeave: jest.fn(() =>
+      Promise.resolve({ data: [], nextCursor: null, hasMore: false }),
+    ),
+  },
+}));
+
 import type ReactTestRenderer from 'react-test-renderer';
 import { act, create } from 'react-test-renderer';
 import { useFocusEffect } from '@react-navigation/native';
@@ -43,11 +55,16 @@ import { AttendanceSummaryView } from './AttendanceSummaryView';
 import type { AttendanceSummaryState } from './useAttendanceSummary';
 import type { AttendanceAccessStateSnapshot } from './attendanceAccessStore';
 import type { AttendanceAccess, AttendanceSummary } from '../../../services';
+import { attendanceLeaveService } from '../../../services';
 import AttendanceTabScreen from './AttendanceTabScreen';
 
 const useAttendanceAccessMock = useAttendanceAccess as jest.Mock;
 const useAttendanceSummaryMock = useAttendanceSummary as jest.Mock;
 const refreshOnFocusMock = refreshAttendanceAccessOnFocus as jest.Mock;
+
+// The LeaveHistorySection fetch — armed per-test after the reset below
+// (the preset wipes module-factory implementations).
+const listMyLeaveMock = attendanceLeaveService.listMyLeave as jest.Mock;
 
 const SUMMARY: AttendanceSummary = {
   officeId: 'o1',
@@ -191,6 +208,14 @@ function textNodes(root: ReactTestRenderer.ReactTestInstance, value: string) {
 beforeEach(() => {
   jest.resetAllMocks();
   consumed = 0;
+  // The history GET stays PENDING: this suite renders and asserts
+  // SYNCHRONOUSLY (the 15-10 state-router pins), so a resolving promise
+  // would settle AFTER the test — a setState outside act whose scheduler
+  // tail leaks into the next suite in the worker (found as moving
+  // window.dispatchEvent failures across unrelated suites). A pending GET
+  // is the honest shape here anyway: the tab suite pins routing, not the
+  // history list (pinned in LeaveHistorySection.test).
+  listMyLeaveMock.mockReturnValue(new Promise(() => undefined));
 });
 
 describe('the state router', () => {

@@ -20,7 +20,7 @@
  */
 import { useCallback, useEffect, useRef } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
-import { Building2, Settings as SettingsIcon } from 'lucide-react-native';
+import { Building2, CalendarOff, Settings as SettingsIcon } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { colors, spacing } from '../../../theme';
@@ -87,6 +87,15 @@ export default function AttendanceHomeScreen({ navigation }: Props) {
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}>
+        {/* 17-6 — the Leave tile ABOVE Offices (Leave is "planned time";
+            the subtitle is FE copy, not mockup text). */}
+        <Tile
+          icon={<CalendarOff size={20} color={colors.status.progress.solid} strokeWidth={1.5} />}
+          iconBg={colors.status.progress.bg}
+          title="Leave"
+          subtitle="Pending requests & history"
+          onPress={() => navigation.navigate('OwnerLeave')}
+        />
         <Tile
           icon={<Building2 size={20} color={colors.status.scheduled.solid} strokeWidth={1.5} />}
           iconBg={colors.status.scheduled.bg}

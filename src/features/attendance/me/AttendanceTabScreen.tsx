@@ -39,6 +39,7 @@ import {
 import { useAttendanceSummary } from './useAttendanceSummary';
 import { AttendanceSummaryView } from './AttendanceSummaryView';
 import { AttendanceTodayView } from '../today/AttendanceTodayView';
+import { LeaveHistorySection } from '../leave/LeaveHistorySection';
 import {
   formatStartsOnCopy,
   shouldShowIntro,
@@ -179,8 +180,8 @@ export default function AttendanceTabScreen({ navigation }: Props) {
               <AttendanceSummaryView state={summaryState} onRetry={onRetrySummary} />
               {/* 17-5 — the Leave section: rendered in active AND upcoming
                   (upcoming can apply; the date floor is server-side);
-                  history_only/none never reach this branch (D1). 17-6
-                  grows the history surfaces under this row. */}
+                  history_only/none never reach this branch (D1). 17-6 adds
+                  the tappable history rows under the apply entry. */}
               <View style={styles.leaveSection}>
                 <SectionHead title="Leave" />
                 <Pressable
@@ -194,6 +195,7 @@ export default function AttendanceTabScreen({ navigation }: Props) {
                   <Text style={styles.leaveRowText}>Apply for leave</Text>
                   <ChevronRight size={18} color={colors.textMuted} strokeWidth={2} />
                 </Pressable>
+                <LeaveHistorySection />
               </View>
               {accessState === 'upcoming' && shouldShowIntro(access) && (
                 <Button variant="secondary" size="md" onPress={openIntro}>

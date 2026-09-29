@@ -20,6 +20,7 @@ import type { ApiNotification } from '../../services';
 import type { StatusKey } from '../../theme';
 import { failedReportCopy } from '../reports/reportModel';
 import type { NotificationCardData } from './notificationCardModel';
+import type { LeaveNotificationCardData } from './leaveNotificationModel';
 import type {
   AttendanceNotificationCardData,
   GenericNotificationCardData,
@@ -86,17 +87,19 @@ export type NotificationListItem =
   | NotificationCardData
   | ReportNotificationCardData
   | AttendanceNotificationCardData
+  | LeaveNotificationCardData
   | GenericNotificationCardData;
 
 /**
  * The tappable card kinds — the `NotificationCard` component's contract.
- * The registry's generic card (Story 14-3) is inert (no deep link, no tap)
- * and the attendance card (15-10) carries its own tap guard in the screen,
- * so both are excluded here.
+ * The registry's generic card (Story 14-3) is inert (no deep link, no tap),
+ * the attendance card (15-10) carries its own tap guard in the screen, and
+ * the leave card (17-6) renders through the generic shell with its own
+ * handler — all three are excluded here.
  */
 export type TappableNotificationListItem = Exclude<
   NotificationListItem,
-  { kind: 'generic' } | { kind: 'attendance' }
+  { kind: 'generic' } | { kind: 'attendance' } | { kind: 'leave' }
 >;
 
 /**
@@ -166,8 +169,13 @@ export function mergeNotificationCards(
   reportCards: ReportNotificationCardData[],
   genericCards: GenericNotificationCardData[] = [],
   attendanceCards: AttendanceNotificationCardData[] = [],
+  leaveCards: LeaveNotificationCardData[] = [],
 ): NotificationListItem[] {
-  return [...genericCards, ...attendanceCards, ...reportCards, ...jobCards].sort(
-    (a, b) => Date.parse(b.latestCreatedAt) - Date.parse(a.latestCreatedAt),
-  );
+  return [
+    ...genericCards,
+    ...attendanceCards,
+    ...leaveCards,
+    ...reportCards,
+    ...jobCards,
+  ].sort((a, b) => Date.parse(b.latestCreatedAt) - Date.parse(a.latestCreatedAt));
 }

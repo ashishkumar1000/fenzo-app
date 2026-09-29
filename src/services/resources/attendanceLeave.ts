@@ -24,6 +24,7 @@
  * Dates stay `YYYY-MM-DD` strings end to end (AD-7 — never `new Date()`).
  */
 import { apiClient } from '../api/apiClient';
+import type { Paginated } from '../api/pagination';
 
 /** Full day | first half | second half — halves are single-date only. */
 export type LeavePart = 'full_day' | 'first_half' | 'second_half';
@@ -68,6 +69,23 @@ export interface ApplyLeaveBody {
   reason: string;
 }
 
+export interface ApplyOnBehalfBody {
+  employeeId: string;
+  startDate: string;
+  /** Omitted for a single date (the BE defaults startDate). */
+  endDate?: string;
+  /** Omitted for full_day (the BE DTO defaults it). */
+  part?: LeavePart;
+  reason: string;
+}
+
+/**
+ * The list/write row — the request view plus `employeeName`, which the
+ * owner list adds and write responses never carry (wire-truth F5: the
+ * envelope is the house `Paginated<T>`).
+ */
+export type LeaveRequestRow = LeaveRequestView & { employeeName?: string };
+
 /** The request view (list adds `employeeName`; never this shape). */
 export interface LeaveRequestView {
   id: string;
@@ -98,6 +116,81 @@ export const attendanceLeaveService = {
   applyLeave(body: ApplyLeaveBody, idempotencyKey: string): Promise<LeaveRequestView> {
     return apiClient
       .post<LeaveRequestView>('/attendance/me/leave', body, {
+        headers: { 'X-Idempotency-Key': idempotencyKey },
+      })
+      .then(res => res.data);
+  },
+
+  // --- Story 17-6 (spec D7) — history, owner queue + decisions, on-behalf.
+
+  /**
+   * `GET /attendance/me/leave` — the employee's own history, newest first
+   * (cursor scope `leave-me-list`). `employeeName` is list-only wire truth
+   * and is meaningless on this endpoint (the caller's own name).
+   */
+  listMyLeave(params: { cursor?: string; limit?: number } = {}): Promise<
+    Paginated<LeaveRequestRow>
+  > {
+    return apiClient
+      .get<Paginated<LeaveRequestRow>>('/attendance/me/leave', { params })
+      .then(res => res.data);
+  },
+
+  /**
+   * `GET /attendance/leave` — the owner list. `status` filters the DERIVED
+   * status (`'pending'` is the queue; the unfiltered list is the All tab) —
+   * cursors are endpoint-scoped (`leave-owner-list`), so a pending cursor
+   * replayed against the unfiltered list would answer garbage: the FE keeps
+   * per-tab state and never crosses them (spec D1).
+   */
+  listOwnerLeave(
+    params: {
+      status?: string;
+      employeeId?: string;
+      cursor?: string;
+      limit?: number;
+    } = {},
+  ): Promise<Paginated<LeaveRequestRow>> {
+    return apiClient
+      .get<Paginated<LeaveRequestRow>>('/attendance/leave', { params })
+      .then(res => res.data);
+  },
+
+  /**
+   * `POST /attendance/leave/:id/approve` — single-tap decision, NO
+   * idempotency key (BE D7: state-guarded own-retry — a retry after a
+   * lost response answers 200 with the refreshed view, one server event).
+   * 409 `LEAVE_NOT_PENDING` = the request moved to a DIFFERENT terminal
+   * state under us — the FE's "already handled" sheet (spec D2).
+   */
+  approveLeave(id: string): Promise<LeaveRequestRow> {
+    return apiClient
+      .post<LeaveRequestRow>(`/attendance/leave/${encodeURIComponent(id)}/approve`)
+      .then(res => res.data);
+  },
+
+  /** `POST /attendance/leave/:id/reject` — empty reason is valid (FR-13):
+   *  omit the field entirely rather than sending an empty string. */
+  rejectLeave(id: string, reason?: string): Promise<LeaveRequestRow> {
+    return apiClient
+      .post<LeaveRequestRow>(
+        `/attendance/leave/${encodeURIComponent(id)}/reject`,
+        reason ? { reason } : {},
+      )
+      .then(res => res.data);
+  },
+
+  /**
+   * `POST /attendance/leave/on-behalf` — FR-16, born approved (D10). The
+   * idempotency key is REQUIRED here (a replayed create must never double
+   * a person's leave): one fresh UUID v4 per tap.
+   */
+  applyOnBehalf(
+    body: ApplyOnBehalfBody,
+    idempotencyKey: string,
+  ): Promise<LeaveRequestRow> {
+    return apiClient
+      .post<LeaveRequestRow>('/attendance/leave/on-behalf', body, {
         headers: { 'X-Idempotency-Key': idempotencyKey },
       })
       .then(res => res.data);

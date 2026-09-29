@@ -9,6 +9,7 @@
  * message + relative time + unread dot), minus every interactive element.
  */
 import { StyleSheet, Text, View, Pressable } from 'react-native';
+import type { ReactNode } from 'react';
 import { BellRing } from 'lucide-react-native';
 import { colors, radius, shadow, spacing, typography } from '../../../theme';
 import { relativeTime } from '../../../utils';
@@ -16,19 +17,33 @@ import type {
   AttendanceNotificationCardData,
   GenericNotificationCardData,
 } from '../notificationEventRegistry';
+import type { LeaveNotificationCardData } from '../leaveNotificationModel';
 
 /**
  * `onPress` — Story 15-10: attendance cards render through this component
  * and ARE tappable (the screen's tap guard decides whether the deep link
  * goes anywhere). Without an `onPress` the card stays inert exactly as
  * before — the generic fallback's contract is unchanged.
+ *
+ * `icon` — Story 17-6: ONE additive optional prop for the leave cards (the
+ * D5 table's per-event glyphs); default stays `BellRing`. A prop, not a
+ * new shell.
  */
 interface GenericNotificationCardProps {
-  card: GenericNotificationCardData | AttendanceNotificationCardData;
+  card:
+    | GenericNotificationCardData
+    | AttendanceNotificationCardData
+    | LeaveNotificationCardData;
   onPress?: () => void;
+  /** Replaces the default bell glyph (the leave cards' D5 icon column). */
+  icon?: ReactNode;
 }
 
-export function GenericNotificationCard({ card, onPress }: GenericNotificationCardProps) {
+export function GenericNotificationCard({
+  card,
+  onPress,
+  icon,
+}: GenericNotificationCardProps) {
   const time = relativeTime(card.latestCreatedAt);
 
   const body = (
@@ -38,7 +53,9 @@ export function GenericNotificationCard({ card, onPress }: GenericNotificationCa
 
       <View style={styles.header}>
         <View style={styles.iconWrap}>
-          <BellRing size={18} color={colors.textStrong} strokeWidth={2} />
+          {icon ?? (
+            <BellRing size={18} color={colors.textStrong} strokeWidth={2} />
+          )}
         </View>
         <Text
           style={[styles.title, card.isUnread ? styles.titleUnread : null]}

@@ -200,6 +200,21 @@ export type RootStackParamList = {
    * navigator routes; editing pushes the existing attendance routes.
    */
   AttendanceSetupWizard: undefined;
+  /**
+   * Story 17-6 — the owner's Leave surface (pending queue + history).
+   * `tab` deep-links a segment: the leave.applied card lands on `pending`,
+   * every other entry point omits it (defaults `pending`) or passes `all`
+   * (the on-behalf landing — a born-approved request is invisible in the
+   * Pending filter). Consumed read-once-then-cleared on merge.
+   */
+  OwnerLeave: { tab?: 'pending' | 'all' } | undefined;
+  /**
+   * Story 17-6 — apply on behalf (FR-16). The identity trio is absent when
+   * the CTA opens the screen cold (the EmployeePickerSheet fills it);
+   * `pickedDate`/`context` are the DatePicker return channel — the same
+   * read-once-clear contract as `LeaveApplyParams` (wire-truth F4).
+   */
+  ApplyOnBehalf: ApplyOnBehalfParams | undefined;
 };
 
 /**
@@ -224,7 +239,8 @@ export type DatePickerParams = {
   today?: string;
   minDate?: string;
   maxDate?: string;
-  returnTo: 'AttendanceEnrolments' | 'LeaveApply';
+  /** `'ApplyOnBehalf'` joins in 17-6 (wire-truth F4). */
+  returnTo: 'AttendanceEnrolments' | 'LeaveApply' | 'ApplyOnBehalf';
   context: string;
 };
 
@@ -237,6 +253,22 @@ export type DatePickerParams = {
  */
 export type LeaveApplyParams = {
   today: string | null;
+  pickedDate?: string | null;
+  context?: 'from' | 'to' | null;
+};
+
+/**
+ * Story 17-6 — the owner's apply-on-behalf params. `employeeId` /
+ * `employeeName` / `officeName: string | null` name the picked team member
+ * (absent on a cold CTA entry — the picker fills them; `officeName` is
+ * nullable on the roster's tracked rows, wire-truth F1). `pickedDate` /
+ * `context` are the DatePicker return channel, consumed
+ * read-once-then-cleared so a stale pick can never re-fire.
+ */
+export type ApplyOnBehalfParams = {
+  employeeId?: string;
+  employeeName?: string;
+  officeName?: string | null;
   pickedDate?: string | null;
   context?: 'from' | 'to' | null;
 };
