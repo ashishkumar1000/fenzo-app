@@ -23,13 +23,14 @@
  * never strand the user on a blank content area (spec finding #9).
  */
 import { useCallback, useEffect, useRef } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ChevronRight } from 'lucide-react-native';
 import { useFocusEffect, type CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button } from '../../../components/ui';
-import { colors, fontSize, spacing } from '../../../theme';
+import { Button, SectionHead } from '../../../components/ui';
+import { colors, fontSize, spacing, touch, typography } from '../../../theme';
 import {
   refreshAttendanceAccessNow,
   refreshAttendanceAccessOnFocus,
@@ -102,6 +103,14 @@ export default function AttendanceTabScreen({ navigation }: Props) {
     navigation.navigate('AttendanceIntro');
   }, [navigation]);
 
+  // 17-5 — the Leave section's entry row. `today` is the server's date
+  // from the loaded summary (active only — the wire carries no today in
+  // the upcoming state), null upstream; the form never derives it.
+  const summaryToday = summaryState.summary?.today?.date ?? null;
+  const openLeave = useCallback(() => {
+    navigation.navigate('LeaveApply', { today: summaryToday });
+  }, [navigation, summaryToday]);
+
   // A refresh that returns `none` while this tab is focused strands the
   // content area when the tab bar removes the screen — leave for Today
   // in the same update (spec finding #9).
@@ -168,6 +177,24 @@ export default function AttendanceTabScreen({ navigation }: Props) {
                 />
               )}
               <AttendanceSummaryView state={summaryState} onRetry={onRetrySummary} />
+              {/* 17-5 — the Leave section: rendered in active AND upcoming
+                  (upcoming can apply; the date floor is server-side);
+                  history_only/none never reach this branch (D1). 17-6
+                  grows the history surfaces under this row. */}
+              <View style={styles.leaveSection}>
+                <SectionHead title="Leave" />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Apply for leave"
+                  onPress={openLeave}
+                  style={({ pressed }) => [
+                    styles.leaveRow,
+                    pressed && styles.leaveRowPressed,
+                  ]}>
+                  <Text style={styles.leaveRowText}>Apply for leave</Text>
+                  <ChevronRight size={18} color={colors.textMuted} strokeWidth={2} />
+                </Pressable>
+              </View>
               {accessState === 'upcoming' && shouldShowIntro(access) && (
                 <Button variant="secondary" size="md" onPress={openIntro}>
                   Finish the intro now
@@ -232,5 +259,22 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     lineHeight: Math.round(fontSize.sm * 1.45),
     color: colors.textMuted,
+  },
+  leaveSection: {
+    gap: spacing.s2,
+  },
+  leaveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s2,
+    minHeight: touch.comfort,
+  },
+  leaveRowPressed: {
+    opacity: 0.85,
+  },
+  leaveRowText: {
+    ...typography.body,
+    color: colors.textStrong,
+    flex: 1,
   },
 });

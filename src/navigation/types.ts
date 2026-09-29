@@ -180,16 +180,9 @@ export type RootStackParamList = {
   /** Story 15-9 — full-screen date selection (user-directed: a calendar
    *  PAGE, not an inline modal — inline calendars collide with pinned
    *  sheet footers). Day tap pops back to `returnTo` merging
-   *  { pickedDate, context }; the opener owns what the date means. */
-  DatePicker: {
-    title: string;
-    value: string | null;
-    today: string;
-    minDate?: string;
-    maxDate?: string;
-    returnTo: 'AttendanceEnrolments';
-    context: string;
-  };
+   *  { pickedDate, context }; the opener owns what the date means.
+   *  Registered in BOTH stacks since 17-5 — shape: `DatePickerParams`. */
+  DatePicker: DatePickerParams;
   /** Story 15-6 — tenant-default weekly-off screen + per-employee overrides.
    *  `selectedTechnicianId` is set by `SelectTechniciansScreen` via
    *  navigate-back-with-params (the new-job picker pattern) when the owner
@@ -215,6 +208,38 @@ export type RootStackParamList = {
  * as `Customers` (the shared store already has the new row).
  */
 export type AddCustomerReturnRouteName = 'Customers' | 'NewJob' | 'Home';
+
+/**
+ * The full-screen date picker's params (Story 15-9). One shared shape for
+ * BOTH stacks it is registered on (owner `RootStackParamList` + technician
+ * `TechnicianRootStackParamList` — 17-5 added the second registration), so
+ * the screen and its callers can never drift. `returnTo` is narrowed to
+ * the screens that actually push the picker; `today` is optionalized for
+ * 17-5 (the LeaveApply flow has no server today in the `upcoming` state) —
+ * the screen destructures it but never uses it (behaviour-safe).
+ */
+export type DatePickerParams = {
+  title: string;
+  value: string | null;
+  today?: string;
+  minDate?: string;
+  maxDate?: string;
+  returnTo: 'AttendanceEnrolments' | 'LeaveApply';
+  context: string;
+};
+
+/**
+ * Story 17-5 — the technician's leave-apply form params. `today` is the
+ * server-provided date from the Attendance tab's loaded summary (`active`)
+ * or null (`upcoming` — the wire has no today outside active). `pickedDate`
+ * /`context` are the DatePicker's return channel (`popTo` merge); consumed
+ * read-once-then-cleared so a stale pick can never re-fire.
+ */
+export type LeaveApplyParams = {
+  today: string | null;
+  pickedDate?: string | null;
+  context?: 'from' | 'to' | null;
+};
 
 /**
  * Technician full-screen routes pushed over `TechnicianTabs` by
@@ -249,6 +274,19 @@ export type TechnicianRootStackParamList = {
    * the Attendance tab's intro gate (active/upcoming + never onboarded).
    */
   AttendanceIntro: undefined;
+  /**
+   * Story 17-5 — the technician's own leave-apply form, pushed from the
+   * Attendance tab's "Leave" section (active AND upcoming). Params:
+   * `LeaveApplyParams` — `today` plus the DatePicker return channel
+   * (read once, then cleared).
+   */
+  LeaveApply: LeaveApplyParams;
+  /**
+   * Story 17-5 — the full-screen date picker, now DUAL-registered (the
+   * owner stack had it since 15-9; the technician stack gains it for the
+   * leave form's From/To rows). Same shared shape: `DatePickerParams`.
+   */
+  DatePicker: DatePickerParams;
 };
 
 declare global {

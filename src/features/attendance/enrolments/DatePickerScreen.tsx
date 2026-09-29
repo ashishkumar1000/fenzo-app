@@ -28,9 +28,26 @@ import type { DateType } from 'react-native-ui-datepicker';
 import { Button } from '../../../components/ui';
 import { colors, radius, spacing, typography } from '../../../theme';
 import ScreenHeader from '../offices/ScreenHeader';
-import type { RootStackParamList } from '../../../navigation/types';
+import type {
+  LeaveApplyParams,
+  RootStackParamList,
+  TechnicianRootStackParamList,
+} from '../../../navigation/types';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'DatePicker'>;
+/**
+ * Dual-stack registration (17-5): the picker is registered on BOTH the
+ * owner root stack (since 15-9) and the technician root stack (the leave
+ * form's From/To rows). Props type against the two param lists'
+ * INTERSECTION — the NotificationsScreen (14-3) house pattern — so one
+ * component typechecks on either navigator with zero behaviour change;
+ * `DatePicker` is deliberately declared in both stacks with the one shared
+ * `DatePickerParams` shape. `today` is optional (17-5: the upcoming leave
+ * flow has no server today) — destructured below, never used.
+ */
+type Props = NativeStackScreenProps<
+  RootStackParamList & TechnicianRootStackParamList,
+  'DatePicker'
+>;
 
 /** The library's onChange hands a DateType (string | Dayjs | Date) —
  *  normalise to the app's YYYY-MM-DD without importing its dayjs. */
@@ -63,12 +80,30 @@ export default function DatePickerScreen({ navigation, route }: Props) {
     if (!selected) return;
     // popTo pops us off the stack and merges the param onto the caller
     // (the SelectTechniciansScreen pattern — React Navigation 7's plain
-    // navigate would push a new screen instead of returning).
-    navigation.popTo(
-      returnTo,
-      { pickedDate: selected, context },
-      { merge: true },
-    );
+    // navigate would push a new screen instead of returning). The picker
+    // never interprets the context — the opener owns what the date means.
+    if (returnTo === 'LeaveApply') {
+      // merge:true shallow-spreads these onto the route's existing params,
+      // so `today` survives by being OMITTED (passing undefined would wipe
+      // it) — React Navigation's types can't express that merge-partial,
+      // hence the scoped assertion. `context` narrows back to the leave
+      // channel purely at the type level (the LeaveApply opener minted it
+      // as 'from' | 'to'; it travels as a plain string through params).
+      navigation.popTo(
+        'LeaveApply',
+        {
+          pickedDate: selected,
+          context: context as LeaveApplyParams['context'],
+        } as LeaveApplyParams,
+        { merge: true },
+      );
+    } else {
+      navigation.popTo(
+        'AttendanceEnrolments',
+        { pickedDate: selected, context },
+        { merge: true },
+      );
+    }
   };
 
   return (

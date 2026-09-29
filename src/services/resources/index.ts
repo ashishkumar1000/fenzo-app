@@ -60,6 +60,14 @@ export type {
 } from './attendanceCheckIn';
 export { enrolmentsService } from './enrolments';
 export type { EnrolmentOverview, EnrolmentWriteState } from './enrolments';
+export { attendanceLeaveService } from './attendanceLeave';
+export type {
+  ApplyLeaveBody,
+  LeavePart,
+  LeavePreview,
+  LeavePreviewErrorCode,
+  LeaveRequestView,
+} from './attendanceLeave';
 export { customerService } from './customers';
 export type {
   ApiCustomer,

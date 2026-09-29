@@ -15,6 +15,8 @@ import SignatureScreen from '../features/technicianApp/SignatureScreen';
 import { LocationCaptureScreen } from '../features/technicianApp/LocationCaptureScreen';
 import { NotificationsScreen } from '../features/notifications';
 import { AttendanceIntroScreen } from '../features/attendance/me';
+import DatePickerScreen from '../features/attendance/enrolments/DatePickerScreen';
+import LeaveApplyScreen from '../features/attendance/leave/LeaveApplyScreen';
 import type { TechnicianRootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<TechnicianRootStackParamList>();
@@ -32,6 +34,11 @@ export default function TechnicianRootNavigator() {
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: false }} />
       {/* 15-10 — the FR-4 intro, pushed over the tabs by the Attendance tab's gate. */}
       <Stack.Screen name="AttendanceIntro" component={AttendanceIntroScreen} options={{ headerShown: false }} />
+      {/* 17-5 — the leave-apply form, pushed from the Attendance tab's Leave section. */}
+      <Stack.Screen name="LeaveApply" component={LeaveApplyScreen} options={{ headerShown: false }} />
+      {/* 17-5 — the date picker's second registration (the owner stack has it
+          since 15-9); the leave form's From/To rows push it on THIS stack. */}
+      <Stack.Screen name="DatePicker" component={DatePickerScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }
