@@ -25,6 +25,16 @@ export interface OfficeFormState {
   halfDayHours: string;
 }
 
+/**
+ * Seed times (18-5 D7): times are mandatory, so a blank start is a
+ * guaranteed first-error dead end — a new (or rule-less) form ships a
+ * VALID rule by default and the owner edits from there. FE-local consts:
+ * the BE's own defaults are the hours/cutoff anchors (15-3); the server
+ * stays authoritative over whatever the owner saves.
+ */
+export const OFFICE_START_TIME_DEFAULT = '09:30';
+export const OFFICE_END_TIME_DEFAULT = '18:30';
+
 /** Defaults for a new office — BE create defaults (radius 100, cutoff 15, 8/4 h). */
 export function emptyOfficeForm(): OfficeFormState {
   return {
@@ -32,8 +42,8 @@ export function emptyOfficeForm(): OfficeFormState {
     latitude: null,
     longitude: null,
     radiusM: 100,
-    startTime: '',
-    endTime: '',
+    startTime: OFFICE_START_TIME_DEFAULT,
+    endTime: OFFICE_END_TIME_DEFAULT,
     lateCutoffMinutes: '15',
     fullDayHours: '8',
     halfDayHours: '4',
@@ -42,7 +52,8 @@ export function emptyOfficeForm(): OfficeFormState {
 
 /**
  * Pre-fill from the detail's rule history (ascending by validFrom — the
- * newest entry is the current rule, or a pending one).
+ * newest entry is the current rule, or a pending one). An explicit rule
+ * always wins; the seed times only cover the no-rule fallback.
  */
 export function formFromDetail(detail: OfficeDetail): OfficeFormState {
   const rule: OfficeRule | undefined = detail.rules[detail.rules.length - 1];
@@ -51,8 +62,8 @@ export function formFromDetail(detail: OfficeDetail): OfficeFormState {
     latitude: detail.latitude,
     longitude: detail.longitude,
     radiusM: detail.radiusM,
-    startTime: rule?.startTime ?? '',
-    endTime: rule?.endTime ?? '',
+    startTime: rule?.startTime ?? OFFICE_START_TIME_DEFAULT,
+    endTime: rule?.endTime ?? OFFICE_END_TIME_DEFAULT,
     lateCutoffMinutes: rule ? String(rule.lateCutoffMinutes) : '15',
     fullDayHours: rule ? String(rule.fullDayHours) : '8',
     halfDayHours: rule ? String(rule.halfDayHours) : '4',

@@ -179,10 +179,26 @@ describe('formFromDetail', () => {
   it('falls back to the create defaults when the office has no rule yet', () => {
     const state = formFromDetail(detail({ rules: [] }));
 
-    expect(state.startTime).toBe('');
+    expect(state.startTime).toBe('09:30');
+    expect(state.endTime).toBe('18:30');
     expect(state.lateCutoffMinutes).toBe('15');
     expect(state.fullDayHours).toBe('8');
     expect(state.halfDayHours).toBe('4');
+  });
+
+  it('seeds the 18-5 default times on a NEW office form (times are mandatory — never blank)', () => {
+    const fresh = emptyOfficeForm();
+
+    expect(fresh.startTime).toBe('09:30');
+    expect(fresh.endTime).toBe('18:30');
+    expect(fresh.lateCutoffMinutes).toBe('15');
+    expect(fresh.fullDayHours).toBe('8');
+    expect(fresh.halfDayHours).toBe('4');
+    // The seed is itself a valid rule — an owner tapping through Add-office
+    // cannot silently ship a blank-time form.
+    expect(hasErrors(validateOfficeForm({ ...fresh, name: 'X', latitude: 1, longitude: 2 }))).toBe(
+      false,
+    );
   });
 
   it('pins the LAST array entry as the latest rule (the server guarantees ascending validFrom)', () => {
