@@ -1,17 +1,30 @@
 /**
  * FlagListSheet — the dashboard's flag list sheet (Story 19-4 D6): ONE
  * sheet serving both kinds (Checkout missing / Fake location attempts).
- * Rows are plain Views, NOT pressable — the day-level action (open the
- * calendar, correct the day) arrives with 19-5's production calendar host;
- * a fake tap on a dead-end row is worse than no affordance (deferred
- * honestly, spec §Out of scope).
+ *
+ * 19-5 (D7) — the rows are PRESSABLE: the day-level action deferred in
+ * 19-4 ("open the calendar, correct the day arrives with 19-5's
+ * production calendar host") lands here. A row press calls `onRowPress`
+ * with the row; the OWNER (AttendanceDashboardScreen, which holds the
+ * sheet state) closes the sheet AND navigates to the drill-down in the
+ * SAME TICK (`AttendanceEmployeeMonth` at the flag's month, the day sheet
+ * auto-opened) — the sheet is a NATIVE TrueSheet and would otherwise
+ * float over the pushed screen on both platforms.
  *
  * Wire order is preserved (workDate asc, then name — the BE's sort), so
  * the oldest unhandled day surfaces first: the strip is the queue.
  */
-import { AccessibilityInfo, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  AccessibilityInfo,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { ChevronRight } from 'lucide-react-native';
 import { Sheet } from '../../../components/ui';
-import { colors, spacing, typography } from '../../../theme';
+import { colors, spacing, touch, typography } from '../../../theme';
 import {
   flagRowDetail,
   flagSheetTitle,
@@ -31,9 +44,19 @@ export type FlagListSheetProps = {
   kind: 'checkoutMissing' | 'fakeLocationAttempt' | null;
   rows: FlagListRow[];
   onClose: () => void;
+  /** 19-5 D7: the row's deep-link — the OWNER closes the sheet and
+   *  navigates in the same tick (never inside the sheet: the native
+   *  sheet would float over the pushed screen). */
+  onRowPress: (row: FlagListRow) => void;
 };
 
-export function FlagListSheet({ visible, kind, rows, onClose }: FlagListSheetProps) {
+export function FlagListSheet({
+  visible,
+  kind,
+  rows,
+  onClose,
+  onRowPress,
+}: FlagListSheetProps) {
   const title = flagSheetTitle(kind);
   return (
     <Sheet
@@ -56,10 +79,18 @@ export function FlagListSheet({ visible, kind, rows, onClose }: FlagListSheetPro
         contentContainerStyle={styles.rows}
         showsVerticalScrollIndicator={false}>
         {rows.map(row => (
-          <View key={`${row.employeeId}-${row.workDate}`} style={styles.row}>
-            <Text style={styles.employee}>{row.employeeName}</Text>
-            <Text style={styles.detail}>{flagRowDetail(row)}</Text>
-          </View>
+          <Pressable
+            key={`${row.employeeId}-${row.workDate}`}
+            accessibilityRole="button"
+            accessibilityLabel={`${row.employeeName}, ${flagRowDetail(row)}`}
+            onPress={() => onRowPress(row)}
+            style={({ pressed }) => [styles.row, pressed && { opacity: 0.8 }]}>
+            <View style={styles.texts}>
+              <Text style={styles.employee}>{row.employeeName}</Text>
+              <Text style={styles.detail}>{flagRowDetail(row)}</Text>
+            </View>
+            <ChevronRight size={18} color={colors.textMuted} strokeWidth={2.2} />
+          </Pressable>
         ))}
       </ScrollView>
     </Sheet>
@@ -73,6 +104,13 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.s4,
   },
   row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s3,
+    minHeight: touch.min,
+  },
+  texts: {
+    flex: 1,
     gap: spacing.s1,
   },
   employee: {

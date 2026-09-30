@@ -172,6 +172,27 @@ export type RootStackParamList = {
    * entered only from AttendanceHome's "Today" tile.
    */
   AttendanceDashboard: undefined;
+  /**
+   * Story 19-5 — the FR-25 owner monthly view (the month-end review:
+   * per-employee summary rows + the office filter). No params — the
+   * displayed month bootstraps from the device clock (declared
+   * scaffolding) and corrects once on the first wire `today` echo (D4).
+   */
+  AttendanceMonthly: undefined;
+  /**
+   * Story 19-5 — the drill-down to one employee's month calendar (the
+   * Epic-18 component's first production host). `yearMonth` is REQUIRED —
+   * the drill-down opens on the month the list showed (continuity);
+   * `focusDate` is set only by the dashboard's flag deep-link (D7), and
+   * the host normalizes the pair once on params (a mismatched pair is
+   * dev-warned and `focusDate` is treated as absent).
+   */
+  AttendanceEmployeeMonth: {
+    employeeId: string;
+    employeeName: string;
+    yearMonth: string;
+    focusDate?: string | null;
+  };
   /** Story 15-6 — Attendance Settings landing (Weekly off + Holidays). */
   AttendanceSettings: undefined;
   /** Story 15-9 — the Team enrolment roster (start dates, offices &

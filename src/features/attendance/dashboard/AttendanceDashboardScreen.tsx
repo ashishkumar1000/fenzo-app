@@ -238,6 +238,19 @@ export default function AttendanceDashboardScreen({ navigation }: Props) {
               : data.flags.fakeLocationAttempt
         }
         onClose={() => setFlagSheetKind(null)}
+        onRowPress={row => {
+          // 19-5 D7 — the deep-link: close the sheet AND navigate in the
+          // SAME tick (the native TrueSheet would otherwise float over
+          // the pushed drill-down on both platforms). The drill-down
+          // opens at the flag's month with the day sheet auto-opened.
+          setFlagSheetKind(null);
+          navigation.navigate('AttendanceEmployeeMonth', {
+            employeeId: row.employeeId,
+            employeeName: row.employeeName,
+            yearMonth: row.workDate.slice(0, 7),
+            focusDate: row.workDate,
+          });
+        }}
       />
       <OfficeFilterSheet
         visible={filterSheetVisible}

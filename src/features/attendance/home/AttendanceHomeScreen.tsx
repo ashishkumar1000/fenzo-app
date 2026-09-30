@@ -20,7 +20,7 @@
  */
 import { useCallback, useEffect, useRef } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
-import { Building2, CalendarOff, FlaskConical, LayoutDashboard, Settings as SettingsIcon } from 'lucide-react-native';
+import { Building2, CalendarDays, CalendarOff, FlaskConical, LayoutDashboard, Settings as SettingsIcon } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { colors, spacing } from '../../../theme';
@@ -95,6 +95,16 @@ export default function AttendanceHomeScreen({ navigation }: Props) {
           title="Today"
           subtitle="Who's in and who's not"
           onPress={() => navigation.navigate('AttendanceDashboard')}
+        />
+        {/* 19-5 D1 — the FR-25 monthly review tile, between Today and
+            Leave (the production AttendanceHome family reads blue =
+            "review people" — the Sally Q1 ruling). */}
+        <Tile
+          icon={<CalendarDays size={20} color={colors.status.progress.solid} strokeWidth={1.5} />}
+          iconBg={colors.status.progress.bg}
+          title="Monthly"
+          subtitle="Everyone's month at a glance"
+          onPress={() => navigation.navigate('AttendanceMonthly')}
         />
         {/* 17-6 — the Leave tile (Leave is "planned time";
             the subtitle is FE copy, not mockup text). */}

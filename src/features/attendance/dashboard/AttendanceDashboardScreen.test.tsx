@@ -46,6 +46,7 @@ import { FlagListSheet } from './FlagListSheet';
 import { OfficeFilterSheet } from './OfficeFilterSheet';
 import { LoadErrorRetry } from './LoadErrorRetry';
 import { DashboardHeader } from './DashboardHeader';
+import { flagRowDetail } from './dashboardModel';
 import { LOAD_ERROR_COPY } from './LoadErrorRetry';
 import { Skeleton } from '../../../components/ui';
 
@@ -327,6 +328,72 @@ describe('AttendanceDashboardScreen — flag strips', () => {
     expect(sheet.props.kind).toBe('fakeLocationAttempt');
     expect(sheet.props.rows).toEqual([
       expect.objectContaining({ employeeName: 'Citra', attemptCount: 2 }),
+    ]);
+  });
+
+  it('a flag-row press closes the sheet AND navigates in the SAME tick (19-5 D7)', async () => {
+    fetchMock.mockResolvedValue(envelope({ flags }));
+    const { renderer, navigation } = renderScreen();
+    await fireFocus();
+    act(() => {
+      findButton(renderer, 'Checkout missing, 2 days').props.onPress();
+    });
+    const sheet = renderer.root.findAllByType(FlagListSheet as never)[0];
+    expect(sheet.props.visible).toBe(true);
+
+    // The row press: the sheet closes AND the drill-down pushes — same
+    // tick (the native TrueSheet must not float over the pushed screen),
+    // at the FLAG'S month with the day sheet auto-opened.
+    await act(async () => {
+      sheet.props.onRowPress({
+        employeeId: 'e1',
+        employeeName: 'Arya',
+        workDate: '2026-09-14',
+        officeName: 'Hero wala',
+      });
+      await flush();
+    });
+    expect(
+      renderer.root.findAllByType(FlagListSheet as never)[0].props.visible,
+    ).toBe(false);
+    expect(navigation.navigate).toHaveBeenCalledWith('AttendanceEmployeeMonth', {
+      employeeId: 'e1',
+      employeeName: 'Arya',
+      yearMonth: '2026-09',
+      focusDate: '2026-09-14',
+    });
+    expect(navigation.navigate).toHaveBeenCalledTimes(1);
+  });
+
+  it('the whole press surface with flags present and the sheet OPEN gains exactly the row presses (the 19-5 pin)', async () => {
+    fetchMock.mockResolvedValue(envelope({ flags }));
+    const { renderer } = renderScreen();
+    await fireFocus();
+    act(() => {
+      findButton(renderer, 'Checkout missing, 2 days').props.onPress();
+    });
+    // The CLOSED press set (sorted-equal, the same discipline as the
+    // tiles pin) plus the two strips and the two sheet rows — nothing
+    // else became pressable.
+    const presses = renderer.root.findAll(
+      node =>
+        typeof node.props.onPress === 'function' &&
+        node.props.accessibilityLabel !== undefined,
+    );
+    expect(presses.map(n => n.props.accessibilityLabel).sort()).toEqual([
+      'All offices',
+      'Andheri',
+      `Arya, ${flagRowDetail(flags.checkoutMissing[0])}`,
+      'Ben, Tuesday, 15 September 2026',
+      'Checkout missing, 2 days',
+      'Close',
+      'Close',
+      'Fake location attempt, 1 day',
+      'Filter by office, currently All offices',
+      'Go back',
+      'Hero wala',
+      'Refresh',
+      'Yuka',
     ]);
   });
 

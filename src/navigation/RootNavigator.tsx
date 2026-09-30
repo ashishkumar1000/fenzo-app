@@ -19,6 +19,8 @@ import {
 } from '../features/attendance/offices';
 import { AttendanceHomeScreen } from '../features/attendance/home';
 import { AttendanceDashboardScreen } from '../features/attendance/dashboard';
+import AttendanceMonthlyScreen from '../features/attendance/monthly/AttendanceMonthlyScreen';
+import AttendanceEmployeeMonthScreen from '../features/attendance/month-detail/AttendanceEmployeeMonthScreen';
 import OwnerLeaveScreen from '../features/attendance/leave/OwnerLeaveScreen';
 import ApplyOnBehalfScreen from '../features/attendance/leave/ApplyOnBehalfScreen';
 import {
@@ -113,6 +115,18 @@ export default function RootNavigator() {
       <Stack.Screen
         name="AttendanceDashboard"
         component={AttendanceDashboardScreen}
+        options={{ headerShown: false }}
+      />
+      {/* Story 19-5 — the FR-25 owner monthly view + the employee
+          drill-down (the MonthCalendar's first production host). */}
+      <Stack.Screen
+        name="AttendanceMonthly"
+        component={AttendanceMonthlyScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="AttendanceEmployeeMonth"
+        component={AttendanceEmployeeMonthScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen

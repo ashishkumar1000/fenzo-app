@@ -39,6 +39,7 @@ import { DAY_STATUS_VISUALS } from './dayStatusVisual';
 import { MonthCalendar } from './MonthCalendar';
 import { DayDetailSheet } from './DayDetailSheet';
 import { RealMonthPane, type RealMonthReport } from './RealMonthPane';
+import { shiftYearMonth } from '../monthly/monthlyModel';
 
 /** Release-bundle grep target (the build step asserts this string is
  *  ABSENT from release builds — the __DEV__ require is the only importer). */
@@ -50,14 +51,6 @@ const PROOF_MONTH = '2026-03'; // a fixed canned month — never production data
  *  what suppresses the Correct entry (asserted by the sheet suite too). */
 const PROOF_TODAY = '2026-03-31';
 const LAB_EMPLOYEE_ID = '00000000-0000-0000-0000-000000000000';
-
-/** 'YYYY-MM' shifted by n months (UTC math on the explicit 1st). */
-function shiftYearMonth(yearMonth: string, months: number): string {
-  const next = new Date(
-    Date.UTC(Number(yearMonth.slice(0, 4)), Number(yearMonth.slice(5, 7)) - 1 + months, 1),
-  );
-  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}`;
-}
 
 /** The lab's own starting month — scaffolding, so the device clock is fine
  *  here (the today RING stays wire-fed; it just renders once data lands). */

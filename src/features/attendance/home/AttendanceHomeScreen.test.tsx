@@ -102,11 +102,15 @@ function findTile(
 }
 
 describe('AttendanceHomeScreen', () => {
-  it('renders the Leave/Offices/Settings tiles + the __DEV__ lab row', () => {
+  it('renders the Leave/Offices/Settings/Monthly tiles + the __DEV__ lab row', () => {
     const { renderer } = renderHome();
     const texts = renderer.root
       .findAll(node => typeof node.props.children === 'string')
       .map(node => node.props.children as string);
+    expect(texts).toContain('Today');
+    expect(texts).toContain("Who's in and who's not");
+    expect(texts).toContain('Monthly');
+    expect(texts).toContain("Everyone's month at a glance");
     expect(texts).toContain('Leave');
     expect(texts).toContain('Pending requests & history');
     expect(texts).toContain('Offices');
@@ -119,7 +123,7 @@ describe('AttendanceHomeScreen', () => {
     expect(texts).toContain('Month calendar & day detail');
   });
 
-  it('renders the full tappable inventory: the three tiles + the dev row', () => {
+  it('renders the full tappable inventory: the four tiles + the dev row', () => {
     const { renderer } = renderHome();
     // NO pre-filter: every button-role label on the screen, deduped (RTR
     // mirrors Pressables through host Views, so a raw findAll counts each
@@ -137,6 +141,7 @@ describe('AttendanceHomeScreen', () => {
       'Component lab (dev)',
       'Go back',
       'Leave',
+      'Monthly',
       'Offices',
       'Settings',
       'Today',
@@ -152,6 +157,20 @@ describe('AttendanceHomeScreen', () => {
       .map((node) => node.props.accessibilityLabel as string);
     expect(all.indexOf('Today')).toBeGreaterThanOrEqual(0);
     expect(all.indexOf('Today')).toBeLessThan(all.indexOf('Leave'));
+  });
+
+  it('renders the 19-5 "Monthly" tile BETWEEN Today and Leave, and it navigates (D1)', () => {
+    const { renderer, navigation } = renderHome();
+    const all = renderer.root
+      .findAll((node) => node.props.accessibilityRole === 'button')
+      .map((node) => node.props.accessibilityLabel as string);
+    expect(all.indexOf('Today')).toBeLessThan(all.indexOf('Monthly'));
+    expect(all.indexOf('Monthly')).toBeLessThan(all.indexOf('Leave'));
+    const monthlyButton = findTile(renderer, 'Monthly');
+    act(() => {
+      monthlyButton.props.onPress();
+    });
+    expect(navigation.navigate).toHaveBeenCalledWith('AttendanceMonthly');
   });
 
   it('tapping "Today" navigates to AttendanceDashboard (19-4 D1)', () => {

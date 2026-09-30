@@ -92,6 +92,12 @@ export type {
   DashboardOfficeStat,
   FakeLocationRow,
 } from './attendanceDashboard';
+export { fetchMonthly } from './attendanceMonthly';
+export type {
+  AttendanceMonthlyData,
+  EmployeeMonthlyRow,
+  MonthlyEmployeeSummary,
+} from './attendanceMonthly';
 export { customerService } from './customers';
 export type {
   ApiCustomer,
