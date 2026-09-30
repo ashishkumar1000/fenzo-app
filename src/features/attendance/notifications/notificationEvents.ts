@@ -9,7 +9,11 @@
  * 15-6 ships the first two (holiday_added, holiday_removed). Every later
  * attendance/leave emitter (16 fake-location, 17 leave lifecycle, 19
  * reminders) extends THIS list on both sides in the same commit — the FE
- * side mirrors the BE side character-for-character.
+ * side mirrors the BE side character-for-character. Story 19-4 (the FE
+ * half of 19-1) adds the three reminders. HONEST MIRROR FACT: the FE mirror
+ * is still BEHIND the BE by one event — `attendance.fake_location` (16)
+ * was never mirrored FE-side and stays deliberately absent here (its ack
+ * UI is 18-2's affair); the mirror tests pin the RESIDUAL gap too.
  *
  * If a field here drifts from the BE registry, the FE renders the wrong
  * row or the BE's dedupe index swallows a notification the user expected
@@ -29,6 +33,13 @@ export const ATTENDANCE_NOTIFICATION_EVENT = Object.freeze({
   HOLIDAY_ADDED: 'attendance.holiday_added',
   /** A future-dated holiday was removed — one row per tracked employee. */
   HOLIDAY_REMOVED: 'attendance.holiday_removed',
+  /** The employee's own check-in nudge (FR-23) — at most once per day. */
+  REMINDER_CHECKIN: 'attendance.reminder_checkin',
+  /** The employee's own check-out nudge — once, per work_date with a
+   *  check-in and no checkout. */
+  REMINDER_CHECKOUT: 'attendance.reminder_checkout',
+  /** The OWNER's office summary (19-2): tracked employees unchecked in. */
+  REMINDER_NOT_CHECKED_IN: 'attendance.reminder_not_checked_in',
 } as const);
 
 export type AttendanceNotificationEvent =
@@ -88,6 +99,30 @@ export const ATTENDANCE_NOTIFICATION_EVENT_REGISTRY: Readonly<
     payloadFields: ['holidayName', 'holidayDate'],
     dedupeKeyShape:
       '<tenantId>:attendance.holiday_removed:<recipientId>:<holidayId>',
+  }),
+  [ATTENDANCE_NOTIFICATION_EVENT.REMINDER_CHECKIN]: frozenEntry({
+    eventType: ATTENDANCE_NOTIFICATION_EVENT.REMINDER_CHECKIN,
+    recipients:
+      'A tracked employee, at most once per work_date (FR-23); never on weekly offs, holidays, an approved full-day leave, the enable-day grace or a status-only day override.',
+    payloadFields: ['workDate'],
+    dedupeKeyShape:
+      '<tenantId>:attendance.reminder_checkin:<recipientId>:<workDate>',
+  }),
+  [ATTENDANCE_NOTIFICATION_EVENT.REMINDER_CHECKOUT]: frozenEntry({
+    eventType: ATTENDANCE_NOTIFICATION_EVENT.REMINDER_CHECKOUT,
+    recipients:
+      'A tracked employee with a check-in and no check-out by the due instant, at most once per work_date.',
+    payloadFields: ['workDate', 'checkinAt'],
+    dedupeKeyShape:
+      '<tenantId>:attendance.reminder_checkout:<recipientId>:<workDate>',
+  }),
+  [ATTENDANCE_NOTIFICATION_EVENT.REMINDER_NOT_CHECKED_IN]: frozenEntry({
+    eventType: ATTENDANCE_NOTIFICATION_EVENT.REMINDER_NOT_CHECKED_IN,
+    recipients:
+      "The tenant owner, once per office per day at that office’s Start + Late cut-off, when the office has tracked employees with no check-in and no approved full-day leave.",
+    payloadFields: ['officeName', 'notCheckedInCount', 'workDate'],
+    dedupeKeyShape:
+      '<tenantId>:attendance.reminder_not_checked_in:<recipientId>:<workDate>:<officeId>',
   }),
 });
 

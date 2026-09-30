@@ -81,6 +81,11 @@ export const colors = {
   primaryActive: palette.blue800,
   primarySoft: palette.blue50,
   onPrimary: palette.gray0,
+  // Translucent whites over a primary-coloured surface (the 19-4
+  // dashboard's Tracked tile sheens + icon badge) — on-primary tints,
+  // tokenised so screens never write rgba strings.
+  onPrimarySoft: 'rgba(255, 255, 255, 0.18)',
+  onPrimaryFaint: 'rgba(255, 255, 255, 0.72)',
 
   // Surfaces
   surfacePage: palette.gray50,
@@ -90,6 +95,11 @@ export const colors = {
 
   // Scrim — modal / sheet backdrop overlay (gray900 @ 45% alpha).
   scrim: 'rgba(17, 24, 39, 0.45)',
+
+  // Shimmer sheen — the Skeleton's moving highlight bar over the
+  // borderSubtle placeholder blocks (translucent white; the skeleton
+  // promises "content is coming", so the sheen stays neutral).
+  shimmerSheen: 'rgba(255, 255, 255, 0.55)',
 
   // Full-screen image viewer backdrop — brand ink at 96%, essentially opaque.
   backdropDark: 'rgba(17, 24, 39, 0.96)',

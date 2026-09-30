@@ -33,7 +33,7 @@ function notification(overrides: Partial<ApiNotification> & { eventType: string;
 const SPAN = { startDate: '2026-10-05', endDate: '2026-10-09' };
 
 describe('the enumerated classifiers (wire-truth F6)', () => {
-  it('classify exactly the 8 table events, role-keyed', () => {
+  it('classify exactly the 9 table events, role-keyed (8 from 17-6 + 19-4 adds pending_reminder)', () => {
     for (const event of LEAVE_OWNER_EVENTS) {
       expect(isLeaveOwnerEvent(event)).toBe(true);
       expect(isLeaveEmployeeEvent(event)).toBe(false);
@@ -42,14 +42,15 @@ describe('the enumerated classifiers (wire-truth F6)', () => {
       expect(isLeaveEmployeeEvent(event)).toBe(true);
       expect(isLeaveOwnerEvent(event)).toBe(false);
     }
-    expect(LEAVE_OWNER_EVENTS.length + LEAVE_EMPLOYEE_EVENTS.length).toBe(8);
+    // 19-4: 8 + the owner-side pending_reminder.
+    expect(LEAVE_OWNER_EVENTS.length + LEAVE_EMPLOYEE_EVENTS.length).toBe(9);
   });
 
-  it('leave.pending_reminder stays OUT of both lists (the generic card keeps it)', () => {
-    expect(isLeaveOwnerEvent('leave.pending_reminder')).toBe(false);
+  it('leave.pending_reminder is an OWNER leave event from 19-4 (composed copy retired the generic-card deferral)', () => {
+    expect(isLeaveOwnerEvent('leave.pending_reminder')).toBe(true);
     expect(isLeaveEmployeeEvent('leave.pending_reminder')).toBe(false);
     const n = notification({ eventType: 'leave.pending_reminder', payload: { pendingCount: 2 } });
-    expect(notificationEventAction(n, 'owner')).toBe('generic');
+    expect(notificationEventAction(n, 'owner')).toBe('leave');
     expect(notificationEventAction(n, 'technician')).toBe('generic');
   });
 

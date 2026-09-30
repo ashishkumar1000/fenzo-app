@@ -4,16 +4,28 @@
  * `jobId`), it decides each notification's card kind and, by way of the
  * card kind, its deep link and which UI it may touch. No React, no network.
  *
- * Three actions today:
- *   'job'     — a job-status event (eventType = a workflow step key, jobId
- *               set) → the grouped job card → JobDetail (owner) /
- *               TechJobDetail (technician).
- *   'report'  — the report engine's terminal events (Epic 12) → the report
- *               card → Reports. OWNER-only: reports are an owner surface,
- *               so a technician row of this type renders generic.
- *   'generic' — anything else, including event types this build has never
- *               seen (later attendance/leave epics). Renders a plain,
- *               non-tappable card and NEVER touches job UI.
+ * Three card KINDS today (story 19-4 adds the attendance card for both
+ * roles):
+ *   'job'        — a job-status event (eventType = a workflow step key,
+ *                  jobId set) → the grouped job card → JobDetail (owner) /
+ *                  TechJobDetail (technician).
+ *   'report'     — the report engine's terminal events (Epic 12) → the
+ *                  report card → Reports. OWNER-only: reports are an owner
+ *                  surface, so a technician row of this type renders
+ *                  generic.
+ *   'attendance' — holiday events (15-6, technician) AND, from 19-4, the
+ *                  three attendance reminders (employee personal reminders
+ *                  + the owner's not-checked-in summary) — composed copy
+ *                  (the payload is display DATA, not display text), with a
+ *                  tap the screen guards: the technician tab rows only
+ *                  navigate while the Attendance tab exists; the owner
+ *                  card lands on the AttendanceDashboard.
+ *   'leave'      — the leave cards (17-6), role-keyed ENUMERATED
+ *                  classifications of the shipped events (19-4 adds
+ *                  leave.pending_reminder to the owner list).
+ *   'generic'    — anything else, including event types this build has
+ *                  never seen (the AD-19 fallback). Renders a plain,
+ *                  non-tappable card and NEVER touches job UI.
  *
  * Rows written before Story 14-2 carry NULL entityType/entityId — they are
  * classified by eventType + jobId exactly as before, so owner job/report
@@ -23,6 +35,9 @@
  */
 import type { ApiNotification } from '../../services';
 import { isAttendanceEventType } from '../../services/attendanceAccessEvents';
+import {
+  ATTENDANCE_NOTIFICATION_EVENT,
+} from '../attendance/notifications/notificationEvents';
 import { formatLongDate } from '../../utils/formatLongDate';
 import { isReportNotification } from './reportNotificationModel';
 import {
@@ -52,19 +67,36 @@ export function notificationEventAction(
   role: SessionRole,
 ): NotificationEventAction {
   if (role === 'owner' && isReportNotification(n)) return 'report';
+  // Story 19-4 (spec D8): the three attendance reminders compose their own
+  // cards — ROLE-AGNOSTIC for these three literals (two employee personal
+  // reminders + the owner's office summary). Everything else `attendance.*`
+  // keeps the status quo below: the technician prefix arm — the owner-side
+  // `attendance.*` rows that fell through to generic before 19-4 still do,
+  // except these three.
+  if (isAttendanceReminderEvent(n.eventType)) return 'attendance';
   // Story 15-10: attendance.* rows are a technician surface — they carry
   // composed copy (the payload is display DATA, not display text) and a
   // tap-guarded deep link to the Attendance tab (the seam decides whether
   // that tab currently exists).
   if (role === 'technician' && isAttendanceEventType(n.eventType)) return 'attendance';
   // Story 17-6: the leave cards — role-keyed ENUMERATED classifications of
-  // exactly the 8 shipped events (wire-truth F6). `leave.pending_reminder`
-  // (story 19-1) is deliberately NOT in either list: it stays on the
-  // generic card instead of composing broken copy from a missing payload.
+  // exactly the shipped events (wire-truth F6). 19-4 adds the 9th owner
+  // event, `leave.pending_reminder`, WITH its composed copy (the original
+  // generic-card deferral is retired — see leaveNotificationModel).
   if (role === 'owner' && isLeaveOwnerEvent(n.eventType)) return 'leave';
   if (role === 'technician' && isLeaveEmployeeEvent(n.eventType)) return 'leave';
   if (n.jobId !== null) return 'job';
   return 'generic';
+}
+
+/** EXACTLY the 19-4 reminder literals, enumerated (never a prefix sweep —
+ *  a future `attendance.reminder_*` must stay generic until composed). */
+function isAttendanceReminderEvent(eventType: string): boolean {
+  return (
+    eventType === ATTENDANCE_NOTIFICATION_EVENT.REMINDER_CHECKIN ||
+    eventType === ATTENDANCE_NOTIFICATION_EVENT.REMINDER_CHECKOUT ||
+    eventType === ATTENDANCE_NOTIFICATION_EVENT.REMINDER_NOT_CHECKED_IN
+  );
 }
 
 /** Generic title when the payload carries no usable text. */
@@ -106,19 +138,23 @@ export interface GenericNotificationCardData {
 }
 
 /**
- * One attendance notification's card (Story 15-10) — one row = one card,
- * same contract as generic cards PLUS a tap guard: the screen only
- * navigates when the access seam says the Attendance tab exists
- * (`attendanceAccess !== 'none'`), so a card from an enrolment since
- * revoked can never open a route that is not registered (FR-3).
+ * One attendance notification's card (Story 15-10; 19-4 opens it to BOTH
+ * roles) — one row = one card, same contract as generic cards PLUS a tap
+ * the screen guards: `attendance-guarded` navigates only when the access
+ * seam says the Attendance tab exists; `dashboard` lands the owner on the
+ * AttendanceDashboard (the reminder summary's home).
  */
+export type AttendanceCardTap = 'attendance-guarded' | 'dashboard';
+
 export interface AttendanceNotificationCardData {
   kind: 'attendance';
   /** The notification row's id — the FlatList key. */
   key: string;
-  /** Composed copy — e.g. "Holiday added" / "Diwali — Sat, 8 Nov 2026". */
+  /** Composed copy — e.g. "Holiday added" / "Check-in reminder". */
   title: string;
   message: string | null;
+  /** The card's tap target (the screen owns the actual navigation). */
+  tap: AttendanceCardTap;
   latestCreatedAt: string;
   isUnread: boolean;
   unreadIds: string[];
@@ -128,29 +164,73 @@ export interface AttendanceNotificationCardData {
 const ATTENDANCE_EVENT_TITLES: Record<string, string> = {
   'attendance.holiday_added': 'Holiday added',
   'attendance.holiday_removed': 'Holiday removed',
+  'attendance.reminder_checkin': 'Check-in reminder',
+  'attendance.reminder_checkout': 'Check-out reminder',
+  'attendance.reminder_not_checked_in': 'Not checked in',
 };
 
-/** Builds one card per attendance row, preserving the list's newest-first order. */
+/** The reminder personal copy (fixed — these cards speak to "you"). */
+const CHECKIN_MESSAGE = "You haven't checked in yet today.";
+const CHECKOUT_MESSAGE = "You haven't checked out yet today.";
+
+/** `reminder_not_checked_in`'s message — the owner's office summary;
+ *  singular/plural on the count ("1 hasn't checked in at «office».").
+ *  A count of 0 is nonsense copy ("0 haven't checked in") — that instant
+ *  means nobody is left to warn, so it is DRIFT, not a card: < 1 → null
+ *  (honest minimal card). */
+function notCheckedInMessage(payload: Record<string, unknown>): string | null {
+  const count = payload.notCheckedInCount;
+  const office = isText(payload.officeName) ? payload.officeName : null;
+  if (typeof count !== 'number' || !Number.isInteger(count) || count < 1) {
+    return null;
+  }
+  if (office === null) return null;
+  const who = count === 1 ? "1 hasn't" : `${count} haven't`;
+  return `${who} checked in at ${office}.`;
+}
+
+/** Builds one card per attendance row, preserving the list's newest-first
+ *  order — for BOTH roles now (the classifier is the filter). A drifted
+ *  payload degrades to an honest minimal card, never a crash. */
 export function buildAttendanceCards(
   items: ApiNotification[],
   role: SessionRole,
 ): AttendanceNotificationCardData[] {
-  if (role !== 'technician') return [];
   return items
     .filter(n => notificationEventAction(n, role) === 'attendance')
     .map(n => {
       const payload = (n.payload ?? {}) as Record<string, unknown>;
-      const holidayName = isText(payload.holidayName) ? payload.holidayName : null;
-      const holidayDate =
-        isText(payload.holidayDate) && payload.holidayDate.length >= 10
-          ? formatLongDate(payload.holidayDate.slice(0, 10))
-          : null;
-      const parts = [holidayName, holidayDate].filter((v): v is string => v !== null);
+      const isReminder = isAttendanceReminderEvent(n.eventType);
+      let message: string | null = null;
+      if (n.eventType === ATTENDANCE_NOTIFICATION_EVENT.REMINDER_CHECKIN) {
+        message = CHECKIN_MESSAGE;
+      } else if (n.eventType === ATTENDANCE_NOTIFICATION_EVENT.REMINDER_CHECKOUT) {
+        message = CHECKOUT_MESSAGE;
+      } else if (
+        n.eventType === ATTENDANCE_NOTIFICATION_EVENT.REMINDER_NOT_CHECKED_IN
+      ) {
+        message = notCheckedInMessage(payload);
+      } else {
+        const holidayName = isText(payload.holidayName) ? payload.holidayName : null;
+        const holidayDate =
+          isText(payload.holidayDate) && payload.holidayDate.length >= 10
+            ? formatLongDate(payload.holidayDate.slice(0, 10))
+            : null;
+        const parts = [holidayName, holidayDate].filter(
+          (v): v is string => v !== null,
+        );
+        message = parts.length > 0 ? parts.join(' — ') : null;
+      }
       return {
         kind: 'attendance' as const,
         key: n.id,
         title: ATTENDANCE_EVENT_TITLES[n.eventType] ?? humanizeEventType(n.eventType),
-        message: parts.length > 0 ? parts.join(' — ') : null,
+        message,
+        // The owner's summary card lands on the dashboard; every
+        // attendance-tab card keeps the guarded seam tap.
+        tap: (isReminder && n.eventType === ATTENDANCE_NOTIFICATION_EVENT.REMINDER_NOT_CHECKED_IN
+          ? 'dashboard'
+          : 'attendance-guarded') as AttendanceCardTap,
         latestCreatedAt: n.createdAt,
         isUnread: n.readAt === null,
         unreadIds: n.readAt === null ? [n.id] : [],

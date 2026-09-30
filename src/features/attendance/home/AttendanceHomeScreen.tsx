@@ -20,7 +20,7 @@
  */
 import { useCallback, useEffect, useRef } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
-import { Building2, CalendarOff, FlaskConical, Settings as SettingsIcon } from 'lucide-react-native';
+import { Building2, CalendarOff, FlaskConical, LayoutDashboard, Settings as SettingsIcon } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { colors, spacing } from '../../../theme';
@@ -87,7 +87,16 @@ export default function AttendanceHomeScreen({ navigation }: Props) {
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}>
-        {/* 17-6 — the Leave tile ABOVE Offices (Leave is "planned time";
+        {/* 19-4 D1 — the FR-24 dashboard tile, FIRST (the today snapshot is
+            the owner's entry answer, ahead of the setup surfaces below). */}
+        <Tile
+          icon={<LayoutDashboard size={20} color={colors.status.progress.solid} strokeWidth={1.5} />}
+          iconBg={colors.status.progress.bg}
+          title="Today"
+          subtitle="Who's in and who's not"
+          onPress={() => navigation.navigate('AttendanceDashboard')}
+        />
+        {/* 17-6 — the Leave tile (Leave is "planned time";
             the subtitle is FE copy, not mockup text). */}
         <Tile
           icon={<CalendarOff size={20} color={colors.status.progress.solid} strokeWidth={1.5} />}

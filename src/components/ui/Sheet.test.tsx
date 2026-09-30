@@ -10,6 +10,7 @@ import type ReactTestRenderer from 'react-test-renderer';
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { Text } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { TrueSheet } from '@lodev09/react-native-true-sheet';
 import { Sheet, type SheetProps } from './Sheet';
 
@@ -18,10 +19,26 @@ const baseProps = {
   children: <Text>body</Text>,
 } satisfies Omit<SheetProps, 'visible' | 'onClose'>;
 
+/** The Sheet's pinned footer carries the system bottom inset
+ *  (SafeAreaProvider contract, as at app root) — zero insets here. Every
+ *  tree root must wear the provider: `renderer.update()` REPLACES the
+ *  initial element, so an update carrying a bare `<Sheet>` would drop it. */
+function safeWrap(sheet: React.ReactElement<typeof Sheet>) {
+  return (
+    <SafeAreaProvider
+      initialMetrics={{
+        frame: { x: 0, y: 0, width: 0, height: 0 },
+        insets: { top: 0, left: 0, right: 0, bottom: 0 },
+      }}>
+      {sheet}
+    </SafeAreaProvider>
+  );
+}
+
 function renderSheet(props: Parameters<typeof Sheet>[0]) {
   let renderer!: ReactTestRenderer.ReactTestRenderer;
   act(() => {
-    renderer = create(<Sheet {...props} />);
+    renderer = create(safeWrap(<Sheet {...props} />));
   });
   return renderer;
 }
@@ -40,7 +57,7 @@ it('presents only once `visible` flips to true', () => {
   expect(nativeCalls(renderer.root).present).not.toHaveBeenCalled();
 
   act(() => {
-    renderer.update(<Sheet {...baseProps} visible onClose={() => {}} />);
+    renderer.update(safeWrap(<Sheet {...baseProps} visible onClose={() => {}} />));
   });
   expect(nativeCalls(renderer.root).present).toHaveBeenCalledTimes(1);
 });
@@ -50,7 +67,7 @@ it('dismisses when `visible` flips back to false', () => {
   expect(nativeCalls(renderer.root).dismiss).not.toHaveBeenCalled();
 
   act(() => {
-    renderer.update(<Sheet {...baseProps} visible={false} onClose={() => {}} />);
+    renderer.update(safeWrap(<Sheet {...baseProps} visible={false} onClose={() => {}} />));
   });
   expect(nativeCalls(renderer.root).dismiss).toHaveBeenCalledTimes(1);
 });
@@ -71,7 +88,7 @@ it('does not re-run onClose when a programmatic close settles natively', () => {
   const renderer = renderSheet({ ...baseProps, visible: true, onClose });
 
   act(() => {
-    renderer.update(<Sheet {...baseProps} visible={false} onClose={onClose} />);
+    renderer.update(safeWrap(<Sheet {...baseProps} visible={false} onClose={onClose} />));
   });
   // The native side still fires `onDidDismiss` after the programmatic
   // `dismiss()` — the guard must swallow it, or the parent's close handler

@@ -139,7 +139,28 @@ describe('AttendanceHomeScreen', () => {
       'Leave',
       'Offices',
       'Settings',
+      'Today',
     ]);
+  });
+
+  it('renders the 19-4 "Today" tile FIRST, above Leave', () => {
+    const { renderer } = renderHome();
+    // The today snapshot is the owner's first answer (19-4 D1) — the tile
+    // must precede the Leave tile in the tile order.
+    const all = renderer.root
+      .findAll((node) => node.props.accessibilityRole === 'button')
+      .map((node) => node.props.accessibilityLabel as string);
+    expect(all.indexOf('Today')).toBeGreaterThanOrEqual(0);
+    expect(all.indexOf('Today')).toBeLessThan(all.indexOf('Leave'));
+  });
+
+  it('tapping "Today" navigates to AttendanceDashboard (19-4 D1)', () => {
+    const { renderer, navigation } = renderHome();
+    const todayButton = findTile(renderer, 'Today');
+    act(() => {
+      todayButton.props.onPress();
+    });
+    expect(navigation.navigate).toHaveBeenCalledWith('AttendanceDashboard');
   });
 
   it('tapping "Offices" navigates to AttendanceOffices', () => {

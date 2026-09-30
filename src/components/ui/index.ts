@@ -38,6 +38,8 @@ export type { SwitchProps } from './Switch';
 export { EmptyState } from './EmptyState';
 export type { EmptyStateProps } from './EmptyState';
 
+export { Skeleton } from './Skeleton';
+
 export { InlineError } from './InlineError';
 export type { InlineErrorProps } from './InlineError';
 

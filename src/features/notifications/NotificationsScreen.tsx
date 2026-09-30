@@ -49,6 +49,7 @@ import {
   Check,
   CheckCircle2,
   ChevronLeft,
+  Clock,
   Undo2,
   XCircle,
 } from 'lucide-react-native';
@@ -82,6 +83,7 @@ import {
 import {
   buildAttendanceCards,
   buildGenericCards,
+  type AttendanceNotificationCardData,
   type SessionRole,
 } from './notificationEventRegistry';
 import {
@@ -127,6 +129,7 @@ const LEAVE_CARD_ICONS: Record<
   CalendarOff,
   CalendarX,
   CheckCircle2,
+  Clock,
   XCircle,
   Undo2,
 };
@@ -275,8 +278,16 @@ export default function NotificationsScreen({ navigation }: Props) {
   // access seam says the Attendance tab exists — a card from an enrolment
   // since revoked must never navigate to a route that is not registered
   // (FR-3; the seam mirrors the store's `attendanceAccess !== 'none'`).
+  // 19-4: the OWNER's summary card (`dashboard` tap) bypasses that guard —
+  // it lands on the AttendanceDashboard, an owner-stack route that never
+  // rides the tab seam.
   const handleAttendanceCardPress = useCallback(
-    (card: { unreadIds: string[] }) => {
+    (card: AttendanceNotificationCardData) => {
+      if (card.tap === 'dashboard') {
+        for (const id of card.unreadIds) void markNotificationRead(id);
+        navigation.navigate('AttendanceDashboard');
+        return;
+      }
       // The guard consults FIRST: for a `none` employee the tap is a
       // no-op (frozen matrix) — no navigation AND no read-mark mutation.
       if (!isAttendanceReachable()) return;

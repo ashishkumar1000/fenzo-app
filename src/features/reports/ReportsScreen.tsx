@@ -33,7 +33,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button, EmptyState, IconButton, InlineError } from '../../components/ui';
+import { Button, EmptyState, IconButton, InlineError, Skeleton } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import { reportService, TECHNICIAN_JOB_ACTIVITY_TYPE } from '../../services';
 import type { ReportListItem } from '../../services';
@@ -44,7 +44,6 @@ import { createReportRequest, loadReports, retryReportRequest, useReports } from
 import { failedReportCopy, todayIst } from './reportModel';
 import { ReportRequestForm } from './components/ReportRequestForm';
 import { ReportRow } from './components/ReportRow';
-import { ReportSkeleton } from './components/ReportSkeleton';
 
 type Props = CompositeScreenProps<
   NativeStackScreenProps<RootStackParamList, 'Reports'>,
@@ -218,7 +217,9 @@ export default function ReportsScreen({ navigation }: Props) {
             onSubmit={handleSubmit}
           />
           <Text style={styles.historyTitle}>History</Text>
-          <ReportSkeleton />
+          {/* Story 19-4 D2 — UX-DR5: the report-local skeleton became the
+              shared DS `Skeleton`; identical output. */}
+          <Skeleton />
         </ScrollView>
       ) : failedWithNoData ? (
         <View style={styles.centered}>

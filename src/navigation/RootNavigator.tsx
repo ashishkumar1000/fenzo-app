@@ -18,6 +18,7 @@ import {
   OfficeMapPickerScreen,
 } from '../features/attendance/offices';
 import { AttendanceHomeScreen } from '../features/attendance/home';
+import { AttendanceDashboardScreen } from '../features/attendance/dashboard';
 import OwnerLeaveScreen from '../features/attendance/leave/OwnerLeaveScreen';
 import ApplyOnBehalfScreen from '../features/attendance/leave/ApplyOnBehalfScreen';
 import {
@@ -106,6 +107,12 @@ export default function RootNavigator() {
       <Stack.Screen
         name="AttendanceHome"
         component={AttendanceHomeScreen}
+        options={{ headerShown: false }}
+      />
+      {/* Story 19-4 — the FR-24 owner dashboard (Today snapshot). */}
+      <Stack.Screen
+        name="AttendanceDashboard"
+        component={AttendanceDashboardScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen

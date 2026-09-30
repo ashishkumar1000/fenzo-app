@@ -58,6 +58,33 @@ jest.mock('@lodev09/react-native-true-sheet', () =>
   require('@lodev09/react-native-true-sheet/mock'),
 );
 
+// The DS Sheet carries the system bottom inset in its pinned footer via
+// useSafeAreaInsets — native inset measurement cannot run in jest. Use the
+// library's own mock: real contexts preserved, native measurement replaced
+// by zero insets (any SafeAreaProvider wrapper in a suite still wins).
+// The mock module is ESM-transpiled — its real object sits behind `default`.
+// The hooks are re-exposed as PLAIN functions, deliberately NOT the mock's
+// own jest.fn wrappers: jest.resetAllMocks wipes every jest.fn
+// implementation — the library mock's hooks included — so a suite that
+// resets mocks and then renders a Sheet (any 19-4 dashboard or sheet-
+// consumer suite) would read `undefined` insets and crash. Plain
+// functions are untouched by the reset, and the context read stays live
+// so a suite's own SafeAreaProvider still wins.
+jest.mock('react-native-safe-area-context', () => {
+  const React = require('react');
+  const mock = require('react-native-safe-area-context/src/jest/mock').default;
+  const actual = jest.requireActual('react-native-safe-area-context');
+  const ZERO_INSETS = { top: 0, bottom: 0, left: 0, right: 0 };
+  return {
+    ...mock,
+    useSafeAreaInsets: () =>
+      React.useContext(actual.SafeAreaInsetsContext) ?? ZERO_INSETS,
+    useSafeAreaFrame: () =>
+      React.useContext(actual.SafeAreaFrameContext) ??
+      mock.initialWindowMetrics.frame,
+  };
+});
+
 // react-native-nitro-geolocation boots NitroModules on import (a native
 // TurboModule jest cannot load) — the `/compat` entry and the main entry
 // (features/technicianApp/geolocation.ts imports both) crash every suite

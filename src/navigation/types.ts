@@ -166,6 +166,12 @@ export type RootStackParamList = {
    * replace this with a real dashboard.
    */
   AttendanceHome: undefined;
+  /**
+   * Story 19-4 — the FR-24 owner dashboard (Today snapshot: five KPI
+   * tiles, flag strips, office filter). Owner-only by the BE route;
+   * entered only from AttendanceHome's "Today" tile.
+   */
+  AttendanceDashboard: undefined;
   /** Story 15-6 — Attendance Settings landing (Weekly off + Holidays). */
   AttendanceSettings: undefined;
   /** Story 15-9 — the Team enrolment roster (start dates, offices &

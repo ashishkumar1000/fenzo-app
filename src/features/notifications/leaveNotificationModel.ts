@@ -1,10 +1,13 @@
 /**
  * leaveNotificationModel.ts — the leave notification cards (Story 17-6,
  * spec D5). The classifiers are ENUMERATED lists of exactly the 8 shipped
- * `leave.*` events (wire-truth F6): `leave.pending_reminder` is a live 9th
- * `leave.*` event (owner recipient, payload `[pendingCount]`, story 19-1)
- * — a prefix-keyed classifier would classify it and compose broken copy
- * from missing fields, so it deliberately stays on the generic card.
+ * `leave.*` events (wire-truth F6), PLUS the 9th in Story 19-4:
+ * `leave.pending_reminder` (owner recipient, payload `[pendingCount]`,
+ * 19-1's BE emitter). It was OFF here until 19-4 ("deliberately on the
+ * generic card" — see git history for that reasoning); the story adds it
+ * with its OWN composed copy, so the original broken-copy concern no
+ * longer applies — a drifted payload degrades to the minimal honest card
+ * like every other enumerated event.
  *
  * Copy is FE-composed from payload DATA (never display text): single-day
  * spans collapse to one date, `reason` is ALWAYS present-but-nullable in
@@ -20,11 +23,13 @@ import {
   workingDaysCopy,
 } from '../attendance/leave/leaveStatusModel';
 
-/** The owner-facing events (recipient = tenants.owner_id, BE D14). */
+/** The owner-facing events (recipient = tenants.owner_id, BE D14).
+ *  Story 19-4 adds `leave.pending_reminder` (the FE half of 19-1's D3). */
 export const LEAVE_OWNER_EVENTS = [
   'leave.applied',
   'leave.employee_cancelled',
   'leave.checkin_auto_cancel',
+  'leave.pending_reminder',
 ] as const;
 
 /** The employee-facing events. */
@@ -44,13 +49,15 @@ export function isLeaveEmployeeEvent(eventType: string): boolean {
   return (LEAVE_EMPLOYEE_EVENTS as readonly string[]).includes(eventType);
 }
 
-/** Lucide glyph names for the card — the screen maps them to components. */
+/** Lucide glyph names for the card — the screen maps them to components.
+ *  19-4 adds Clock for the pending-reminder card. */
 export type LeaveCardIconName =
   | 'CalendarOff'
   | 'CalendarX'
   | 'CheckCircle2'
   | 'XCircle'
-  | 'Undo2';
+  | 'Undo2'
+  | 'Clock';
 
 /** The card's tap target (the screen owns the actual navigation). */
 export type LeaveCardTap = 'owner-pending' | 'owner-all' | 'attendance-guarded';
@@ -221,6 +228,20 @@ function copyFor(eventType: string, payload: Record<string, unknown>): LeaveEven
         icon: 'CalendarX',
         tap: 'attendance-guarded',
       };
+    case 'leave.pending_reminder': {
+      // 19-4 — the daily "n leave requests waiting" nudge lands on the
+      // actionable queue (Pending), like leave.applied.
+      const count = payload.pendingCount;
+      if (typeof count !== 'number' || !Number.isInteger(count) || count < 0) {
+        return null;
+      }
+      return {
+        title: 'Pending leave',
+        message: `${count} leave request${count === 1 ? '' : 's'} waiting for approval.`,
+        icon: 'Clock',
+        tap: 'owner-pending',
+      };
+    }
     default:
       return null;
   }

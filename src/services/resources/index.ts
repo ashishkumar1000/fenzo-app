@@ -84,6 +84,14 @@ export type {
   CorrectionEntry,
   CorrectionsQuery,
 } from './attendanceCorrections';
+export { fetchDashboard } from './attendanceDashboard';
+export type {
+  AttendanceDashboardCounts,
+  AttendanceDashboardData,
+  CheckoutMissingRow,
+  DashboardOfficeStat,
+  FakeLocationRow,
+} from './attendanceDashboard';
 export { customerService } from './customers';
 export type {
   ApiCustomer,

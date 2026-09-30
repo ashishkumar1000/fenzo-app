@@ -31,6 +31,7 @@
 import React, { useEffect, useRef, type ReactElement, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { TrueSheet, type TrueSheetProps } from '@lodev09/react-native-true-sheet';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
 import { IconButton } from './IconButton';
 import { colors, radius, spacing, typography } from '../../theme';
@@ -86,6 +87,14 @@ export function Sheet({
   // Tracks whether the native sheet is currently presented, so a close on a
   // never-presented sheet (initial render with visible=false) is a no-op.
   const presentedRef = useRef(false);
+  // The pinned footer lands flush against the screen edge — in edge-to-edge
+  // mode Android leaves NO gap for the gesture-nav inset (found on device:
+  // footer buttons glued to the bottom edge), and iOS home-indicator sheets
+  // behave the same. The footer slot is the Sheet's, so the inset belongs
+  // HERE once, not re-invented in every footer. SafeAreaProvider is a
+  // required app-level provider — without it the context consumer THROWS;
+  // there is nothing to fall back to, so this is a plain hook call.
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (visible) {
@@ -149,7 +158,19 @@ export function Sheet({
       dimmedDetentIndex={0}
       onDidDismiss={handleDidDismiss}
       onDidPresent={onDidPresent}
-      footer={footer}>
+      footer={
+        footer ? (
+          <View
+            style={[
+              styles.footerSlot,
+              { paddingBottom: Math.max(insets.bottom, spacing.s2) },
+            ]}>
+            {footer}
+          </View>
+        ) : (
+          footer
+        )
+      }>
       <View style={styles.content}>
         <View style={styles.header}>
           <View style={styles.headerText}>
@@ -187,6 +208,11 @@ const styles = StyleSheet.create({
   headerText: {
     flex: 1,
     gap: spacing.s1,
+  },
+  // The native footer slot wrapper — carries the system bottom inset the
+  // sheet's own chrome doesn't (see the comment at the insets hook).
+  footerSlot: {
+    backgroundColor: colors.surfaceCard,
   },
   title: {
     ...typography.title,

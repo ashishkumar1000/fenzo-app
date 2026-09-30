@@ -21,6 +21,7 @@ jest.mock('@react-native-community/datetimepicker');
 import type ReactTestRenderer from 'react-test-renderer';
 import { act, create } from 'react-test-renderer';
 import { Platform, Text } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import TimePickerStub, {
   DateTimePickerAndroid,
   // The root __mocks__ module carries these mock-only helpers; the real
@@ -43,7 +44,17 @@ function renderField(
 ): ReactTestRenderer.ReactTestRenderer {
   let renderer!: ReactTestRenderer.ReactTestRenderer;
   act(() => {
-    renderer = create(<TimeField {...props} />);
+    // The rendered Sheet now carries the system bottom inset in its footer
+    // (SafeAreaProvider contract, as at app root) — zero insets here.
+    renderer = create(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 0, height: 0 },
+          insets: { top: 0, left: 0, right: 0, bottom: 0 },
+        }}>
+        <TimeField {...props} />
+      </SafeAreaProvider>,
+    );
   });
   return renderer;
 }

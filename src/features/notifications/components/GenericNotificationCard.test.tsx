@@ -113,6 +113,7 @@ describe('GenericNotificationCard — Story 15-10 attendance cards (optional onP
     key: 'a1',
     title: 'Holiday added',
     message: 'Diwali — Sat, 8 Nov 2026',
+    tap: 'attendance-guarded',
     latestCreatedAt: CREATED_AT,
     isUnread: true,
     unreadIds: ['a1'],

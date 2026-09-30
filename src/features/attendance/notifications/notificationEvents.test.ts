@@ -78,6 +78,52 @@ describe('ATTENDANCE_NOTIFICATION_EVENT_REGISTRY', () => {
       expect(meta.eventType).toBe(key);
     }
   });
+
+  // 19-4 — the FE half of 19-1's D3: the three reminders, character-for-
+  // character against the BE registry (fenzit-be notification-events.ts).
+  it('REMINDER_CHECKIN: eventType / payloadFields / dedupeKeyShape are pinned', () => {
+    const meta =
+      ATTENDANCE_NOTIFICATION_EVENT_REGISTRY[
+        ATTENDANCE_NOTIFICATION_EVENT.REMINDER_CHECKIN
+      ];
+    expect(meta.eventType).toBe('attendance.reminder_checkin');
+    expect(meta.payloadFields).toEqual(['workDate']);
+    expect(meta.dedupeKeyShape)
+      .toBe('<tenantId>:attendance.reminder_checkin:<recipientId>:<workDate>');
+    expect(meta.recipients).toContain('A tracked employee, at most once per work_date');
+  });
+
+  it('REMINDER_CHECKOUT: eventType / payloadFields / dedupeKeyShape are pinned', () => {
+    const meta =
+      ATTENDANCE_NOTIFICATION_EVENT_REGISTRY[
+        ATTENDANCE_NOTIFICATION_EVENT.REMINDER_CHECKOUT
+      ];
+    expect(meta.eventType).toBe('attendance.reminder_checkout');
+    expect(meta.payloadFields).toEqual(['workDate', 'checkinAt']);
+    expect(meta.dedupeKeyShape)
+      .toBe('<tenantId>:attendance.reminder_checkout:<recipientId>:<workDate>');
+    expect(meta.recipients).toContain('A tracked employee with a check-in and no check-out');
+  });
+
+  it('REMINDER_NOT_CHECKED_IN: eventType / payloadFields / dedupeKeyShape are pinned', () => {
+    const meta =
+      ATTENDANCE_NOTIFICATION_EVENT_REGISTRY[
+        ATTENDANCE_NOTIFICATION_EVENT.REMINDER_NOT_CHECKED_IN
+      ];
+    expect(meta.eventType).toBe('attendance.reminder_not_checked_in');
+    expect(meta.payloadFields).toEqual(['officeName', 'notCheckedInCount', 'workDate']);
+    expect(meta.dedupeKeyShape)
+      .toBe(
+        '<tenantId>:attendance.reminder_not_checked_in:<recipientId>:<workDate>:<officeId>',
+      );
+    // The FULL literal, character for character — the BE's recipients text
+    // is the source (its U+2019 apostrophe is intentional), and a prefix
+    // alone would let apostrophe/wording drift through the mirror.
+    expect(meta.recipients)
+      .toBe(
+        "The tenant owner, once per office per day at that office’s Start + Late cut-off, when the office has tracked employees with no check-in and no approved full-day leave.",
+      );
+  });
 });
 
 describe('ATTENDANCE_NOTIFICATION_EVENT_TYPES', () => {
@@ -85,6 +131,9 @@ describe('ATTENDANCE_NOTIFICATION_EVENT_TYPES', () => {
     expect(ATTENDANCE_NOTIFICATION_EVENT_TYPES).toEqual([
       'attendance.holiday_added',
       'attendance.holiday_removed',
+      'attendance.reminder_checkin',
+      'attendance.reminder_checkout',
+      'attendance.reminder_not_checked_in',
     ]);
     expect(Object.isFrozen(ATTENDANCE_NOTIFICATION_EVENT_TYPES)).toBe(true);
   });

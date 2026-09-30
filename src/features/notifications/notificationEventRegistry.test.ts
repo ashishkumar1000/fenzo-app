@@ -13,6 +13,7 @@ import {
   buildGenericCards,
   notificationEventAction,
 } from './notificationEventRegistry';
+import { buildLeaveCards } from './leaveNotificationModel';
 
 function makeNotification(
   id: string,
@@ -265,7 +266,9 @@ describe('buildAttendanceCards (Story 15-10)', () => {
     }
   });
 
-  it('an OWNER always gets [] — attendance is a technician surface', () => {
+  it('an OWNER always gets [] — attendance is a technician surface (except 19-4 reminders)', () => {
+    // 19-4 narrowed this: the OWNER still gets [] for the holiday events
+    // (non-reminder attendance.* falls through to generic for an owner).
     const cards = buildAttendanceCards(
       [
         makeNotification('a1', {
@@ -313,5 +316,133 @@ describe('buildAttendanceCards (Story 15-10)', () => {
     expect(cards[0].unreadIds).toEqual(['a1']);
     expect(cards[1].isUnread).toBe(false);
     expect(cards[1].unreadIds).toEqual([]);
+  });
+});
+
+describe('notificationEventAction — the 19-4 reminder literals (role-agnostic)', () => {
+  const REMINDERS = [
+    'attendance.reminder_checkin',
+    'attendance.reminder_checkout',
+    'attendance.reminder_not_checked_in',
+  ];
+
+  it('the three literals classify as attendance for BOTH roles — enumerated, not prefix-swept', () => {
+    for (const eventType of REMINDERS) {
+      for (const role of ['owner', 'technician'] as const) {
+        expect(
+          notificationEventAction(makeNotification('x', { eventType }), role),
+        ).toBe('attendance');
+      }
+    }
+    // A FUTURE reminder.* word stays generic until composed — never a
+    // prefix sweep.
+    expect(
+      notificationEventAction(
+        makeNotification('y', { eventType: 'attendance.reminder_something_future' }),
+        'owner',
+      ),
+    ).toBe('generic');
+  });
+});
+
+describe('buildAttendanceCards — the 19-4 reminder cards (spec D8 copy table)', () => {
+  it('reminder_checkin → "Check-in reminder" / fixed personal copy, guarded attendance tap (technician)', () => {
+    const [card] = buildAttendanceCards(
+      [
+        makeNotification('r1', {
+          eventType: 'attendance.reminder_checkin',
+          payload: { workDate: '2026-09-30' },
+        }),
+      ],
+      'technician',
+    );
+    expect(card).toMatchObject({
+      title: 'Check-in reminder',
+      message: "You haven't checked in yet today.",
+      tap: 'attendance-guarded',
+    });
+  });
+
+  it('reminder_checkout → "Check-out reminder" / fixed personal copy, guarded attendance tap', () => {
+    const [card] = buildAttendanceCards(
+      [
+        makeNotification('r2', {
+          eventType: 'attendance.reminder_checkout',
+          payload: { workDate: '2026-09-30' },
+        }),
+      ],
+      'technician',
+    );
+    expect(card).toMatchObject({
+      title: 'Check-out reminder',
+      message: "You haven't checked out yet today.",
+      tap: 'attendance-guarded',
+    });
+  });
+
+  it('reminder_not_checked_in (OWNER) → "Not checked in" / singular + plural message, DASHBOARD tap', () => {
+    const cards = buildAttendanceCards(
+      [
+        makeNotification('r2', {
+          eventType: 'attendance.reminder_not_checked_in',
+          payload: { officeName: 'HSR Office', notCheckedInCount: 1, workDate: '2026-09-30' },
+        }),
+        makeNotification('r3', {
+          eventType: 'attendance.reminder_not_checked_in',
+          payload: { officeName: 'HSR Office', notCheckedInCount: 4, workDate: '2026-09-30' },
+        }),
+      ],
+      'owner',
+    );
+    expect(cards[0]).toMatchObject({
+      title: 'Not checked in',
+      message: "1 hasn't checked in at HSR Office.",
+      tap: 'dashboard',
+    });
+    expect(cards[1].message).toBe("4 haven't checked in at HSR Office.");
+  });
+
+  it('leave.pending_reminder (owner) → "Pending leave" / singular + plural message, Pending tap', () => {
+    const [single] = buildLeaveCards(
+      [
+        makeNotification('l1', {
+          eventType: 'leave.pending_reminder',
+          payload: { pendingCount: 1 },
+        }),
+      ],
+      'owner',
+    );
+    expect(single).toMatchObject({
+      title: 'Pending leave',
+      message: '1 leave request waiting for approval.',
+      icon: 'Clock',
+      tap: 'owner-pending',
+    });
+    const [many] = buildLeaveCards(
+      [
+        makeNotification('l2', {
+          eventType: 'leave.pending_reminder',
+          payload: { pendingCount: 3 },
+        }),
+      ],
+      'owner',
+    );
+    expect(many.message).toBe('3 leave requests waiting for approval.');
+  });
+
+  it('a drifted reminder payload degrades without crashing — missing office/count fields render an honest minimal card', () => {
+    const cards = buildAttendanceCards(
+      [
+        makeNotification('r3', { eventType: 'attendance.reminder_not_checked_in', payload: {} }),
+        makeNotification(
+          'r4',
+          { eventType: 'attendance.reminder_not_checked_in', payload: { officeName: 'HSR', notCheckedInCount: 'many' } },
+        ),
+      ],
+      'owner',
+    );
+    expect(cards).toHaveLength(2);
+    expect(cards[0]).toMatchObject({ title: 'Not checked in', message: null, tap: 'dashboard' });
+    expect(cards[1].message).toBeNull();
   });
 });
