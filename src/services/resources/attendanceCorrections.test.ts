@@ -7,22 +7,31 @@
  * instants → "Times 9:02 AM – 6:00 PM"; empty → "—"); and the documented
  * error mapping (400 'Invalid cursor' / 422 employeeId / 403 me-none)
  * surfacing as the SAME rejection — the FE adds no recovery policy.
+ *
+ * Story 18-4 adds the WRITE (`correctDay`): the PUT route with both path
+ * params encodeURIComponent'd, the XOR body sent VERBATIM (no reshaping,
+ * no idempotency key — a replay IS a legitimate re-correction), and the
+ * 200 echo returned as-is (the raw override — the FE never seeds cells
+ * from it, it refreshes).
  */
 jest.mock('../api/apiClient', () => ({
   apiClient: {
     get: jest.fn(),
+    put: jest.fn(),
     post: jest.fn(),
   },
 }));
 
 import { apiClient } from '../api/apiClient';
 import {
+  correctDay,
   fetchCorrections,
   formatCorrectionValue,
   type CorrectionEntry,
 } from './attendanceCorrections';
 
 const get = apiClient.get as jest.Mock;
+const put = apiClient.put as jest.Mock;
 
 function entry(overrides: Partial<CorrectionEntry> = {}): CorrectionEntry {
   return {
@@ -151,5 +160,61 @@ describe('formatCorrectionValue — the D6 formatter', () => {
 
   it('an empty value renders "—"', () => {
     expect(formatCorrectionValue({ status: null, checkinAt: null, checkoutAt: null })).toBe('—');
+  });
+});
+
+describe('correctDay — the 18-4 write', () => {
+  const echo = {
+    workDate: '2026-09-14',
+    override: { status: 'present', checkinAt: null, checkoutAt: null },
+    correctedAt: '2026-09-29T10:00:00+05:30',
+    actorId: 'actor-1',
+  };
+
+  it('PUTs /attendance/corrections/:employeeId/:workDate and returns the echo', async () => {
+    put.mockResolvedValueOnce({ data: echo });
+
+    const body = { status: 'present' as const, note: 'No attendance exists' };
+    const res = await correctDay('e1', '2026-09-14', body);
+
+    expect(put).toHaveBeenCalledWith('/attendance/corrections/e1/2026-09-14', body);
+    expect(res).toEqual(echo);
+  });
+
+  it('encodes both path params (the placeholder UUID / odd ids never reshape the route)', async () => {
+    put.mockResolvedValueOnce({ data: echo });
+
+    await correctDay('a/b?c', '2026-09-14', { status: 'absent', note: 'n' });
+
+    expect(put).toHaveBeenCalledWith(
+      '/attendance/corrections/a%2Fb%3Fc/2026-09-14',
+      { status: 'absent', note: 'n' },
+    );
+  });
+
+  it('sends the instants arm VERBATIM — no reshaping, no idempotency key', async () => {
+    put.mockResolvedValueOnce({ data: echo });
+
+    const body = {
+      checkinAt: '2026-09-14T09:00:00+05:30',
+      checkoutAt: '2026-09-14T18:00:00+05:30',
+      note: 'Fixed the times',
+    };
+    await correctDay('e1', '2026-09-14', body);
+
+    expect(put).toHaveBeenCalledWith('/attendance/corrections/e1/2026-09-14', body);
+  });
+
+  it('the wire 422s surface as ApiError verbatim (no FE mapping)', async () => {
+    const error = {
+      status: 422,
+      code: 'ATTENDANCE_FUTURE_DATE',
+      message: 'The day is in the future.',
+    };
+    put.mockRejectedValueOnce(error);
+
+    await expect(
+      correctDay('e1', '2026-09-30', { status: 'present', note: 'n' }),
+    ).rejects.toEqual(error);
   });
 });

@@ -15,6 +15,13 @@
  * `today` is the wire echo (spec-18-3 D2) — data-driven, never the device
  * clock. Midnight-crossing staleness of today's cell is accepted until the
  * next fetch.
+ *
+ * Story 18-4 adds `refresh()` (D5): a DISTINCT stale-while-revalidate path
+ * for post-write consistency — existing rows are KEPT (never the clearing
+ * `setData(new Map())`: that would blank every cell and flip an open
+ * sheet's row to a false "Not tracked" mid-flight), no month-level loading
+ * flip, seq-guarded against a concurrent month fetch, rows swap in place
+ * when the fetch lands. `retry()` keeps its error-recovery semantics.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -37,6 +44,13 @@ export interface MonthStatuses {
   loading: boolean;
   error: string | null;
   retry: () => void;
+  /**
+   * The stale-while-revalidate refetch (18-4 D5): re-fetches the CURRENT
+   * month/scope WITHOUT clearing rows or flipping the month loading flag —
+   * the post-correction in-place refresh. Errors surface through the same
+   * ordinary `error` state (the rows stay put).
+   */
+  refresh: () => void;
 }
 
 const FALLBACK_ERROR = "Couldn't load the month. Check your connection and try again.";
@@ -112,7 +126,45 @@ export function useMonthStatuses(input: {
 
   const retry = useCallback(() => setRetryTick(t => t + 1), []);
 
-  return { data, today, loading, error, retry };
+  // The refresh path reads the CURRENT scope/month through refs (the
+  // todayRef idiom) so its identity stays stable for host effects.
+  const yearMonthRef = useRef(yearMonth);
+  yearMonthRef.current = yearMonth;
+  const employeeIdRef = useRef<string | null>(
+    scope.kind === 'owner' ? scope.employeeId : null,
+  );
+  employeeIdRef.current = scope.kind === 'owner' ? scope.employeeId : null;
+
+  /** 18-4 D5 — the non-clearing stale-while-revalidate fetch: NO
+   * `setData(new Map())` (existing rows are kept — the old glyphs stay
+   * until this lands), NO `setLoading(true)` (no month-pane spinner), one
+   * seq bump so a concurrent month fetch wins/loses cleanly. */
+  const refresh = useCallback(() => {
+    const { from, to } = monthRangeSafe(yearMonthRef.current);
+    const employeeId = employeeIdRef.current;
+    const seq = ++seqRef.current;
+    setError(null);
+    const request =
+      employeeId != null
+        ? fetchDayStatuses(employeeId, from, to)
+        : fetchMyDayStatuses(from, to);
+    request
+      .then(res => {
+        if (!mounted.current || seq !== seqRef.current) return;
+        const map = new Map<string, DayStatusRow>();
+        for (const row of res.days) map.set(row.workDate, row);
+        setData(map);
+        setToday(res.today);
+        setLoading(false);
+      })
+      .catch(err => {
+        if (!mounted.current || seq !== seqRef.current) return;
+        setError(errorMessage(err));
+        setLoading(false);
+      });
+  }, []);
+
+  return { data, today, loading, error, retry, refresh };
 }
 
 /** monthRange guarded for the hook path — a malformed yearMonth is a

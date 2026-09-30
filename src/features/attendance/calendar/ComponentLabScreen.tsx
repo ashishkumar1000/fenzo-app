@@ -10,36 +10,45 @@
  *      colours/icons: a table drift breaks here loudly instead of
  *      silently mis-rendering). All 12 statuses render at real cell size —
  *      the AC-1 same-hue distinctness evidence source (screenshots come
- *      from THIS month only, no production data).
+ *      from THIS month only, no production data). Its sheet passes the
+ *      read-only posture (18-4 D1): a write against canned data + a
+ *      placeholder UUID would 404 no-leak — a baffling error on fake data.
  *  (b) a REAL month — employee picker (id→name from the MMKV-hydrated
  *      ProfileTechnician roster; the wire carries no employeeName) + month
- *      nav through `useMonthStatuses`, whose cells open the REAL
- *      DayDetailSheet against production data.
+ *      nav through `useMonthStatuses` (RealMonthPane), whose cells open the
+ *      REAL DayDetailSheet against production data — wired END-TO-END for
+ *      18-4: `correctDay` writes, the pane's non-clearing refresh repaints
+ *      the cell in place (D5).
  *
  * 19-5/19-6 replace this screen as the real hosts; the lab (and its dev
  * row on AttendanceHome) retires with them.
  */
-import { useMemo, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { useMemo, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button, InlineError, Select } from '../../../components/ui';
+import { Select } from '../../../components/ui';
 import { colors, fontSize, spacing, weight } from '../../../theme';
 import ScreenHeader from '../offices/ScreenHeader';
 import { useTechnicians } from '../../technicians/useTechnicians';
 import type { RootStackParamList } from '../../../navigation/types';
 import type { DayStatusKey, DayStatusRow } from '../../../services/resources/attendanceDayStatus';
+import { correctDay } from '../../../services/resources/attendanceCorrections';
+import type { CorrectionWriteBody } from '../../../services/resources/attendanceCorrections';
 import { DAY_STATUS_VISUALS } from './dayStatusVisual';
-import { useMonthStatuses } from './useMonthStatuses';
 import { MonthCalendar } from './MonthCalendar';
 import { DayDetailSheet } from './DayDetailSheet';
+import { RealMonthPane, type RealMonthReport } from './RealMonthPane';
 
 /** Release-bundle grep target (the build step asserts this string is
  *  ABSENT from release builds — the __DEV__ require is the only importer). */
 export const COMPONENT_LAB_MARKER = 'component-lab-18-3';
 
 const PROOF_MONTH = '2026-03'; // a fixed canned month — never production data
+/** The proof month's canned "wire today" (its last day): every proof day
+ *  is date-correctable, so the read-only posture — not the date gate — is
+ *  what suppresses the Correct entry (asserted by the sheet suite too). */
+const PROOF_TODAY = '2026-03-31';
 const LAB_EMPLOYEE_ID = '00000000-0000-0000-0000-000000000000';
 
 /** 'YYYY-MM' shifted by n months (UTC math on the explicit 1st). */
@@ -48,15 +57,6 @@ function shiftYearMonth(yearMonth: string, months: number): string {
     Date.UTC(Number(yearMonth.slice(0, 4)), Number(yearMonth.slice(5, 7)) - 1 + months, 1),
   );
   return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}`;
-}
-
-/** 'YYYY-MM' → "September 2026". */
-function monthTitle(yearMonth: string): string {
-  const names = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-  ];
-  return `${names[Number(yearMonth.slice(5, 7)) - 1]} ${yearMonth.slice(0, 4)}`;
 }
 
 /** The lab's own starting month — scaffolding, so the device clock is fine
@@ -120,70 +120,6 @@ function buildProofDays(): Map<string, DayStatusRow> {
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ComponentLab'>;
 
-/** The real-data pane — mounted ONLY with a picked employee, so an empty
- *  roster never fires a wire request (the day-statuses call is real). */
-function RealMonthPane({
-  employeeId,
-  yearMonth,
-  onShiftMonth,
-  onPickDay,
-  onData,
-}: {
-  employeeId: string;
-  yearMonth: string;
-  onShiftMonth: (delta: number) => void;
-  onPickDay: (workDate: string) => void;
-  onData: (days: ReadonlyMap<string, DayStatusRow>) => void;
-}) {
-  const month = useMonthStatuses({
-    scope: { kind: 'owner', employeeId },
-    yearMonth,
-  });
-  // Report the rows up for the parent's sheet (an effect, never a render
-  // side-effect; both deps are stable between data changes).
-  useEffect(() => {
-    onData(month.data);
-  }, [onData, month.data]);
-  return (
-    <>
-      <View style={styles.navRow}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Previous month"
-          onPress={() => onShiftMonth(-1)}
-          style={styles.navButton}>
-          <ChevronLeft size={20} color={colors.textBody} strokeWidth={2} />
-        </Pressable>
-        <Text style={styles.monthLabel}>{monthTitle(yearMonth)}</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Next month"
-          onPress={() => onShiftMonth(1)}
-          style={styles.navButton}>
-          <ChevronRight size={20} color={colors.textBody} strokeWidth={2} />
-        </Pressable>
-      </View>
-      {month.loading ? (
-        <ActivityIndicator size="large" color={colors.primary} style={styles.spinner} />
-      ) : null}
-      {month.error != null ? (
-        <>
-          <InlineError message={month.error} />
-          <Button variant="secondary" size="sm" onPress={month.retry}>
-            Retry
-          </Button>
-        </>
-      ) : null}
-      <MonthCalendar
-        yearMonth={yearMonth}
-        days={month.data}
-        today={month.today}
-        onPickDate={onPickDay}
-      />
-    </>
-  );
-}
-
 export default function ComponentLabScreen({ navigation }: Props) {
   const { technicians } = useTechnicians();
   // Roster read is MMKV-synchronous — the first employee can start picked.
@@ -197,10 +133,9 @@ export default function ComponentLabScreen({ navigation }: Props) {
   // Proof month (canned, static).
   const proofDays = useMemo(buildProofDays, []);
 
-  // The real pane reports its rows back for the sheet (data ownership stays
-  // in the pane; the parent only holds the picked day).
-  const [realMonthData, setRealMonthData] =
-    useState<ReadonlyMap<string, DayStatusRow> | null>(null);
+  // The real pane reports its rows/today/refresh back for the sheet (data
+  // ownership stays in the pane; the parent holds the picked day only).
+  const [realMonth, setRealMonth] = useState<RealMonthReport | null>(null);
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
@@ -235,7 +170,7 @@ export default function ComponentLabScreen({ navigation }: Props) {
             yearMonth={yearMonth}
             onShiftMonth={delta => setYearMonth(shiftYearMonth(yearMonth, delta))}
             onPickDay={setRealPick}
-            onData={setRealMonthData}
+            onData={setRealMonth}
           />
         )}
 
@@ -243,19 +178,33 @@ export default function ComponentLabScreen({ navigation }: Props) {
           visible={proofPick != null}
           workDate={proofPick}
           day={proofPick != null ? proofDays.get(proofPick) ?? null : null}
+          today={PROOF_TODAY}
           scope={{ kind: 'owner', employeeId: LAB_EMPLOYEE_ID }}
+          readOnly
           onClose={() => setProofPick(null)}
         />
         <DayDetailSheet
           visible={realPick != null && employeeId != null}
           workDate={realPick}
-          day={realPick != null && realMonthData ? realMonthData.get(realPick) ?? null : null}
+          day={
+            realPick != null && realMonth
+              ? realMonth.days.get(realPick) ?? null
+              : null
+          }
+          today={realMonth?.today ?? null}
           scope={
             employeeId != null
               ? { kind: 'owner', employeeId }
               : { kind: 'me' }
           }
           onClose={() => setRealPick(null)}
+          onCorrect={
+            employeeId != null && realPick != null
+              ? (body: CorrectionWriteBody) =>
+                  correctDay(employeeId, realPick, body)
+              : undefined
+          }
+          onCorrected={realMonth?.refresh}
         />
       </View>
     </SafeAreaView>
@@ -280,28 +229,5 @@ const styles = StyleSheet.create({
   caption: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
-  },
-  navRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  navButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceCard,
-    borderWidth: 1,
-    borderColor: colors.borderDefault,
-  },
-  monthLabel: {
-    fontSize: fontSize.base,
-    fontWeight: weight.semibold,
-    color: colors.textStrong,
-  },
-  spinner: {
-    paddingVertical: spacing.s3,
   },
 });

@@ -306,3 +306,117 @@ describe('unmount mid-flight', () => {
     expect(fetchOwner).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('the non-clearing refresh (18-4 D5)', () => {
+  it('keeps rows AND skips the loading flip while in flight; lands the new rows + today', async () => {
+    fetchOwner.mockResolvedValueOnce(ownerEnvelope('e1', [row('2026-09-14')]));
+
+    let ctx!: Ctx;
+    await act(async () => {
+      ctx = render({ kind: 'owner', employeeId: 'e1' }, '2026-09');
+    });
+    expect(latest.data.get('2026-09-14')?.status).toBe('present');
+    expect(latest.today).toBe('2026-09-29');
+
+    // The correction's refetch: hangs — September's row must stay readable
+    // mid-flight (no false "Not tracked" on an open sheet), loading must
+    // NOT flip (no month-pane spinner).
+    let resolveRefresh!: (v: ReturnType<typeof ownerEnvelope>) => void;
+    fetchOwner.mockImplementationOnce(
+      () => new Promise(resolve => (resolveRefresh = resolve)),
+    );
+    await act(async () => {
+      latest.refresh();
+    });
+    expect(fetchOwner).toHaveBeenLastCalledWith('e1', '2026-09-01', '2026-09-30');
+    expect(latest.loading).toBe(false);
+    expect(latest.data.get('2026-09-14')?.status).toBe('present');
+
+    // Rows (and the wire today) swap IN PLACE when the fetch lands.
+    await act(async () => {
+      resolveRefresh({
+        employeeId: 'e1',
+        from: '2026-09-01',
+        to: '2026-09-30',
+        today: '2026-09-30',
+        days: [row('2026-09-14', 'absent')],
+      });
+      await Promise.resolve();
+    });
+    expect(latest.data.get('2026-09-14')?.status).toBe('absent');
+    expect(latest.today).toBe('2026-09-30');
+    expect(latest.error).toBeNull();
+  });
+
+  it('an error sets the ordinary error state but KEEPS the rows', async () => {
+    fetchOwner.mockResolvedValueOnce(ownerEnvelope('e1', [row('2026-09-14')]));
+
+    let ctx!: Ctx;
+    await act(async () => {
+      ctx = render({ kind: 'owner', employeeId: 'e1' }, '2026-09');
+    });
+
+    fetchOwner.mockRejectedValueOnce({ status: 0, code: 'NETWORK_ERROR', message: 'Network request failed' });
+    await act(async () => {
+      latest.refresh();
+      await Promise.resolve();
+    });
+
+    expect(latest.error).toBe('Network request failed');
+    expect(latest.data.get('2026-09-14')?.status).toBe('present');
+    expect(latest.loading).toBe(false);
+  });
+
+  it('a slow refresh loses to a newer month fetch (the same seq guard)', async () => {
+    let resolveRefresh!: (v: ReturnType<typeof ownerEnvelope>) => void;
+    fetchOwner
+      .mockResolvedValueOnce(ownerEnvelope('e1', [row('2026-09-14')]))
+      .mockImplementationOnce(
+        () => new Promise(resolve => (resolveRefresh = resolve)),
+      )
+      .mockResolvedValueOnce(ownerEnvelope('e1', [row('2026-10-05')]));
+
+    let ctx!: Ctx;
+    await act(async () => {
+      ctx = render({ kind: 'owner', employeeId: 'e1' }, '2026-09');
+    });
+
+    // The post-save refresh fires, THEN the host pages to October (which
+    // resolves fast). The refresh's late answer must not paint September
+    // over October.
+    await act(async () => {
+      latest.refresh();
+    });
+    ctx.rerender({ kind: 'owner', employeeId: 'e1' }, '2026-10');
+    await act(async () => {});
+    expect(latest.data.get('2026-10-05')?.status).toBe('present');
+
+    await act(async () => {
+      resolveRefresh(ownerEnvelope('e1', [row('2026-09-14', 'absent')]));
+      await Promise.resolve();
+    });
+    expect(latest.data.has('2026-09-14')).toBe(false);
+    expect(latest.data.get('2026-10-05')?.status).toBe('present');
+  });
+
+  it('the me scope refreshes through fetchMyDayStatuses', async () => {
+    fetchMe.mockResolvedValueOnce({ from: 'a', to: 'b', today: '2026-09-29', days: [row('2026-09-14')] });
+
+    let ctx!: Ctx;
+    await act(async () => {
+      ctx = render({ kind: 'me' }, '2026-09');
+    });
+    expect(fetchMe).toHaveBeenCalledTimes(1);
+
+    fetchMe.mockResolvedValueOnce({ from: 'a', to: 'b', today: '2026-09-29', days: [row('2026-09-14', 'leave')] });
+    await act(async () => {
+      latest.refresh();
+      await Promise.resolve();
+    });
+
+    expect(fetchMe).toHaveBeenCalledTimes(2);
+    expect(fetchMe).toHaveBeenLastCalledWith('2026-09-01', '2026-09-30');
+    expect(fetchOwner).not.toHaveBeenCalled();
+    expect(latest.data.get('2026-09-14')?.status).toBe('leave');
+  });
+});

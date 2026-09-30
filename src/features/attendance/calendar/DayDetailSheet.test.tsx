@@ -8,10 +8,18 @@
  * entries, "Show earlier", count = the loaded page's count); the KEYED
  * history fetch (a resolve for a non-current day or after dismissal is
  * discarded) with per-open reset; the small-spinner loading + InlineError
- * + Retry; announce-on-present; read-only. The corrections block lives in
- * CorrectionHistory — driven here through the sheet, the way hosts embed
- * it. RTR gotchas: Buttons driven by type+children, async flushes via
- * `await act(async () => {})`.
+ * + Retry; announce-on-present; read-only.
+ *
+ * Story 18-4 stage coverage (spec D1/D2/D4/D5): the "Correct day" entry's
+ * D1 truth table (owner + plumbing + row + tracked + workDate ≤ wire
+ * today; readOnly suppresses even a correctable day — the proof pane);
+ * the morph under the SAME title with the times-line subtitle; the XOR
+ * bodies per mode; the WRITE posture (latch = one wire call, dismissible
+ * flipped off mid-flight, server copy verbatim / transport copy / offline
+ * probe) and the success morph-back + host refresh; the per-open stage
+ * reset. RTR gotchas: Buttons driven by type+children, async flushes via
+ * `await act(async () => {})`; NetInfo through the root mock's
+ * __setNetInfoState seam.
  */
 jest.mock('../../../services/resources/attendanceCorrections', () => ({
   ...jest.requireActual('../../../services/resources/attendanceCorrections'),
@@ -21,13 +29,28 @@ jest.mock('../../../services/resources/attendanceCorrections', () => ({
 import type ReactTestRenderer from 'react-test-renderer';
 import { act, create } from 'react-test-renderer';
 import { AccessibilityInfo, ActivityIndicator, Text } from 'react-native';
-import { Button, InlineError } from '../../../components/ui';
+import { Button, InlineError, Input, Sheet } from '../../../components/ui';
 import { fetchCorrections } from '../../../services/resources/attendanceCorrections';
 import type { CorrectionEntry } from '../../../services/resources/attendanceCorrections';
 import type { DayStatusRow } from '../../../services/resources/attendanceDayStatus';
+import {
+  // The root __mocks__ module auto-applies for this package under jest and
+  // carries these mock-only helpers; the real package's types do not.
+  // @ts-expect-error — mock-only named exports
+  __setNetInfoState,
+  // @ts-expect-error — mock-only named exports
+  __resetNetInfoMock,
+} from '@react-native-community/netinfo';
 import { DayDetailSheet } from './DayDetailSheet';
 
 const fetchCorrectionsMock = fetchCorrections as jest.Mock;
+
+const offlineState = {
+  type: 'none',
+  isConnected: false,
+  isInternetReachable: false,
+  details: null,
+} as never;
 
 function row(overrides: Partial<DayStatusRow> = {}): DayStatusRow {
   return {
@@ -82,6 +105,8 @@ function baseProps(overrides: Partial<Props> = {}): Props {
     visible: true,
     workDate: '2026-09-14',
     day: row(),
+    // The wire's tenant-local today echo — the D1 gate never reads a clock.
+    today: '2026-09-29',
     scope: { kind: 'owner', employeeId: 'e1' },
     onClose: jest.fn(),
     ...overrides,
@@ -102,7 +127,7 @@ async function renderSheet(props: Partial<Props> = {}) {
 function flatText(node: ReactTestRenderer.ReactTestInstance): string {
   const children = node.props.children;
   return Array.isArray(children)
-    ? children.map(String).join('')
+    ? children.map(child => (child == null ? '' : String(child))).join('')
     : String(children ?? '');
 }
 
@@ -114,11 +139,69 @@ function findButtonByText(root: ReactTestRenderer.ReactTestInstance, text: strin
   return root.findAllByType(Button).find(b => b.props.children === text);
 }
 
+/** Presses the pressable ancestor of the FIRST Text carrying exactly
+ *  `label` (segment segments and other non-Button presses — a Text's
+ *  pressable ancestor is the only reliable walk-up). */
+async function pressLabel(root: ReactTestRenderer.ReactTestInstance, label: string) {
+  const text = root.find(n => n.type === Text && flatText(n) === label);
+  let node = text.parent;
+  while (node != null && typeof node.props.onPress !== 'function') {
+    node = node.parent;
+  }
+  if (node == null) throw new Error(`no pressable ancestor for "${label}"`);
+  await act(async () => {
+    node!.props.onPress();
+  });
+}
+
+/** Drives the labelled field's onChangeText (the RevokeSheet idiom —
+ *  act-wrapped, or the state never flushes into the tree). */
+async function typeInto(
+  root: ReactTestRenderer.ReactTestInstance,
+  label: string,
+  text: string,
+) {
+  await act(async () => {
+    field(root, label).props.onChangeText(text);
+  });
+}
+
+function field(
+  root: ReactTestRenderer.ReactTestInstance,
+  label: string,
+): ReactTestRenderer.ReactTestInstance {
+  const input = root.findAllByType(Input).find(i => i.props.label === label);
+  if (input == null) throw new Error(`no input labelled "${label}"`);
+  return input;
+}
+
+/** Enters the correct stage (the plumbing must be in the props). */
+async function enterCorrectStage(root: ReactTestRenderer.ReactTestInstance) {
+  const entry = findButtonByText(root, 'Correct day');
+  if (entry == null) throw new Error('the Correct day entry did not render');
+  await act(async () => {
+    entry.props.onPress();
+  });
+}
+
+/** The corrected note, typed and saved (times mode keeps the pre-fill). */
+async function enterAndSave(
+  root: ReactTestRenderer.ReactTestInstance,
+  note: string,
+) {
+  await enterCorrectStage(root);
+  await typeInto(root, 'Note (required)', note);
+  await act(async () => {
+    findButtonByText(root, 'Save correction')!.props.onPress();
+  });
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
 });
 
 afterEach(() => {
+  __resetNetInfoMock();
   if (lastRenderer) {
     const renderer = lastRenderer;
     lastRenderer = null;
@@ -648,7 +731,7 @@ describe('the keyed-fetch discipline + loading/error postures', () => {
   });
 });
 
-describe('announce-on-present + read-only', () => {
+describe('announce-on-present + the read-only postures', () => {
   it('announces "Day detail, {d} {Month}" once the sheet presents', async () => {
     await renderSheet();
     const announce = AccessibilityInfo.announceForAccessibility as jest.Mock;
@@ -656,13 +739,15 @@ describe('announce-on-present + read-only', () => {
     expect(calls).toContain('Day detail, 14 September');
   });
 
-  it('stays strictly read-only: no write controls anywhere', async () => {
+  it('a me-scope sheet stays strictly read-only: no write controls anywhere', async () => {
     fetchCorrectionsMock.mockResolvedValueOnce({
       data: [entry(), entry({ id: 'c0' })],
       nextCursor: null,
       hasMore: false,
     });
     const root = await renderSheet({
+      scope: { kind: 'me' },
+      onCorrect: jest.fn(),
       day: row({ markers: ['corrected'], latestCorrection: entry() }),
     });
 
@@ -670,5 +755,219 @@ describe('announce-on-present + read-only', () => {
     for (const label of ['Approve', 'Reject', 'Revoke', 'Save', 'Submit', 'Check in', 'Check out']) {
       expect(written).not.toContain(label);
     }
+    expect(findButtonByText(root, 'Correct day')).toBeUndefined();
+  });
+});
+
+describe('the Correct day entry (18-4 D1)', () => {
+  it('renders for an owner with the plumbing on a past tracked day, and the morph keeps the SAME title', async () => {
+    const root = await renderSheet({ onCorrect: jest.fn() });
+    expect(findButtonByText(root, 'Correct day')).toBeDefined();
+
+    await enterCorrectStage(root);
+
+    // Same heading; the subtitle slot now carries the day's times line.
+    expect(texts(root)).toContain('Monday, 14 September');
+    expect(texts(root)).toContain('10:22 AM – 6:30 PM');
+    // The form: mode segments, the times fields, the note, Save.
+    expect(texts(root)).toContain('Times');
+    expect(texts(root)).toContain('Status');
+    expect(texts(root)).toContain('Check-in time');
+    expect(texts(root)).toContain('Note (required)');
+    expect(findButtonByText(root, 'Save correction')).toBeDefined();
+    expect(findButtonByText(root, 'Back')).toBeDefined();
+    // The detail content is swapped out, not stacked.
+    expect(texts(root).some(t => t.includes('m from Andheri'))).toBe(false);
+  });
+
+  it('a day carrying instants opens the stage in Times mode with the wall times pre-filled', async () => {
+    const root = await renderSheet({ onCorrect: jest.fn() });
+    await enterCorrectStage(root);
+    const fields = root.findAllByType(Input).map(i => i.props.value);
+    expect(fields).toEqual(['10:22', '18:30', '']);
+  });
+
+  it('readOnly suppresses the entry even on a correctable day (the lab proof pane)', async () => {
+    const root = await renderSheet({ readOnly: true, onCorrect: jest.fn() });
+    expect(findButtonByText(root, 'Correct day')).toBeUndefined();
+  });
+
+  it.each([
+    ['a me scope', { scope: { kind: 'me' } as const }],
+    ['a not_tracked day', { day: row({ status: 'not_tracked', checkinAt: null, checkoutAt: null, workedMinutes: null }) }],
+    ['a day after the wire today', { workDate: '2026-09-30', day: row({ workDate: '2026-09-30' }) }],
+    ['a null today echo', { today: null }],
+    ['no write plumbing', { onCorrect: undefined }],
+  ])('renders no entry for %s', async (_name, overrides) => {
+    const root = await renderSheet({ onCorrect: jest.fn(), ...overrides });
+    expect(findButtonByText(root, 'Correct day')).toBeUndefined();
+  });
+});
+
+describe('the write posture (18-4 D4/D5)', () => {
+  it('Save in Times mode sends the instants arm carrying the row offset; no checkout key when cleared', async () => {
+    const onCorrect = jest.fn().mockResolvedValue({ workDate: '2026-09-14' });
+    const root = await renderSheet({ onCorrect });
+
+    await enterCorrectStage(root);
+    await typeInto(root, 'Check-out time (optional)', '');
+    await typeInto(root, 'Note (required)', '  Forgot to check out  ');
+    await act(async () => {
+      findButtonByText(root, 'Save correction')!.props.onPress();
+    });
+
+    expect(onCorrect).toHaveBeenCalledWith({
+      checkinAt: '2026-09-14T10:22:00+05:30',
+      note: 'Forgot to check out',
+    });
+  });
+
+  it('Save in Status mode sends the {status, note} arm and nothing else', async () => {
+    const onCorrect = jest.fn().mockResolvedValue({ workDate: '2026-09-14' });
+    const root = await renderSheet({ onCorrect });
+
+    await enterCorrectStage(root);
+    await pressLabel(root, 'Status');
+    await typeInto(root, 'Note (required)', 'No attendance exists for this day');
+    await act(async () => {
+      findButtonByText(root, 'Save correction')!.props.onPress();
+    });
+
+    expect(onCorrect).toHaveBeenCalledWith({
+      status: 'present',
+      note: 'No attendance exists for this day',
+    });
+  });
+
+  it('a same-tick double press files ONE wire call (no idempotency key — the latch)', async () => {
+    const onCorrect = jest.fn(() => new Promise(() => undefined));
+    const root = await renderSheet({ onCorrect });
+
+    await enterCorrectStage(root);
+    await typeInto(root, 'Note (required)', 'once only');
+    await act(async () => {
+      const save = findButtonByText(root, 'Save correction')!;
+      save.props.onPress();
+      save.props.onPress();
+    });
+
+    expect(onCorrect).toHaveBeenCalledTimes(1);
+  });
+
+  it('while the write is in flight the sheet is not dismissible and Save spins; success morphs back + refreshes', async () => {
+    let resolveSave!: (v: unknown) => void;
+    const onCorrect = jest.fn(
+      () => new Promise(resolve => (resolveSave = resolve)),
+    );
+    const onCorrected = jest.fn();
+    const root = await renderSheet({ onCorrect, onCorrected });
+    const sheet = () => root.findAllByType(Sheet)[0];
+    expect(sheet().props.dismissible).toBe(true);
+
+    await enterCorrectStage(root);
+    await typeInto(root, 'Note (required)', 'fixing it');
+    await act(async () => {
+      findButtonByText(root, 'Save correction')!.props.onPress();
+    });
+
+    expect(sheet().props.dismissible).toBe(false);
+    expect(findButtonByText(root, 'Save correction')!.props.loading).toBe(true);
+
+    await act(async () => {
+      resolveSave({
+        workDate: '2026-09-14',
+        override: { status: 'present', checkinAt: null, checkoutAt: null },
+        correctedAt: '2026-09-29T10:00:00+05:30',
+        actorId: 'a1',
+      });
+    });
+
+    // D5: the stage morphs back to detail; the HOST refresh fired.
+    expect(sheet().props.dismissible).toBe(true);
+    expect(findButtonByText(root, 'Correct day')).toBeDefined();
+    expect(findButtonByText(root, 'Save correction')).toBeUndefined();
+    expect(onCorrected).toHaveBeenCalledTimes(1);
+    // The morph-back swaps content under the same heading — the saved cue
+    // announces (triage a11y patch).
+    const announce = AccessibilityInfo.announceForAccessibility as jest.Mock;
+    const announced = announce.mock.calls.map(([text]) => text);
+    expect(announced).toContain('Correction saved');
+  });
+
+  it('a server failure renders the server message verbatim and stays on the stage', async () => {
+    const onCorrect = jest.fn().mockRejectedValue({
+      status: 422,
+      code: 'ATTENDANCE_INVALID_RANGE',
+      message: 'Check-out must be after check-in.',
+    });
+    const onCorrected = jest.fn();
+    const root = await renderSheet({ onCorrect, onCorrected });
+
+    await enterAndSave(root, 'wrong order');
+    expect(texts(root)).toContain('Check-out must be after check-in.');
+    expect(findButtonByText(root, 'Save correction')).toBeDefined();
+    expect(onCorrected).not.toHaveBeenCalled();
+  });
+
+  it('a transport failure renders the connection copy, not the raw error', async () => {
+    const onCorrect = jest.fn().mockRejectedValue({
+      code: 'NETWORK_ERROR',
+      message: 'Network request failed',
+    });
+    const root = await renderSheet({ onCorrect });
+
+    await enterAndSave(root, 'offline-ish');
+    expect(texts(root)).toContain(
+      "Couldn't save the correction. Check your connection.",
+    );
+  });
+
+  it('an offline probe shows the offline copy and never calls the write', async () => {
+    __setNetInfoState(offlineState);
+    const onCorrect = jest.fn();
+    const root = await renderSheet({ onCorrect });
+
+    await enterAndSave(root, 'airplane mode');
+    expect(onCorrect).not.toHaveBeenCalled();
+    expect(texts(root)).toContain(
+      "You're offline. Correcting attendance needs a working connection.",
+    );
+    // Entries intact — the note survives for the retry.
+    expect(
+      root.findAllByType(Input).find(i => i.props.label === 'Note (required)')!
+        .props.value,
+    ).toBe('airplane mode');
+  });
+
+  it('closing and reopening lands back on the detail stage with a fresh form', async () => {
+    let renderer!: ReactTestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DayDetailSheet {...baseProps({ onCorrect: jest.fn() })} />);
+    });
+    lastRenderer = renderer;
+    const root = renderer.root;
+
+    await enterCorrectStage(root);
+    await typeInto(root, 'Note (required)', 'typed then abandoned');
+    await act(async () => {
+      renderer.update(
+        <DayDetailSheet {...baseProps({ onCorrect: jest.fn(), visible: false })} />,
+      );
+    });
+    await act(async () => {
+      renderer.update(
+        <DayDetailSheet {...baseProps({ onCorrect: jest.fn() })} />,
+      );
+    });
+
+    expect(findButtonByText(root, 'Save correction')).toBeUndefined();
+    expect(findButtonByText(root, 'Correct day')).toBeDefined();
+
+    // Re-entering mounts a FRESH form — no carried note.
+    await enterCorrectStage(root);
+    expect(
+      root.findAllByType(Input).find(i => i.props.label === 'Note (required)')!
+        .props.value,
+    ).toBe('');
   });
 });

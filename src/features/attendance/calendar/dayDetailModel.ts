@@ -5,6 +5,11 @@
  * rules) and the "is a future day" posture flag. All date work is string
  * surgery on the AD-7 offset instants / workDate — never a Date built from
  * an instant (the offsetInstant.ts rules).
+ *
+ * Story 18-4 adds the correction gate + write plumbing: `canCorrectDay`
+ * (the D1 entry truth table), `buildOffsetInstant` + `tenantOffsetFromCarried`
+ * (the D2 instant construction) and `dayTimesLine` (the correct stage's
+ * subtitle slot) — same doctrine: string surgery, never a device date.
  */
 import {
   formatOffsetInstantTime,
@@ -12,6 +17,7 @@ import {
 } from '../../../utils/offsetInstant';
 import type { DayStatusRow } from '../../../services/resources/attendanceDayStatus';
 import { DAY_STATUS_LABELS } from '../../../services/resources/attendanceDayStatus';
+import type { MonthStatusesScope } from './useMonthStatuses';
 
 const WEEKDAY_NAMES = [
   'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
@@ -85,4 +91,77 @@ export function workedValue(row: DayStatusRow): string | null {
 /** The day's display label ("Present", …) — the no-row case is Not tracked. */
 export function dayLabel(row: DayStatusRow | null): string {
   return DAY_STATUS_LABELS[row?.status ?? 'not_tracked'];
+}
+
+/**
+ * The correction ENTRY gate (Story 18-4 D1) — true only when ALL hold:
+ * owner scope (a `me` sheet never corrects, FR-21), a row exists, the
+ * day's status is not the untracked posture itself (the BE's
+ * DATE_NOT_TRACKED gate renders as this same status — one predicate both
+ * sides), and `workDate ≤ today`. Both dates are zero-padded `YYYY-MM-DD`
+ * tenant-local strings from the same wire vocabulary, so the lexicographic
+ * compare is valid — and `today` is the wire echo, never the device clock.
+ */
+export function canCorrectDay(
+  day: DayStatusRow | null,
+  today: string | null,
+  scope: MonthStatusesScope,
+): boolean {
+  if (scope.kind !== 'owner') return false;
+  if (day == null || today == null) return false;
+  if (day.status === 'not_tracked') return false;
+  return day.workDate <= today;
+}
+
+/**
+ * The PUT's instant form (18-4 D2): `${workDate}T${HH:mm}:00${offset}` —
+ * the wall time anchored to the work date with the CARRIED tenant offset.
+ * The FE never derives an offset itself (AD-7): an offset-less wall time
+ * would be anchored to the SERVER's process zone by the BE's
+ * `new Date(...)` (the validator accepts the shape, the anchor lies).
+ */
+export function buildOffsetInstant(
+  workDate: string,
+  time: string,
+  offset: string,
+): string {
+  return `${workDate}T${time}:00${offset}`;
+}
+
+/**
+ * The tenant offset CARRIED from the surface (18-4 D2): the FIRST non-null
+ * instant's trailing "+HH:MM", across as many rows' instants as the caller
+ * has — falling back to the documented IST constant (the 17-7 non-IST
+ * caveat, carried in deferred-work). Never `new Date().getTimezoneOffset()`.
+ *
+ * A Z-terminated instant carries `+00:00`, NOT `slice(-6)`: the BE
+ * normalizes zero offsets to `Z` (check-in-out.model.ts — "GMT"/"+00:00"
+ * both normalise to "Z"), so the naive slice yields `00:00Z` garbage and
+ * every times-mode write for a zero-offset tenant would 422. The offset
+ * tail is verified against `[+-]HH:MM` before it travels.
+ */
+export function tenantOffsetFromCarried(
+  ...instants: ReadonlyArray<string | null | undefined>
+): string {
+  for (const iso of instants) {
+    if (iso == null) continue;
+    if (iso.endsWith('Z')) return '+00:00';
+    const tail = iso.slice(-6);
+    if (/^[+-]\d{2}:\d{2}$/.test(tail)) return tail;
+  }
+  return '+05:30';
+}
+
+/**
+ * The day's current times as one compact line — "10:22 AM – 6:30 PM"
+ * (wall-clock parts verbatim, the offsetInstant rules); a lone check-in
+ * renders alone; a day with no parseable instants renders null (the
+ * correct stage's subtitle slot omits — the omission rule).
+ */
+export function dayTimesLine(row: DayStatusRow | null): string | null {
+  const times = [row?.checkinAt, row?.checkoutAt]
+    .map(iso => formatOffsetInstantTime(iso))
+    .filter((time): time is string => time != null);
+  if (times.length === 0) return null;
+  return times.join(' – ');
 }

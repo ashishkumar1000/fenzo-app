@@ -26,6 +26,8 @@ import {
   ShieldAlert,
   XCircle,
 } from 'lucide-react-native';
+import { createElement } from 'react';
+import type { ReactElement } from 'react';
 import type { LucideIcon } from 'lucide-react-native';
 import { colors, type StatusKey } from '../../../theme';
 import type { DayMarker, DayStatusKey, DayStatusRow } from '../../../services/resources/attendanceDayStatus';
@@ -79,6 +81,23 @@ export const DAY_STATUS_VISUALS: Record<DayStatusKey, DayStatusVisual> = {
 /** The soft chip colours for a status — the same mapping `Badge` uses. */
 export function dayStatusColors(key: DayStatusKey) {
   return colors.status[DAY_STATUS_VISUALS[key].badgeStatus];
+}
+
+/**
+ * The ONE 12px soft-badge icon element: the sheet's StatusBadge, the
+ * detail flag row and 18-4's correction-stage flagbadge row (the row is
+ * deliberately repeated under the same heading) all render the same
+ * picture. `createElement` keeps this table module JSX-free.
+ */
+export function softBadgeIcon(
+  icon: LucideIcon,
+  badgeStatus: StatusKey,
+): ReactElement {
+  return createElement(icon, {
+    size: 12,
+    color: colors.status[badgeStatus].fg,
+    strokeWidth: 2,
+  });
 }
 
 /** One flag tag under the sheet's StatusBadge (DESIGN.md Flag table). */

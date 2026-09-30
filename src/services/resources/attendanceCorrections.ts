@@ -22,6 +22,19 @@
  *   - `me` with access state none → 403 ATTENDANCE_NOT_TRACKED — an
  *     ordinary error state for the sheet (the access UI is 19-6's concern);
  *   - a foreign employee on the owner path → 404 (no existence leak).
+ * The WRITE (Story 18-4 D6, `PUT /attendance/corrections/:employeeId/:workDate`)
+ * adds these 422 subcodes to the same map — the FE branches on the code,
+ * never the message text (which renders verbatim):
+ *   - `VALIDATION_ERROR` — XOR shape broken (status+instants mixed,
+ *     neither present, a checkout alone), a malformed employeeId/workDate,
+ *     or note hygiene (trim, control chars, 1–500 after trim);
+ *   - `ATTENDANCE_FUTURE_DATE` — workDate past the tenant's today;
+ *   - `ATTENDANCE_DATE_NOT_TRACKED` — the day is not a tracked working day
+ *     (the SAME engine predicate the row's `not_tracked` status renders);
+ *   - `ATTENDANCE_INVALID_RANGE` — instants mis-anchored (checkout not
+ *     strictly after check-in, or neither instant after the DB now).
+ * There is NO idempotency key on the write (AD-6's letter): a replay is a
+ * legitimate re-correction — which is why the FE latches presses instead.
  * All surface as `ApiError`; this module adds no retry/recovery policy.
  */
 import { apiClient } from '../api/apiClient';
@@ -101,4 +114,48 @@ export function formatCorrectionValue(value: CorrectionValue): string {
     return `Times ${times.join(' – ')}`;
   }
   return '—';
+}
+
+/** The three statuses the write accepts (the wire's closed enum; every
+ *  other DayStatusKey is an engine grade, never a correctable target). */
+export type CorrectionStatus = 'present' | 'half_day' | 'absent';
+
+/**
+ * The XOR write body (18-4 D6): EXACTLY one arm travels — `{ status, note }`
+ * or `{ checkinAt, checkoutAt?, note }`. Mixing the arms, sending neither,
+ * or a checkout without a check-in is a `422 VALIDATION_ERROR` (the FE's
+ * gates make all three unreachable; the type mirrors the wire so the
+ * compiler carries the same rule). Both instants are full ISO WITH the
+ * tenant offset — `${workDate}T${HH:mm}:00${carriedOffset}` (D2).
+ */
+export type CorrectionWriteBody =
+  | { status: CorrectionStatus; note: string }
+  | { checkinAt: string; checkoutAt?: string; note: string };
+
+/** The `200` write echo (BE `PutCorrectionResponse`): the raw override —
+ *  NOT the recomputed row (the FR-10 engine owns the displayed status), so
+ *  the FE never seeds cells from it; it refreshes instead (D5). */
+export interface CorrectionWriteResult {
+  workDate: string;
+  override: CorrectionValue;
+  correctedAt: string;
+  actorId: string;
+}
+
+/**
+ * `correctDay` — the owner's day-correction write. Sends the XOR body
+ * verbatim (no FE reshaping, no `X-Idempotency-Key`); the 200 echo comes
+ * back as `CorrectionWriteResult`. Errors surface as `ApiError` per the
+ * header map — the sheet renders the message verbatim.
+ */
+export async function correctDay(
+  employeeId: string,
+  workDate: string,
+  body: CorrectionWriteBody,
+): Promise<CorrectionWriteResult> {
+  const res = await apiClient.put<CorrectionWriteResult>(
+    `/attendance/corrections/${encodeURIComponent(employeeId)}/${encodeURIComponent(workDate)}`,
+    body,
+  );
+  return res.data;
 }
