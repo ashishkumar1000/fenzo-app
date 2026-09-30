@@ -1,14 +1,18 @@
 /**
  * useCheckInOut.ts — the Today screen's orchestration (Story 16-4, spec
- * D5/D9/D10/D12). Owns: the permission probe (+ foreground re-probe), the
- * latched pre-flight dialog (weekly off / holiday), the tap-time offline
- * re-checks (at tap AND at confirm), capture → submit with one fresh
- * idempotency key per tap, outcome → message/state mapping, the rate-limit
- * countdown, and the freshness contract: the POST response is the render
- * source; forced summary refetches are consistency + 409 recovery.
+ * D5/D9/D10/D12; 17-8 adds the full-day-leave branch and the awaited
+ * wire-driven 409 fallback, D2–D4). Owns: the permission probe (+
+ * foreground re-probe), the latched pre-flight dialogs (weekly off /
+ * holiday; full-day leave), the tap-time offline re-checks (at tap AND
+ * at confirm), capture → submit with one fresh idempotency key per tap,
+ * the 409 leave fallback inside the SAME press continuation (latch held
+ * across dialog + retry), outcome → message/state mapping, the
+ * rate-limit countdown, and the freshness contract: the POST response is
+ * the render source; forced summary refetches are consistency + 409
+ * recovery.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Alert } from 'react-native';
+import { AppState } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import {
   captureAttendanceLocation,
@@ -31,21 +35,20 @@ import {
   captureFailureMessage,
   messageForApiError,
   needsHolidayConfirm,
+  needsLeaveConfirm,
   offlineMessage,
   type TodayOutcomeMessage,
 } from './attendanceTodayModel';
+import { confirmHolidayDialog, confirmLeaveDialog } from './checkInDialogs';
 
-const HOLIDAY_CONFIRM_TITLE = "It's a holiday. Check in anyway?";
-
-/** Alert.alert wrapped as a promise — single awaitable decision point. */
-function confirmHolidayDialog(): Promise<boolean> {
-  return new Promise(resolve => {
-    Alert.alert(HOLIDAY_CONFIRM_TITLE, undefined, [
-      { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-      { text: 'Check in', onPress: () => resolve(true) },
-    ]);
-  });
-}
+/** The submit outcome the press continuation branches on: 'leaveConflict'
+ *  is a 409 ATTENDANCE_LEAVE_CONFIRMATION_REQUIRED intercepted BEFORE the
+ *  generic error handling — the trigger of the awaited wire-driven
+ *  fallback (17-8 D4). Only an UNFLAGGED check-in can produce it: a
+ *  flag-carrying retry cannot 409 again (the BE gate's !confirmLeaveCancel
+ *  conjunct), so a second 409 falls through to handleWriteError — the
+ *  generic error, never a re-dialog. */
+type SubmitOutcome = 'done' | 'leaveConflict';
 
 async function isOfflineNow(): Promise<boolean> {
   try {
@@ -193,6 +196,17 @@ export function useCheckInOut(input: {
           onAccessDenied();
           setMessage(messageForApiError(err));
           return;
+        case 'ATTENDANCE_LEAVE_CONFIRMATION_REQUIRED':
+          // 17-8 D4 loop guard: the FIRST 409 is intercepted inside
+          // submit (the awaited fallback in the press continuation). One
+          // that reaches THIS handler is terminal — a flag-carrying
+          // retry cannot 409 (the gate's !confirmLeaveCancel conjunct),
+          // so this is either the second 409 (a wiring regression) or a
+          // check-out contract break: the generic server-message error
+          // posture, NEVER a re-dialog. (The 16-4 holding string is
+          // retired — the AC copy lives only in the leave dialog.)
+          setMessage(messageForApiError(err));
+          return;
         default:
           setMessage(messageForApiError(err));
       }
@@ -200,9 +214,14 @@ export function useCheckInOut(input: {
     [onAccessDenied, onSettled],
   );
 
-  /** Capture + submit — the shared tail of both buttons. */
+  /** Capture + submit — the shared tail of both buttons. Returns the
+   *  SubmitOutcome for the press continuation to branch on. The flag
+   *  (17-8 D3) is passed ONLY by the leave-dialog Continue paths. */
   const submit = useCallback(
-    async (kind: 'check_in' | 'check_out') => {
+    async (
+      kind: 'check_in' | 'check_out',
+      confirmLeaveCancel?: boolean,
+    ): Promise<SubmitOutcome> => {
       setResolving(true);
       setMessage(null);
       try {
@@ -211,15 +230,19 @@ export function useCheckInOut(input: {
           fix = await captureAttendanceLocation();
         } catch (failure) {
           setMessage({ tone: 'error', text: captureFailureMessage(failure) });
-          return;
+          return 'done';
         }
         // The fix exists — keep it for the display-only distance hint
         // (D7), whatever the server decides about the write.
         setLastFix({ latitude: fix.latitude, longitude: fix.longitude });
-        const key = generateIdempotencyKey(); // one fresh UUID v4 per tap
+        const key = generateIdempotencyKey(); // one fresh UUID v4 per call — a retry mints a FRESH key
         try {
           if (kind === 'check_in') {
-            const res = await attendanceCheckInService.checkIn(fix, key);
+            const res = await attendanceCheckInService.checkIn(
+              fix,
+              key,
+              confirmLeaveCancel,
+            );
             adopt({
               checkinAt: res.checkinAt,
               checkoutAt: null,
@@ -246,18 +269,62 @@ export function useCheckInOut(input: {
           }
           onSettled();
         } catch (err) {
+          if (
+            kind === 'check_in' &&
+            confirmLeaveCancel !== true &&
+            (err as ApiError).code === 'ATTENDANCE_LEAVE_CONFIRMATION_REQUIRED'
+          ) {
+            // The wire-driven fallback trigger (17-8 D4): hand the 409 to
+            // the press continuation — which owns the latch and can await
+            // the dialog — instead of surfacing it as an error here.
+            return 'leaveConflict';
+          }
           handleWriteError(err as ApiError);
         }
       } finally {
         setResolving(false);
       }
+      return 'done';
     },
     [adopt, handleWriteError],
   );
 
+  /** The confirm-time re-check (16-4 precedent): a dialog confirm is a
+   *  NEW moment of decision — the network may have changed during the
+   *  dialog. True = proceed to submit; false = the offline message is
+   *  showing and the press must stop. */
+  const onlineAtConfirm = useCallback(async (): Promise<boolean> => {
+    if (!(await isOfflineNow())) return true;
+    setOnline(false);
+    setMessage({ tone: 'error', text: offlineMessage });
+    return false;
+  }, []);
+
+  /** A check-in submit + the awaited wire-driven 409 fallback (17-8 D4).
+   *  The fallback fires ONLY on the intercepted 409, and shows the leave
+   *  dialog UNCONDITIONALLY — bypassing the pure facts fn (the tap-time
+   *  facts said no leave; re-consulting them would yield no dialog; the
+   *  server's gate is the authority). Everything runs inside the
+   *  caller's press continuation: the latch stays HELD across dialog +
+   *  retry, so the button never releases mid-fallback and a second tap
+   *  stays a no-op (no double dialog, no double submit). */
+  const checkInWithFallback = useCallback(async () => {
+    if ((await submit('check_in')) !== 'leaveConflict') return;
+    const confirmed = await confirmLeaveDialog();
+    if (!confirmed) return; // fallback-cancel: the dialog was the communication — nothing renders
+    if (!(await onlineAtConfirm())) return;
+    // Retry = full FRESH capture (the burned fix is stale by
+    // dialog-dismiss and would 422 ATTENDANCE_STALE_FIX) + a FRESH
+    // idempotency key (submit mints one per call). The flag rides: a
+    // second 409 is structurally impossible and would land in
+    // handleWriteError as the generic error, never a re-dialog.
+    await submit('check_in', true);
+  }, [submit, onlineAtConfirm]);
+
   /** The button press: latch → offline → day-facts dialog → submit.
-   *  One latch release point per path — double-taps are no-ops while the
-   *  dialog is up or the request is in flight. */
+   *  One latch release point per path (the single finally) — double-taps
+   *  are no-ops while a dialog is up or a request is in flight, and the
+   *  409 fallback's dialog + retry stay inside the SAME continuation. */
   const press = useCallback(
     (kind: 'check_in' | 'check_out') => {
       if (latch.current) return;
@@ -273,24 +340,36 @@ export function useCheckInOut(input: {
           if (kind === 'check_in' && needsHolidayConfirm(todayRef.current)) {
             const confirmed = await confirmHolidayDialog();
             if (!confirmed) return; // no request at all (AC)
-            // Confirm is a NEW moment of decision — the network may have
-            // changed during the dialog.
-            if (await isOfflineNow()) {
-              setOnline(false);
-              setMessage({ tone: 'error', text: offlineMessage });
-              return;
-            }
-            await submit('check_in');
+            if (await onlineAtConfirm()) await checkInWithFallback();
             return;
           }
-          await submit(kind);
+          if (
+            kind === 'check_in' &&
+            needsLeaveConfirm(todayRef.current, 'check_in')
+          ) {
+            // The full-day-leave pre-flight (17-8 D2) — tap-time facts,
+            // re-run on EVERY fresh tap (a remembered flag/decision is
+            // never replayed). confirmLeaveCancel rides ONLY this path
+            // (D3) — never the holiday dialog, never a plain working-day
+            // check-in. Half-day facts never reach this branch
+            // (needsLeaveConfirm is full_day-only: strictly nothing).
+            const confirmed = await confirmLeaveDialog();
+            if (!confirmed) return; // no request at all (AC)
+            if (await onlineAtConfirm()) await submit('check_in', true);
+            return;
+          }
+          if (kind === 'check_in') {
+            await checkInWithFallback();
+            return;
+          }
+          await submit('check_out');
         } finally {
           latch.current = false;
           setDialogPending(false);
         }
       })();
     },
-    [submit],
+    [checkInWithFallback, onlineAtConfirm, submit],
   );
 
   const openRemediation = useCallback(() => {

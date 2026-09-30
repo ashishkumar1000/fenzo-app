@@ -40,6 +40,8 @@ function summaryState(
         isHoliday: false,
         holidayName: null,
         isWorkingDay: true,
+        leaveState: null,
+        leavePart: null,
       },
       todayRecord: null,
     },

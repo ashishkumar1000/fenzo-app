@@ -6,7 +6,9 @@ import {
   formatCountdownWords,
   messageForApiError,
   needsHolidayConfirm,
+  needsLeaveConfirm,
 } from './attendanceTodayModel';
+import type { AttendanceTodayFacts } from '../../../services/resources/attendanceMe';
 
 /**
  * Story 16-4 — the pure state machine (spec D4) and copy table (spec §4).
@@ -161,14 +163,26 @@ describe('messageForApiError — the copy table (server-verbatim for catalogued 
     });
   });
 
-  it('leave_confirmation_required renders the PRD user copy, NEVER the enum dev text (the 17-8 holding string)', () => {
+  it('leave_confirmation_required has NO entry — the 17-8 holding string is RETIRED (the AC copy lives only in the leave dialog)', () => {
+    // A 409 that reaches this table is the TERMINAL posture (a
+    // flag-carrying retry cannot 409): the generic server-message error,
+    // never dialog copy outside a dialog, never a re-dialog.
     const msg = messageForApiError({
       code: 'ATTENDANCE_LEAVE_CONFIRMATION_REQUIRED',
-      message: 'dev-facing enum text that must not render',
+      message: 'You have leave today. Confirm to cancel it and check in',
     });
     expect(msg).toEqual({
-      tone: 'info',
-      text: "You're on leave today. Checking in will cancel today's leave. Continue?",
+      tone: 'error',
+      text: 'You have leave today. Confirm to cancel it and check in',
+    });
+  });
+
+  it('an empty-message leave 409 falls to the shared generic line (never renders nothing)', () => {
+    expect(
+      messageForApiError({ code: 'ATTENDANCE_LEAVE_CONFIRMATION_REQUIRED', message: '' }),
+    ).toEqual({
+      tone: 'error',
+      text: 'Something went wrong with that request.',
     });
   });
 
@@ -183,12 +197,14 @@ describe('messageForApiError — the copy table (server-verbatim for catalogued 
 });
 
 describe('needsHolidayConfirm — the 16-4 pre-flight scope', () => {
-  const facts = (over: Partial<Parameters<typeof needsHolidayConfirm>[0] & object>) => ({
+  const facts = (over: Partial<AttendanceTodayFacts>): AttendanceTodayFacts => ({
     date: '2026-09-29',
     isWeeklyOff: false,
     isHoliday: false,
     holidayName: null,
     isWorkingDay: true,
+    leaveState: null,
+    leavePart: null,
     ...over,
   });
 
@@ -201,6 +217,115 @@ describe('needsHolidayConfirm — the 16-4 pre-flight scope', () => {
   it('facts ABSENT (undefined = pre-16-4 backend) never asks — the server still records the truth', () => {
     expect(needsHolidayConfirm(undefined)).toBe(false);
     expect(needsHolidayConfirm(null)).toBe(false);
+  });
+});
+
+describe('needsLeaveConfirm — byte-parity with the BE D11 gate (17-8 D2)', () => {
+  /**
+   * The BE gate VERBATIM (fenzit-be `check-in-out.service.ts:186-195`,
+   * the `leaveGateActive` block):
+   *
+   *   const leaveGateActive =
+   *     kind === 'check_in' &&
+   *     ctx.leaveState !== null &&
+   *     ctx.leavePart === 'full_day' &&
+   *     ctx.isWorkingDay;
+   *
+   * Mirrored here conjunct-for-conjunct so any FE drift against the
+   * recorded gate fails this test (the spec's byte-parity demand).
+   * The BE copy is hand-retyped — a BE-side drift fails nothing HERE
+   * (separate repos): there the BE's own suite catches it, and at
+   * runtime the authoritative server gate + the wire-driven 409
+   * fallback remain the net.
+   */
+  function beLeaveGate(input: {
+    kind: 'check_in' | 'check_out';
+    isWorkingDay: boolean;
+    leaveState: 'pending' | 'approved' | null;
+    leavePart: 'full_day' | 'first_half' | 'second_half' | null;
+  }): boolean {
+    const leaveGateActive =
+      input.kind === 'check_in' &&
+      input.leaveState !== null &&
+      input.leavePart === 'full_day' &&
+      input.isWorkingDay;
+    return leaveGateActive;
+  }
+
+  const facts = (over: Partial<AttendanceTodayFacts>): AttendanceTodayFacts => ({
+    date: '2026-09-29',
+    isWeeklyOff: false,
+    isHoliday: false,
+    holidayName: null,
+    isWorkingDay: true,
+    leaveState: null,
+    leavePart: null,
+    ...over,
+  });
+
+  it('the FULL truth table (2 kinds × 2 working-day × 3 states × 4 parts) matches the service condition exactly', () => {
+    const kinds = ['check_in', 'check_out'] as const;
+    const states = [null, 'pending', 'approved'] as const;
+    const parts = [null, 'full_day', 'first_half', 'second_half'] as const;
+    let rows = 0;
+    for (const kind of kinds) {
+      for (const isWorkingDay of [true, false]) {
+        for (const leaveState of states) {
+          for (const leavePart of parts) {
+            const today = facts({ isWorkingDay, leaveState, leavePart });
+            expect(needsLeaveConfirm(today, kind)).toBe(
+              beLeaveGate({ kind, isWorkingDay, leaveState, leavePart }),
+            );
+            rows += 1;
+          }
+        }
+      }
+    }
+    expect(rows).toBe(48);
+  });
+
+  it('each conjunct is load-bearing (the readable four rows of the matrix)', () => {
+    expect(needsLeaveConfirm(facts({ leaveState: 'approved', leavePart: 'full_day' }), 'check_in')).toBe(true);
+    expect(needsLeaveConfirm(facts({ leaveState: 'pending', leavePart: 'full_day' }), 'check_in')).toBe(true);
+    expect(needsLeaveConfirm(facts({ leaveState: 'approved', leavePart: 'full_day' }), 'check_out')).toBe(false);
+    expect(needsLeaveConfirm(facts({ leaveState: 'approved', leavePart: 'full_day', isWorkingDay: false }), 'check_in')).toBe(false);
+  });
+
+  it('half-day parts are strictly NOTHING — first_half and second_half never ask (FR-9 pass-through is structural)', () => {
+    expect(needsLeaveConfirm(facts({ leaveState: 'approved', leavePart: 'first_half' }), 'check_in')).toBe(false);
+    expect(needsLeaveConfirm(facts({ leaveState: 'pending', leavePart: 'second_half' }), 'check_in')).toBe(false);
+  });
+
+  it('cancelled/revoked reads null (the post-auto-cancel shape) — no dialog', () => {
+    expect(needsLeaveConfirm(facts({}), 'check_in')).toBe(false);
+  });
+
+  it('legacy absence: today undefined/null never asks; leaveState ABSENT on the wire (pre-17-8 sub-field) never asks', () => {
+    expect(needsLeaveConfirm(undefined, 'check_in')).toBe(false);
+    expect(needsLeaveConfirm(null, 'check_in')).toBe(false);
+    const legacySubfield = facts({}) as Partial<AttendanceTodayFacts>;
+    delete legacySubfield.leaveState;
+    delete legacySubfield.leavePart;
+    expect(needsLeaveConfirm(legacySubfield as AttendanceTodayFacts, 'check_in')).toBe(false);
+  });
+
+  it('needsLeaveConfirm and needsHolidayConfirm are MUTUALLY EXCLUSIVE (the isWorkingDay conjunct) — no ladder-order rule exists', () => {
+    // Well-formed facts couple isWorkingDay = !isWeeklyOff && !isHoliday,
+    // so on any day the leave predicate can fire, the holiday one cannot.
+    const onLeaveWorkingDay = facts({ leaveState: 'approved', leavePart: 'full_day' });
+    expect(needsLeaveConfirm(onLeaveWorkingDay, 'check_in')).toBe(true);
+    expect(needsHolidayConfirm(onLeaveWorkingDay)).toBe(false);
+    // The off-day-inside-leave shape (the D1 read does not filter on
+    // working-day): leaveState non-null, isWorkingDay false — the HOLIDAY
+    // dialog owns the day, exactly as the BE gate behaves.
+    const offDayInsideLeave = facts({
+      isWeeklyOff: true,
+      isWorkingDay: false,
+      leaveState: 'approved',
+      leavePart: 'full_day',
+    });
+    expect(needsLeaveConfirm(offDayInsideLeave, 'check_in')).toBe(false);
+    expect(needsHolidayConfirm(offDayInsideLeave)).toBe(true);
   });
 });
 

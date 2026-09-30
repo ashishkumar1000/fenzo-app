@@ -73,6 +73,17 @@ export interface AttendanceTodayFacts {
   isHoliday: boolean;
   holidayName: string | null;
   isWorkingDay: boolean;
+  /** Today's ACTIVE leave state (17-8 D1 — day-context's own names):
+   *  `pending` | `approved`, or null when no live leave covers today (a
+   *  cancelled/revoked day reads null too). The summary read does NOT
+   *  filter on working-day, so an off-day inside a leave span carries
+   *  leaveState non-null with isWorkingDay false — exactly the shape the
+   *  FE predicate must handle (the BE gate already does). The normalizer
+   *  maps an ABSENT field (a pre-17-8 backend) to null: legacy payloads
+   *  never ask. */
+  leaveState: 'pending' | 'approved' | null;
+  /** The covering request's part; null with leaveState. */
+  leavePart: 'full_day' | 'first_half' | 'second_half' | null;
 }
 
 export interface AttendanceTodayRecord {
@@ -163,6 +174,22 @@ function normalizeTodayFacts(
     isHoliday: raw.isHoliday === true,
     holidayName: typeof raw.holidayName === 'string' ? raw.holidayName : null,
     isWorkingDay: raw.isWorkingDay === true,
+    // 17-8 — STRICT WHITELIST: these MUST be listed here or the fields
+    // vanish silently. Absent on the wire (a pre-17-8 backend) means
+    // "legacy": both normalize to null, so no leave dialog is ever asked
+    // from facts the device cannot know. An out-of-domain value (a future
+    // state word) degrades to null too — dialog-less, and the server's
+    // gate + the 409 fallback remain the safety net.
+    leaveState:
+      raw.leaveState === 'pending' || raw.leaveState === 'approved'
+        ? raw.leaveState
+        : null,
+    leavePart:
+      raw.leavePart === 'full_day' ||
+      raw.leavePart === 'first_half' ||
+      raw.leavePart === 'second_half'
+        ? raw.leavePart
+        : null,
   };
 }
 

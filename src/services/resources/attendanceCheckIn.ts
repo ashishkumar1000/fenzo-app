@@ -50,6 +50,7 @@ async function postCheck(
   path: '/attendance/me/check-in' | '/attendance/me/check-out',
   fix: AttendanceLocationFix,
   idempotencyKey: string,
+  confirmLeaveCancel?: boolean,
 ): Promise<CheckInResponse | CheckOutResponse> {
   const res = await apiClient.post<CheckInResponse | CheckOutResponse>(path, {
     latitude: fix.latitude,
@@ -58,8 +59,11 @@ async function postCheck(
     mocked: fix.mocked,
     provider: fix.provider,
     fixAgeMs: fix.fixAgeMs,
-    // confirmLeaveCancel is NOT sent until 17-8 (the FR-9 flag; the server
-    // accepts-and-ignores it, but 16-4 has no leave dialog).
+    // confirmLeaveCancel (17-8 D3) rides ONLY the leave-dialog Continue
+    // path — the caller (useCheckInOut) passes it exclusively from there;
+    // the BE DTO accepts-and-ignores it unless its gate holds. Absent
+    // stays absent on the wire (the 16-4 body shape, byte-identical).
+    ...(confirmLeaveCancel !== undefined ? { confirmLeaveCancel } : {}),
   }, {
     headers: { 'X-Idempotency-Key': idempotencyKey },
   });
@@ -67,8 +71,12 @@ async function postCheck(
 }
 
 export const attendanceCheckInService = {
-  checkIn: (fix: AttendanceLocationFix, idempotencyKey: string): Promise<CheckInResponse> =>
-    postCheck('/attendance/me/check-in', fix, idempotencyKey) as Promise<CheckInResponse>,
+  checkIn: (
+    fix: AttendanceLocationFix,
+    idempotencyKey: string,
+    confirmLeaveCancel?: boolean,
+  ): Promise<CheckInResponse> =>
+    postCheck('/attendance/me/check-in', fix, idempotencyKey, confirmLeaveCancel) as Promise<CheckInResponse>,
   checkOut: (fix: AttendanceLocationFix, idempotencyKey: string): Promise<CheckOutResponse> =>
     postCheck('/attendance/me/check-out', fix, idempotencyKey) as Promise<CheckOutResponse>,
 };

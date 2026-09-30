@@ -30,6 +30,7 @@ import {
 import {
   resolveAttendanceLocationState,
 } from '../../../services/location/attendanceLocationPermission';
+import type { AttendanceTodayFacts } from '../../../services/resources/attendanceMe';
 import { useCheckInOut } from './useCheckInOut';
 
 jest.mock('../../../services/location/attendanceLocation', () => ({
@@ -62,14 +63,35 @@ const FIX = {
   fixAgeMs: 1200,
 };
 
-const workingDayFacts = {
+const workingDayFacts: AttendanceTodayFacts = {
   date: '2026-09-29',
   isWeeklyOff: false,
   isHoliday: false,
   holidayName: null,
   isWorkingDay: true,
+  leaveState: null,
+  leavePart: null,
 };
-const weeklyOffFacts = { ...workingDayFacts, isWeeklyOff: true, isWorkingDay: false };
+const weeklyOffFacts: AttendanceTodayFacts = { ...workingDayFacts, isWeeklyOff: true, isWorkingDay: false };
+// 17-8 leave fixtures — the summary-today shapes the D1 read ships.
+const approvedFullDayLeaveFacts: AttendanceTodayFacts = {
+  ...workingDayFacts,
+  leaveState: 'approved',
+  leavePart: 'full_day',
+};
+const pendingFullDayLeaveFacts: AttendanceTodayFacts = {
+  ...workingDayFacts,
+  leaveState: 'pending',
+  leavePart: 'full_day',
+};
+// An off-day inside a leave span: the D1 read does NOT filter on
+// working-day — leaveState non-null with isWorkingDay false. The HOLIDAY
+// dialog owns this shape (the predicates are mutually exclusive).
+const offDayInsideLeaveFacts: AttendanceTodayFacts = {
+  ...weeklyOffFacts,
+  leaveState: 'approved',
+  leavePart: 'full_day',
+};
 const offlineState = {
   type: 'none',
   isConnected: false,
@@ -125,7 +147,7 @@ function dialogButtons(): Array<{ text: string; onPress?: () => void }> {
   return (call?.[2] ?? []) as Array<{ text: string; onPress?: () => void }>;
 }
 
-async function settleDialog(buttonText: 'Cancel' | 'Check in') {
+async function settleDialog(buttonText: string) {
   const button = dialogButtons().find(b => b.text === buttonText);
   await act(async () => {
     button?.onPress?.();
@@ -250,6 +272,327 @@ describe('the pre-flight dialog (weekly off / holiday)', () => {
 
     expect(Alert.alert).not.toHaveBeenCalled();
     expect(checkIn).toHaveBeenCalledTimes(1);
+    alertSpy.mockRestore();
+    unmount(renderer);
+  });
+});
+
+describe('the full-day-leave pre-flight dialog (17-8 D2/D3/D6)', () => {
+  const LEAVE_TITLE =
+    "You're on leave today. Checking in will cancel today's leave. Continue?";
+  const LEAVE_BODY =
+    "Your owner will be notified. Only today's leave is cancelled — your other leave days are not affected.";
+
+  it('fires BEFORE any GPS work on an approved full-day-leave working day; copy + button order are EXACT', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const renderer = renderProbe(approvedFullDayLeaveFacts);
+
+    await act(async () => {
+      probe.press('check_in');
+      await Promise.resolve();
+    });
+    // Title = the PRD-verbatim ask string; body = the one plain-English
+    // line; "Don't check in" (style cancel) FIRST, "Check in" second — no
+    // destructive, no isPreferred (D6).
+    expect(Alert.alert).toHaveBeenCalledWith(LEAVE_TITLE, LEAVE_BODY, [
+      { text: "Don't check in", style: 'cancel', onPress: expect.any(Function) },
+      { text: 'Check in', onPress: expect.any(Function) },
+    ]);
+    expect(capture).not.toHaveBeenCalled(); // GPS only AFTER the confirm
+
+    await settleDialog("Don't check in");
+    expect(capture).not.toHaveBeenCalled();
+    expect(checkIn).not.toHaveBeenCalled();
+    // The latch released — a new tap re-opens the dialog (every fresh tap
+    // re-runs the gate; a decision is never remembered).
+    await act(async () => {
+      probe.press('check_in');
+      await Promise.resolve();
+    });
+    expect(Alert.alert).toHaveBeenCalledTimes(2);
+    alertSpy.mockRestore();
+    unmount(renderer);
+  });
+
+  it('PENDING full-day leave asks too (the copy never says "approved")', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const renderer = renderProbe(pendingFullDayLeaveFacts);
+
+    await act(async () => {
+      probe.press('check_in');
+      await Promise.resolve();
+    });
+    expect(Alert.alert).toHaveBeenCalledWith(LEAVE_TITLE, LEAVE_BODY, expect.any(Array));
+
+    await settleDialog('Check in');
+    expect(checkIn).toHaveBeenCalledTimes(1);
+    expect(checkIn.mock.calls[0][2]).toBe(true); // confirmLeaveCancel rides
+    alertSpy.mockRestore();
+    unmount(renderer);
+  });
+
+  it('CONFIRM proceeds: capture + submit carrying confirmLeaveCancel: true, normal success', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const renderer = renderProbe(approvedFullDayLeaveFacts);
+
+    await act(async () => {
+      probe.press('check_in');
+      await Promise.resolve();
+    });
+    await settleDialog('Check in');
+
+    expect(capture).toHaveBeenCalledTimes(1);
+    const [fix, key, flag] = checkIn.mock.calls[0];
+    expect(fix).toEqual(FIX);
+    expect(key).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(flag).toBe(true);
+    expect(probe.record).toMatchObject({
+      checkinAt: '2026-09-29T10:16:00+05:30',
+      checkoutAt: null,
+    });
+    expect(settled).toHaveBeenCalled();
+    expect(probe.message).toBeNull();
+    alertSpy.mockRestore();
+    unmount(renderer);
+  });
+
+  it.each(['first_half', 'second_half'] as const)(
+    'a %s leave day is strictly NOTHING — no dialog, no subtext, straight to capture, no flag',
+    async part => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+      const renderer = renderProbe({ ...workingDayFacts, leaveState: 'approved', leavePart: part });
+
+      await act(async () => {
+        probe.press('check_in');
+        await act(async () => {});
+      });
+
+      expect(Alert.alert).not.toHaveBeenCalled();
+      expect(capture).toHaveBeenCalledTimes(1);
+      expect(checkIn).toHaveBeenCalledTimes(1);
+      expect(checkIn.mock.calls[0][2]).toBeUndefined(); // the flag never rides
+      alertSpy.mockRestore();
+      unmount(renderer);
+    },
+  );
+
+  it('a fresh tap re-runs the gate at TAP time: facts that changed to no-leave never replay the dialog', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const renderer = renderProbe(approvedFullDayLeaveFacts);
+
+    await act(async () => {
+      probe.press('check_in');
+      await Promise.resolve();
+    });
+    await settleDialog("Don't check in");
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+
+    // Leave revoked mid-session; the next refresh has landed.
+    await act(async () => {
+      renderer.update(<Probe today={workingDayFacts} />);
+    });
+    await act(async () => {
+      probe.press('check_in');
+      await act(async () => {});
+    });
+
+    expect(Alert.alert).toHaveBeenCalledTimes(1); // never replayed
+    expect(checkIn).toHaveBeenCalledTimes(1);
+    expect(checkIn.mock.calls[0][2]).toBeUndefined();
+    alertSpy.mockRestore();
+    unmount(renderer);
+  });
+
+  it('check-OUT is never gated even on a full-day-leave day (FR-9 is check-in only)', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const renderer = renderProbe(approvedFullDayLeaveFacts);
+
+    await act(async () => {
+      probe.press('check_out');
+      await act(async () => {});
+    });
+
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(checkOut).toHaveBeenCalledTimes(1);
+    expect(checkIn).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+    unmount(renderer);
+  });
+
+  it('a legacy wire (today present, leaveState ABSENT) never asks and never sends the flag', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    // Simulate the pre-17-8 wire: today carries the 16-4 fields only.
+    const legacyFacts = { ...workingDayFacts };
+    delete (legacyFacts as Partial<AttendanceTodayFacts>).leaveState;
+    delete (legacyFacts as Partial<AttendanceTodayFacts>).leavePart;
+    const renderer = renderProbe(legacyFacts);
+
+    await act(async () => {
+      probe.press('check_in');
+      await act(async () => {});
+    });
+
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(checkIn).toHaveBeenCalledTimes(1);
+    expect(checkIn.mock.calls[0][2]).toBeUndefined();
+    alertSpy.mockRestore();
+    unmount(renderer);
+  });
+
+  it('an OFF DAY inside a leave span surfaces the HOLIDAY dialog, never the leave dialog (mutual exclusivity)', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const renderer = renderProbe(offDayInsideLeaveFacts);
+
+    await act(async () => {
+      probe.press('check_in');
+      await Promise.resolve();
+    });
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      "It's a holiday. Check in anyway?",
+      undefined,
+      expect.any(Array),
+    );
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+    await settleDialog('Cancel');
+    expect(checkIn).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+    unmount(renderer);
+  });
+});
+
+describe('the wire-driven 409 fallback (17-8 D4)', () => {
+  const LEAVE_TITLE =
+    "You're on leave today. Checking in will cancel today's leave. Continue?";
+  const LEAVE_BODY =
+    "Your owner will be notified. Only today's leave is cancelled — your other leave days are not affected.";
+  const SERVER_LINE = 'You have leave today. Confirm to cancel it and check in';
+  const leave409 = {
+    status: 409,
+    code: 'ATTENDANCE_LEAVE_CONFIRMATION_REQUIRED',
+    message: SERVER_LINE,
+  };
+
+  it('a 409 on a PLAIN working-day tap shows the SAME dialog UNCONDITIONALLY (facts fn not consulted), latch HELD', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const renderer = renderProbe(workingDayFacts);
+    // The first capture returns FIX1; the retry's FRESH capture returns FIX2.
+    const FIX2 = { ...FIX, latitude: 12.98, longitude: 77.6 };
+    capture.mockReset();
+    capture.mockResolvedValueOnce(FIX).mockResolvedValue(FIX2);
+    checkIn.mockRejectedValueOnce(leave409);
+
+    await act(async () => {
+      probe.press('check_in');
+      await act(async () => {});
+    });
+
+    // The facts said NO leave — the dialog shows anyway (wire-driven).
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+    expect(Alert.alert).toHaveBeenCalledWith(LEAVE_TITLE, LEAVE_BODY, expect.any(Array));
+    expect(probe.message).toBeNull(); // the 409 is not an error message
+
+    // The latch stays HELD: a tap mid-fallback is a no-op — no double dialog.
+    await act(async () => {
+      probe.press('check_in');
+      await Promise.resolve();
+    });
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+    expect(checkIn).toHaveBeenCalledTimes(1);
+
+    // Continue = full FRESH capture + FRESH idempotency key + the flag.
+    const firstKey = checkIn.mock.calls[0][1];
+    await settleDialog('Check in');
+    expect(capture).toHaveBeenCalledTimes(2);
+    expect(checkIn).toHaveBeenCalledTimes(2);
+    expect(checkIn.mock.calls[1][0]).toEqual(FIX2); // the SECOND capture's fix
+    const secondKey = checkIn.mock.calls[1][1];
+    expect(secondKey).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(secondKey).not.toBe(firstKey);
+    expect(checkIn.mock.calls[1][2]).toBe(true);
+    expect(settled).toHaveBeenCalled();
+    expect(probe.record).toMatchObject({ checkinAt: '2026-09-29T10:16:00+05:30' });
+    alertSpy.mockRestore();
+    unmount(renderer);
+  });
+
+  it('a SECOND 409 (wiring regression) is the generic error, NEVER a re-dialog (loop guard)', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const renderer = renderProbe(workingDayFacts);
+    checkIn.mockRejectedValueOnce(leave409).mockRejectedValueOnce(leave409);
+
+    await act(async () => {
+      probe.press('check_in');
+      await act(async () => {});
+    });
+    await settleDialog('Check in'); // the flag-carrying retry — also 409s
+
+    expect(Alert.alert).toHaveBeenCalledTimes(1); // never re-dialoged
+    expect(probe.message).toEqual({ tone: 'error', text: SERVER_LINE });
+    alertSpy.mockRestore();
+    unmount(renderer);
+  });
+
+  it('fallback-CANCEL renders NOTHING (the dialog was the communication) and releases the latch without replaying the flag', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const renderer = renderProbe(workingDayFacts);
+    checkIn.mockRejectedValueOnce(leave409);
+
+    await act(async () => {
+      probe.press('check_in');
+      await act(async () => {});
+    });
+    await settleDialog("Don't check in");
+
+    expect(checkIn).toHaveBeenCalledTimes(1); // only the burned first attempt
+    expect(probe.message).toBeNull(); // nothing renders
+
+    // The latch released — a fresh tap works and sends NO flag.
+    await act(async () => {
+      probe.press('check_in');
+      await act(async () => {});
+    });
+    expect(checkIn).toHaveBeenCalledTimes(2);
+    expect(checkIn.mock.calls[1][2]).toBeUndefined();
+    alertSpy.mockRestore();
+    unmount(renderer);
+  });
+
+  it('revoke-staleness: a flag-carrying submit against a leave that is GONE succeeds normally (inert flag, no leave-cancelled outcome)', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const renderer = renderProbe(approvedFullDayLeaveFacts);
+
+    await act(async () => {
+      probe.press('check_in');
+      await Promise.resolve();
+    });
+    await settleDialog('Check in'); // facts stale — the owner already revoked
+
+    expect(checkIn).toHaveBeenCalledTimes(1);
+    expect(checkIn.mock.calls[0][2]).toBe(true);
+    expect(probe.record).toMatchObject({ checkinAt: '2026-09-29T10:16:00+05:30' });
+    expect(settled).toHaveBeenCalled();
+    expect(probe.message).toBeNull();
+    alertSpy.mockRestore();
+    unmount(renderer);
+  });
+
+  it('the fallback fires on the HOLIDAY-dialog path too (stale off-day facts, server says working day with leave)', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const renderer = renderProbe(weeklyOffFacts);
+    checkIn.mockRejectedValueOnce(leave409);
+
+    await act(async () => {
+      probe.press('check_in');
+      await Promise.resolve();
+    });
+    await settleDialog('Check in'); // the holiday confirm → submit 409s
+
+    expect(Alert.alert).toHaveBeenCalledTimes(2); // holiday dialog, then the SAME leave dialog
+    expect(Alert.alert).toHaveBeenLastCalledWith(LEAVE_TITLE, LEAVE_BODY, expect.any(Array));
+    await settleDialog('Check in');
+    expect(checkIn).toHaveBeenCalledTimes(2);
+    expect(checkIn.mock.calls[1][2]).toBe(true);
     alertSpy.mockRestore();
     unmount(renderer);
   });

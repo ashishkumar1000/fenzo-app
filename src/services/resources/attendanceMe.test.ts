@@ -254,3 +254,59 @@ describe('attendanceMeService.getSummary', () => {
     await expect(attendanceMeService.getSummary()).rejects.toBe(err);
   });
 });
+
+describe('attendanceMeService.getSummary — the 17-8 leave facts on today (strict whitelist)', () => {
+  const baseToday = {
+    date: '2026-09-29',
+    isWeeklyOff: false,
+    isHoliday: false,
+    holidayName: null,
+    isWorkingDay: true,
+  };
+
+  it.each([
+    ['pending', 'full_day'],
+    ['approved', 'full_day'],
+    ['approved', 'first_half'],
+    ['approved', 'second_half'],
+  ] as const)(
+    'passes the in-domain %s/%s pair through untouched (whitelist membership is what keeps the fields alive)',
+    async (leaveState, leavePart) => {
+      get.mockResolvedValueOnce({ data: { today: { ...baseToday, leaveState, leavePart } } });
+
+      const returned = await attendanceMeService.getSummary();
+
+      expect(returned.today).toEqual({ ...baseToday, leaveState, leavePart });
+    },
+  );
+
+  it('an ABSENT leaveState (a pre-17-8 backend) normalizes to null — the legacy payload never asks', async () => {
+    get.mockResolvedValueOnce({ data: { today: baseToday } });
+
+    const returned = await attendanceMeService.getSummary();
+
+    expect(returned.today).toEqual({ ...baseToday, leaveState: null, leavePart: null });
+  });
+
+  it('no live leave (nulls on the wire) stays null; out-of-domain words degrade to null (dialog-less; the 409 fallback is the net)', async () => {
+    get.mockResolvedValueOnce({
+      data: { today: { ...baseToday, leaveState: null, leavePart: null } },
+    });
+    expect((await attendanceMeService.getSummary()).today).toEqual({
+      ...baseToday,
+      leaveState: null,
+      leavePart: null,
+    });
+
+    get.mockResolvedValueOnce({
+      data: {
+        today: { ...baseToday, leaveState: 'cancelled' as never, leavePart: 42 as never },
+      },
+    });
+    expect((await attendanceMeService.getSummary()).today).toEqual({
+      ...baseToday,
+      leaveState: null,
+      leavePart: null,
+    });
+  });
+});

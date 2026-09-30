@@ -451,6 +451,8 @@ const TAB_SUMMARY: AttendanceSummary = {
     isHoliday: false,
     holidayName: null,
     isWorkingDay: true,
+    leaveState: null,
+    leavePart: null,
   },
 };
 

@@ -118,19 +118,19 @@ export function messageForApiError(err: {
         tone: 'error',
         text: err.message || 'Too many attempts. Try again in 10 minutes.',
       };
-    case 'ATTENDANCE_LEAVE_CONFIRMATION_REQUIRED':
-      // 17-8 replaces this with the real dialog; until then the PRD's
-      // user-facing copy (never the enum's dev text).
-      return {
-        tone: 'info',
-        text: "You're on leave today. Checking in will cancel today's leave. Continue?",
-      };
     default:
       // Every catalogued code carries its own PRD copy server-side
       // ("You are 600 m from …", "Check in before checking out", …);
       // transport errors carry their own copy from toApiError. An empty
       // message (a non-ApiError rejection) falls back to the shared line
       // rather than rendering nothing.
+      //
+      // ATTENDANCE_LEAVE_CONFIRMATION_REQUIRED (17-8 D4) has NO entry
+      // here on purpose: its AC copy lives in exactly one place — the
+      // leave dialog. A 409 with that code is intercepted by the hook's
+      // press continuation (the awaited wire-driven fallback); one that
+      // still reaches this table is the terminal posture (a flag-carrying
+      // retry cannot 409) and renders the generic server-message error.
       return {
         tone: 'error',
         text: err.message || 'Something went wrong with that request.',
@@ -202,11 +202,44 @@ export function captureFailureMessage(failure: unknown): string {
 }
 
 /** True when the tap needs the holiday/weekly-off pre-flight confirm
- *  (16-4 scope; leave dialogs are 17-8). `today` absent (legacy backend)
- *  never asks — the server still records the truth. */
+ *  (16-4 scope). `today` absent (legacy backend) never asks — the server
+ *  still records the truth. Mutually exclusive with `needsLeaveConfirm`
+ *  by construction: this is true only when `isWorkingDay` is false, and
+ *  the leave predicate requires it true — there IS no ladder-order rule
+ *  to pin (leave + holiday can only ever surface the holiday dialog,
+ *  exactly as the BE gate behaves). */
 export function needsHolidayConfirm(
   today: AttendanceTodayFacts | null | undefined,
 ): boolean {
   if (!today) return false;
   return today.isWeeklyOff || today.isHoliday;
+}
+
+/**
+ * True when the check-in needs the FR-9 full-day-leave confirm (17-8 D2):
+ * the FULL byte-parity mirror of the BE D11 gate (fenzit-be
+ * `check-in-out.service.ts:186-195` — `leaveGateActive`):
+ *
+ *   kind === 'check_in' && ctx.isWorkingDay && ctx.leaveState !== null &&
+ *   ctx.leavePart === 'full_day'
+ *
+ * with `today != null` standing in for the summary's legacy absence
+ * signal (a pre-17-8 wire has no leave fields; `today` absent is the
+ * 16-4 signal). A model test asserts the parity against the service
+ * condition conjunct-for-conjunct. Half-day parts (`first_half` /
+ * `second_half`) are strictly NOTHING — no dialog, no subtext, no copy
+ * anywhere (the gate is full_day-only, so pass-through is structural).
+ * Check-out is never gated (FR-9 is check-in only).
+ */
+export function needsLeaveConfirm(
+  today: AttendanceTodayFacts | null | undefined,
+  kind: 'check_in' | 'check_out',
+): boolean {
+  return (
+    kind === 'check_in' &&
+    today != null &&
+    today.isWorkingDay === true &&
+    today.leaveState != null &&
+    today.leavePart === 'full_day'
+  );
 }
