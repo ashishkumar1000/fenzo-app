@@ -4,10 +4,16 @@
  * from tomorrow" note as an info chip (server-enforced effective-dating;
  * profile fields apply immediately). Unit suffixes ("mins", "hrs") render
  * via the Input's trailing adornment.
+ *
+ * Start/End time are the DS `TimeField` (§10 D-TP3): the OS clock picker,
+ * no keyboard — labels/placeholders/model untouched, the 18-5 default
+ * seeds (09:30/18:30) open the picker pre-set; the model's format errors
+ * remain as the unreachable safety net. The three minute/hour-count
+ * fields stay typed.
  */
 import { StyleSheet, Text, View } from 'react-native';
-import { Clock, Info } from 'lucide-react-native';
-import { Card, Input } from '../../../components/ui';
+import { Info } from 'lucide-react-native';
+import { Card, Input, TimeField } from '../../../components/ui';
 import { colors, radius, spacing, typography } from '../../../theme';
 import type { OfficeFormErrors, OfficeFormState } from './officeFormModel';
 
@@ -33,28 +39,20 @@ export default function OfficeRuleFields({ state, errors, onChange, isEdit }: Pr
         </View>
       ) : null}
       <View style={styles.timeRow}>
-        <Input
+        <TimeField
           label="Start time"
           value={state.startTime}
-          onChangeText={(text) => onChange({ startTime: text })}
+          onChangeValue={(hhmm) => onChange({ startTime: hhmm })}
           placeholder="09:00"
           error={errors.startTime}
-          autoCapitalize="none"
-          keyboardType="numbers-and-punctuation"
-          maxLength={5}
-          trailingAdornment={<Clock size={16} color={colors.textMuted} strokeWidth={2} />}
           style={styles.timeInput}
         />
-        <Input
+        <TimeField
           label="End time"
           value={state.endTime}
-          onChangeText={(text) => onChange({ endTime: text })}
+          onChangeValue={(hhmm) => onChange({ endTime: hhmm })}
           placeholder="18:00"
           error={errors.endTime}
-          autoCapitalize="none"
-          keyboardType="numbers-and-punctuation"
-          maxLength={5}
-          trailingAdornment={<Clock size={16} color={colors.textMuted} strokeWidth={2} />}
           style={styles.timeInput}
         />
       </View>

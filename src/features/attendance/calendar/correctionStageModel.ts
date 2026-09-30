@@ -39,8 +39,10 @@ export function wallTime(iso: string | null | undefined): string {
 /** A checkout pre-fills only when its carried date IS the work date: the
  *  write anchors every instant to workDate (D2), so a next-day checkout's
  *  wall time (e.g. "01:30") cannot round-trip — pre-filling it would
- *  guarantee a 422 INVALID_RANGE on save. Left empty it means "no checkout
- *  correction" (the field is optional), the honest default. */
+ *  guarantee a 422 INVALID_RANGE on save. Left empty it means the saved
+ *  correction CLEARS the displayed check-out (the write replaces the pair:
+ *  the BE lands manualCheckoutAt null — corrections.service.ts), which the
+ *  Clear action on the picker field now expresses deliberately. */
 export function prefillCheckout(
   day: DayStatusRow | null,
   workDate: string,

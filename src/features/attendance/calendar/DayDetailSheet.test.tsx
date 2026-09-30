@@ -29,7 +29,7 @@ jest.mock('../../../services/resources/attendanceCorrections', () => ({
 import type ReactTestRenderer from 'react-test-renderer';
 import { act, create } from 'react-test-renderer';
 import { AccessibilityInfo, ActivityIndicator, Text } from 'react-native';
-import { Button, InlineError, Input, Sheet } from '../../../components/ui';
+import { Button, InlineError, Input, Sheet, TimeField } from '../../../components/ui';
 import { fetchCorrections } from '../../../services/resources/attendanceCorrections';
 import type { CorrectionEntry } from '../../../services/resources/attendanceCorrections';
 import type { DayStatusRow } from '../../../services/resources/attendanceDayStatus';
@@ -783,8 +783,12 @@ describe('the Correct day entry (18-4 D1)', () => {
   it('a day carrying instants opens the stage in Times mode with the wall times pre-filled', async () => {
     const root = await renderSheet({ onCorrect: jest.fn() });
     await enterCorrectStage(root);
-    const fields = root.findAllByType(Input).map(i => i.props.value);
-    expect(fields).toEqual(['10:22', '18:30', '']);
+    // The times are picker fields (§10 D-TP2); the note is the one typed Input.
+    expect(root.findAllByType(TimeField).map(f => f.props.value)).toEqual([
+      '10:22',
+      '18:30',
+    ]);
+    expect(root.findAllByType(Input).map(i => i.props.value)).toEqual(['']);
   });
 
   it('readOnly suppresses the entry even on a correctable day (the lab proof pane)', async () => {
@@ -805,12 +809,11 @@ describe('the Correct day entry (18-4 D1)', () => {
 });
 
 describe('the write posture (18-4 D4/D5)', () => {
-  it('Save in Times mode sends the instants arm carrying the row offset; no checkout key when cleared', async () => {
+  it('Save in Times mode sends the instants arm carrying the row offset; no checkout key when the pre-fill is empty', async () => {
     const onCorrect = jest.fn().mockResolvedValue({ workDate: '2026-09-14' });
-    const root = await renderSheet({ onCorrect });
+    const root = await renderSheet({ onCorrect, day: row({ checkoutAt: null }) });
 
     await enterCorrectStage(root);
-    await typeInto(root, 'Check-out time (optional)', '');
     await typeInto(root, 'Note (required)', '  Forgot to check out  ');
     await act(async () => {
       findButtonByText(root, 'Save correction')!.props.onPress();

@@ -1,22 +1,30 @@
 /**
- * Stage tests for CorrectionStage (Story 18-4, spec §3 test plan): the
- * initial mode derivation (instants → Times; a status grade / no row →
- * Status); pre-fill from the carried instants' wall times; the status
- * pre-select (current grade when correctable, else Present); values LIFTED
- * above the mode switch (Times → Status → Times keeps typed text); the
- * Save gate (note ≥ 1 after trim AND valid times; checkout-filled-without-
- * checkin blocks with its field's copy); the XOR bodies (status arm;
- * instants arm anchored to the work date with the CARRIED offset, no
- * checkout key when cleared); the note counter (amber from 450, the
- * RevokeSheet anatomy); the InlineError slot; Back; the submitting
- * posture. No I/O — the component renders the posture, the sheet owns the
- * write, so nothing here needs a mock beyond the render itself. Every
+ * Stage tests for CorrectionStage (Story 18-4, spec §3 test plan + §10
+ * D-TP2/D-TP4): the initial mode derivation (instants → Times; a status
+ * grade / no row → Status); pre-fill from the carried instants' wall
+ * times; the status pre-select (current grade when correctable, else
+ * Present); values LIFTED above the mode switch (Times → Status → Times
+ * keeps the picked times); the Save gate (note ≥ 1 after trim AND valid
+ * times — the picker cannot emit a malformed value, so isValidTime is the
+ * safety net only); the NEW ordering gate (check-out ≤ check-in blocks
+ * client-side with the field's copy, always visible — no blur concept);
+ * the XOR bodies (status arm; instants arm anchored to the work date with
+ * the CARRIED offset, no checkout key when the pre-fill is empty); the
+ * note counter (amber from 450, the RevokeSheet anatomy); the InlineError
+ * slot; Back; the submitting posture. Times are set through the TimeField's
+ * onChangeValue — the only mutation surface a picker field has. The
+ * datetimepicker package is stubbed by the root __mocks__ module. Every
  * state-changing call is act-wrapped (the RevokeSheet idiom).
  */
 import type ReactTestRenderer from 'react-test-renderer';
 import { act, create } from 'react-test-renderer';
 import { Text } from 'react-native';
-import { Button, InlineError, Input } from '../../../components/ui';
+import {
+  Button,
+  InlineError,
+  Input,
+  TimeField,
+} from '../../../components/ui';
 import { colors } from '../../../theme';
 import type { DayStatusRow } from '../../../services/resources/attendanceDayStatus';
 import { CorrectionStage } from './CorrectionStage';
@@ -85,31 +93,42 @@ function texts(root: ReactTestRenderer.ReactTestInstance): string[] {
   return root.findAll(n => n.type === Text).map(flatText);
 }
 
-function field(
+/** A picker time field by its label. */
+function timeField(
   root: ReactTestRenderer.ReactTestInstance,
   label: string,
 ): ReactTestRenderer.ReactTestInstance {
-  const input = root.findAllByType(Input).find(i => i.props.label === label);
-  if (input == null) throw new Error(`no input labelled "${label}"`);
+  const field = root.findAllByType(TimeField).find(f => f.props.label === label);
+  if (field == null) throw new Error(`no time field labelled "${label}"`);
+  return field;
+}
+
+/** The picker path: commit a "HH:mm" through onChangeValue. */
+async function setTime(
+  root: ReactTestRenderer.ReactTestInstance,
+  label: string,
+  hhmm: string,
+) {
+  await act(async () => {
+    timeField(root, label).props.onChangeValue(hhmm);
+  });
+}
+
+/** The one still-typed field: the note. */
+function noteField(
+  root: ReactTestRenderer.ReactTestInstance,
+): ReactTestRenderer.ReactTestInstance {
+  const input = root.findAllByType(Input).find(i => i.props.label === 'Note (required)');
+  if (input == null) throw new Error('no note input');
   return input;
 }
 
 async function typeInto(
   root: ReactTestRenderer.ReactTestInstance,
-  label: string,
   text: string,
 ) {
   await act(async () => {
-    field(root, label).props.onChangeText(text);
-  });
-}
-
-async function blurField(
-  root: ReactTestRenderer.ReactTestInstance,
-  label: string,
-) {
-  await act(async () => {
-    field(root, label).props.onBlur();
+    noteField(root).props.onChangeText(text);
   });
 }
 
@@ -187,8 +206,8 @@ describe('initial mode + pre-fill', () => {
     const root = await renderStage();
     expect(texts(root)).toContain('Times');
     expect(texts(root)).toContain('Status');
-    expect(field(root, 'Check-in time').props.value).toBe('09:35');
-    expect(field(root, 'Check-out time (optional)').props.value).toBe('18:05');
+    expect(timeField(root, 'Check-in time').props.value).toBe('09:35');
+    expect(timeField(root, 'Check-out time (optional)').props.value).toBe('18:05');
     expect(texts(root)).not.toContain('Set day status');
   });
 
@@ -211,8 +230,8 @@ describe('initial mode + pre-fill', () => {
     const root = await renderStage({
       day: row({ checkoutAt: '2026-09-16T01:10:00+05:30' }),
     });
-    expect(field(root, 'Check-in time').props.value).toBe('09:35');
-    expect(field(root, 'Check-out time (optional)').props.value).toBe('');
+    expect(timeField(root, 'Check-in time').props.value).toBe('09:35');
+    expect(timeField(root, 'Check-out time (optional)').props.value).toBe('');
   });
 
   it('the engine\'s past-absent (a non-override absent) also starts from Absent; a no-row day from Present', async () => {
@@ -238,16 +257,44 @@ describe('initial mode + pre-fill', () => {
 });
 
 describe('lifted values survive mode flips', () => {
-  it('Times → Status → Times keeps the typed times', async () => {
+  it('Times → Status → Times keeps the picked times', async () => {
     const root = await renderStage({ day: null }); // opens in Status mode
     await pressSegment(root, 'Times');
-    await typeInto(root, 'Check-in time', '08:15');
-    await typeInto(root, 'Check-out time (optional)', '17:40');
+    await setTime(root, 'Check-in time', '08:15');
+    await setTime(root, 'Check-out time (optional)', '17:40');
     await pressSegment(root, 'Status');
     expect(texts(root)).toContain('Set day status');
     await pressSegment(root, 'Times');
-    expect(field(root, 'Check-in time').props.value).toBe('08:15');
-    expect(field(root, 'Check-out time (optional)').props.value).toBe('17:40');
+    expect(timeField(root, 'Check-in time').props.value).toBe('08:15');
+    expect(timeField(root, 'Check-out time (optional)').props.value).toBe('17:40');
+  });
+});
+
+describe('the ordering gate (the picker enables it — D-TP2)', () => {
+  it('check-out before check-in blocks client-side, copy always visible (no blur concept)', async () => {
+    const root = await renderStage();
+    await typeInto(root, 'Forgot checkout');
+    await setTime(root, 'Check-out time (optional)', '09:00');
+    expect(texts(root)).toContain('Check-out must be after check-in');
+    expect(saveButton(root).props.disabled).toBe(true);
+  });
+
+  it('check-out EQUAL to check-in also blocks (the string compare is chronological)', async () => {
+    const root = await renderStage();
+    await typeInto(root, 'note');
+    await setTime(root, 'Check-out time (optional)', '09:35');
+    expect(texts(root)).toContain('Check-out must be after check-in');
+    expect(saveButton(root).props.disabled).toBe(true);
+  });
+
+  it('a later check-out re-enables Save and clears the copy', async () => {
+    const root = await renderStage();
+    await typeInto(root, 'note');
+    await setTime(root, 'Check-out time (optional)', '09:00');
+    expect(saveButton(root).props.disabled).toBe(true);
+    await setTime(root, 'Check-out time (optional)', '18:10');
+    expect(texts(root)).not.toContain('Check-out must be after check-in');
+    expect(saveButton(root).props.disabled).toBe(false);
   });
 });
 
@@ -255,62 +302,46 @@ describe('the Save gate', () => {
   it('stays disabled until the note trims non-empty (valid prefilled times alone are not enough)', async () => {
     const root = await renderStage();
     expect(saveButton(root).props.disabled).toBe(true);
-    await typeInto(root, 'Note (required)', '   ');
+    await typeInto(root, '   ');
     expect(saveButton(root).props.disabled).toBe(true);
-    await typeInto(root, 'Note (required)', 'Forgot checkout');
+    await typeInto(root, 'Forgot checkout');
     expect(saveButton(root).props.disabled).toBe(false);
   });
 
-  it('an invalid check-in blocks; the office copy shows onBlur', async () => {
+  it('the safety net: a malformed time (unreachable via the picker) still blocks, with no format copy', async () => {
     const root = await renderStage({ day: null });
     await pressSegment(root, 'Times');
-    await typeInto(root, 'Check-in time', '9:5');
-    await typeInto(root, 'Note (required)', 'note');
+    await setTime(root, 'Check-in time', '9:5');
+    await typeInto(root, 'note');
     expect(saveButton(root).props.disabled).toBe(true);
-
-    await blurField(root, 'Check-in time');
-    expect(texts(root)).toContain('Use 24-hour time, e.g. 09:00');
-  });
-
-  it('a blocked Times submit reveals the field errors in place — Save press does not blur (triage: D2 submit-time validation)', async () => {
-    const root = await renderStage({ day: null });
-    await pressSegment(root, 'Times');
-    await typeInto(root, 'Check-in time', '9:5');
-    await typeInto(root, 'Note (required)', 'note');
     expect(texts(root)).not.toContain('Use 24-hour time, e.g. 09:00');
+  });
 
+  it('an empty check-in blocks the Save gate with neutral guidance, no shaming copy', async () => {
+    const root = await renderStage({ day: null });
+    await pressSegment(root, 'Times');
+    await setTime(root, 'Check-in time', '');
+    await typeInto(root, 'note');
+    expect(saveButton(root).props.disabled).toBe(true);
+    // The neutral helper line, not an error (the D3 posture).
+    expect(texts(root)).toContain('Pick a check-in time');
+  });
+
+  it('CLEAR: a filled optional check-out can be emptied — the body then omits checkoutAt (the 18-2 clear-on-the-wire flow)', async () => {
+    const onSave = jest.fn();
+    const root = await renderStage({ onSave }); // 09:35 / 18:05 pre-filled
+    await setTime(root, 'Check-out time (optional)', '');
+    await typeInto(root, 'wrong checkout removed');
     await pressSave(root);
-    expect(texts(root)).toContain('Use 24-hour time, e.g. 09:00');
-  });
-
-  it('a checkout filled while the check-in is invalid blocks with the checkout field\'s copy', async () => {
-    const root = await renderStage({ day: null });
-    await pressSegment(root, 'Times');
-    await typeInto(root, 'Check-in time', 'garbage');
-    await typeInto(root, 'Check-out time (optional)', '18:00');
-    await blurField(root, 'Check-out time (optional)');
-    await typeInto(root, 'Note (required)', 'note');
-
-    expect(saveButton(root).props.disabled).toBe(true);
-    expect(texts(root)).toContain('Enter a check-in time first');
-    // The field keeps its text — never disabled mid-edit.
-    expect(field(root, 'Check-out time (optional)').props.value).toBe('18:00');
-  });
-
-  it('an invalid checkout shows its own copy and blocks', async () => {
-    const root = await renderStage({ day: null });
-    await pressSegment(root, 'Times');
-    await typeInto(root, 'Check-in time', '09:00');
-    await typeInto(root, 'Check-out time (optional)', '24:00');
-    await blurField(root, 'Check-out time (optional)');
-    await typeInto(root, 'Note (required)', 'note');
-    expect(saveButton(root).props.disabled).toBe(true);
-    expect(texts(root)).toContain('Use 24-hour time, e.g. 18:00');
+    expect(onSave).toHaveBeenCalledWith({
+      checkinAt: '2026-09-15T09:35:00+05:30',
+      note: 'wrong checkout removed',
+    });
   });
 
   it('in Status mode the note alone gates (the segmented always has a selection)', async () => {
     const root = await renderStage({ day: null });
-    await typeInto(root, 'Note (required)', 'day status note');
+    await typeInto(root, 'day status note');
     expect(saveButton(root).props.disabled).toBe(false);
   });
 });
@@ -320,7 +351,7 @@ describe('the XOR bodies', () => {
     const onSave = jest.fn();
     const root = await renderStage({ day: null, onSave });
     await pressSegment(root, 'Absent');
-    await typeInto(root, 'Note (required)', 'restoring the record');
+    await typeInto(root, 'restoring the record');
     await pressSave(root);
     expect(onSave).toHaveBeenCalledTimes(1);
     expect(onSave).toHaveBeenCalledWith({
@@ -329,10 +360,12 @@ describe('the XOR bodies', () => {
     });
   });
 
-  it('Times mode saves instants anchored to the work date with the CARRIED offset', async () => {
+  it('Times mode saves instants built from the PICKED times, anchored to the work date with the CARRIED offset', async () => {
     const onSave = jest.fn();
     const root = await renderStage({ onSave }); // +05:30 carried from the row
-    await typeInto(root, 'Note (required)', 'late open');
+    await setTime(root, 'Check-in time', '09:35');
+    await setTime(root, 'Check-out time (optional)', '18:05');
+    await typeInto(root, 'late open');
     await pressSave(root);
     expect(onSave).toHaveBeenCalledWith({
       checkinAt: '2026-09-15T09:35:00+05:30',
@@ -341,11 +374,13 @@ describe('the XOR bodies', () => {
     });
   });
 
-  it('a cleared checkout omits the checkoutAt key entirely (the wire\'s checkout-alone 422 stays unreachable)', async () => {
+  it('an EMPTY check-out (no pre-fill) omits the checkoutAt key entirely (the wire\'s checkout-alone 422 stays unreachable)', async () => {
     const onSave = jest.fn();
-    const root = await renderStage({ onSave });
-    await typeInto(root, 'Check-out time (optional)', '');
-    await typeInto(root, 'Note (required)', 'no checkout known');
+    const root = await renderStage({
+      day: row({ checkoutAt: null }),
+      onSave,
+    });
+    await typeInto(root, 'no checkout known');
     await pressSave(root);
     expect(onSave).toHaveBeenCalledWith({
       checkinAt: '2026-09-15T09:35:00+05:30',
@@ -362,7 +397,7 @@ describe('the XOR bodies', () => {
       }),
       onSave,
     });
-    await typeInto(root, 'Note (required)', 'offset carried');
+    await typeInto(root, 'offset carried');
     await pressSave(root);
     expect(onSave).toHaveBeenCalledWith({
       checkinAt: '2026-09-15T09:00:00-03:00',
@@ -376,7 +411,7 @@ describe('the XOR bodies', () => {
       day: row({ checkinAt: '2026-09-15T04:00:00Z', checkoutAt: null }),
       onSave,
     });
-    await typeInto(root, 'Note (required)', 'z carried');
+    await typeInto(root, 'z carried');
     await pressSave(root);
     expect(onSave).toHaveBeenCalledWith({
       checkinAt: '2026-09-15T04:00:00+00:00',
@@ -391,11 +426,11 @@ describe('the note counter', () => {
     const counterText = () =>
       root.find(n => n.type === Text && /^\d+ \/ 500$/.test(flatText(n)));
 
-    await typeInto(root, 'Note (required)', 'x'.repeat(449));
+    await typeInto(root, 'x'.repeat(449));
     expect(counterText().props.children).toEqual([449, ' / ', 500]);
     expect(colorOf(counterText())).toBe(colors.textMuted);
 
-    await typeInto(root, 'Note (required)', 'x'.repeat(450));
+    await typeInto(root, 'x'.repeat(450));
     expect(colorOf(counterText())).toBe(colors.status.scheduled.fg);
   });
 });

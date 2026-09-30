@@ -56,6 +56,9 @@ export type { CalendarProps } from './Calendar';
 export { DatePickerField } from './DatePickerField';
 export type { DatePickerFieldProps } from './DatePickerField';
 
+export { TimeField } from './TimeField';
+export type { TimeFieldProps } from './TimeField';
+
 export { Eyebrow } from './Eyebrow';
 export type { EyebrowProps } from './Eyebrow';
 

@@ -3,20 +3,21 @@
  * rendered INSIDE DayDetailSheet as a stage morph (never a stacked sheet;
  * the 17-7 doctrine): under the SAME day heading, the day's StatusBadge
  * leads the flag-badge row (the mock's Frame B flagbadge), then the XOR
- * arms as a Times/Status SegmentedControl, the mode's fields, the
- * required note, the InlineError slot and "Save correction".
+ * arms as a Times/Status SegmentedControl, the mode's fields (the two
+ * times are the DS TimeField — the OS clock dialog, no keyboard, §10
+ * D-TP2), the required note, the InlineError slot and "Save correction".
  *
  * The stage MOUNTS FRESH on every entry, so pre-fill derives from the
  * host's CURRENT row exactly once, at tap time; field values are LIFTED
- * above the mode switch, so Times → Status → Times keeps what was typed
+ * above the mode switch, so Times → Status → Times keeps what was picked
  * while the XOR body builds from the ACTIVE mode's fields only.
  *
  * The WRITE stays host-owned (the sheet latches, flips `dismissible`,
  * maps the failure and morphs back on success — D4/D5); this component
  * renders the posture: Save disabled until the note trims non-empty AND
- * the active mode's fields are valid (no error-shaming banner), a blocked
- * Times submit reveals the field errors in place, the counter amber from
- * 450 (the RevokeSheet anatomy).
+ * the active mode's fields are valid AND the check-out is after the
+ * check-in (no error-shaming banner; the ordering copy shows in place),
+ * the counter amber from 450 (the RevokeSheet anatomy).
  */
 import { useState } from 'react';
 import {
@@ -25,8 +26,14 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Clock } from 'lucide-react-native';
-import { Badge, Button, InlineError, Input, SegmentedControl } from '../../../components/ui';
+import {
+  Badge,
+  Button,
+  InlineError,
+  Input,
+  SegmentedControl,
+  TimeField,
+} from '../../../components/ui';
 import { colors, spacing, typography } from '../../../theme';
 import type {
   CorrectionStatus,
@@ -52,35 +59,6 @@ import {
   type CorrectionMode,
 } from './correctionStageModel';
 
-/** One office-form time field (the OfficeRuleFields anatomy verbatim:
- *  24-h placeholder, 5-char cap, numbers keyboard, Clock adornment). */
-function TimeField(input: {
-  label: string;
-  value: string;
-  placeholder: string;
-  error: string | undefined;
-  onChangeText: (value: string) => void;
-  onBlur: () => void;
-}) {
-  return (
-    <Input
-      label={input.label}
-      value={input.value}
-      onChangeText={input.onChangeText}
-      onBlur={input.onBlur}
-      placeholder={input.placeholder}
-      error={input.error}
-      autoCapitalize="none"
-      keyboardType="numbers-and-punctuation"
-      maxLength={5}
-      trailingAdornment={
-        <Clock size={16} color={colors.textMuted} strokeWidth={2} />
-      }
-      style={styles.timeInput}
-    />
-  );
-}
-
 export function CorrectionStage(input: {
   workDate: string;
   /** The host's CURRENT row — pre-fill derives from it at mount. */
@@ -103,43 +81,35 @@ export function CorrectionStage(input: {
     initialStatus(day),
   );
   const [note, setNote] = useState('');
-  const [touched, setTouched] = useState({ checkin: false, checkout: false });
 
   const checkinValid = isValidTime(checkin);
   const checkoutFilled = checkout.trim() !== '';
   const checkoutValid = isValidTime(checkout);
   const noteFilled = note.trim() !== '';
+  // Zero-padded "HH:mm" compares chronologically as strings — the check
+  // the picker makes possible (the typed field never guaranteed the shape).
+  const orderValid = checkoutValid && checkout > checkin;
 
-  // The Save gate (D2/D3): note ≥ 1 after trim, and in Times mode a valid
-  // check-in with a valid optional check-out. What the gate does NOT see
-  // across fields: a REVERSED pair (check-in after check-out) and a next-
-  // day wall time both pass here and surface the wire's verbatim 422
-  // ATTENDANCE_INVALID_RANGE — the D4 posture (honest server copy).
-  const timesValid = checkinValid && (!checkoutFilled || checkoutValid);
+  // The Save gate (D2/D3 + D-TP2): note ≥ 1 after trim, and in Times mode
+  // a valid check-in with a check-out that is valid AND after the check-in.
+  // The ordering compare catches the reversed pair AND a next-day wall time
+  // picked as check-out (22:00 → 01:10) — both block here with the field's
+  // copy. What still passes and surfaces the wire's verbatim 422: a valid-
+  // ORDER pair whose instant lands after the DB now (correcting today into
+  // the future) — ATTENDANCE_INVALID_RANGE, the D4 posture. isValidTime
+  // stays only as the safety net: the picker cannot emit a malformed value.
+  const timesValid = checkinValid && (!checkoutFilled || orderValid);
   const saveDisabled =
     submitting || !noteFilled || (mode === 'times' && !timesValid);
 
-  const checkinError =
-    touched.checkin && checkin !== '' && !checkinValid
-      ? 'Use 24-hour time, e.g. 09:00'
+  const checkoutError =
+    checkoutFilled && checkoutValid && checkinValid && checkout <= checkin
+      ? 'Check-out must be after check-in'
       : undefined;
-  const checkoutError = !touched.checkout || checkout === ''
-    ? undefined
-    : !checkinValid
-      ? 'Enter a check-in time first'
-      : !checkoutValid
-        ? 'Use 24-hour time, e.g. 18:00'
-        : undefined;
 
   const save = () => {
     if (submitting || !noteFilled) return;
-    // A blocked Times submit reveals the field errors in place (D2:
-    // submit-time validation into the field slots) — pressing Save does
-    // not blur a focused TextInput, so onBlur alone may never show them.
-    if (mode === 'times' && !timesValid) {
-      setTouched({ checkin: true, checkout: true });
-      return;
-    }
+    if (mode === 'times' && !timesValid) return;
     const trimmed = note.trim();
     if (mode === 'status') {
       onSave({ status, note: trimmed });
@@ -199,17 +169,18 @@ export function CorrectionStage(input: {
             label="Check-in time"
             value={checkin}
             placeholder="09:00"
-            error={checkinError}
-            onChangeText={setCheckin}
-            onBlur={() => setTouched(prev => ({ ...prev, checkin: true }))}
+            helper={checkin === '' ? 'Pick a check-in time' : undefined}
+            onChangeValue={setCheckin}
+            style={styles.timeInput}
           />
           <TimeField
             label="Check-out time (optional)"
             value={checkout}
             placeholder="18:00"
             error={checkoutError}
-            onChangeText={setCheckout}
-            onBlur={() => setTouched(prev => ({ ...prev, checkout: true }))}
+            onChangeValue={setCheckout}
+            clearable
+            style={styles.timeInput}
           />
         </View>
       ) : (
