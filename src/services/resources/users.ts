@@ -131,6 +131,23 @@ export type ProfileJob = ApiJob & {
   customer: ProfileCustomerSummary;
 };
 
+/**
+ * The `attendance` mirror embedded on the `/users/me` profile (AD-17):
+ * `{ attendanceEnabled, attendanceAccess, attendanceStartDate, onboardedAt }`
+ * — the same four facts `GET /attendance/me/access` serves, read from the
+ * same view, so entry-point gates seed on FIRST LOAD with no second round
+ * trip. `attendanceEnabled` is the TENANT flag (settings enabled AND setup
+ * completed) — on owner profiles it is what gates the Home attendance tile;
+ * an owner's `attendanceAccess` reads 'none' (owners are never enrolled).
+ * Refetches go through the light me/access endpoint, never the profile.
+ */
+export interface ProfileAttendanceMirror {
+  attendanceEnabled: boolean;
+  attendanceAccess: AttendanceAccessState;
+  attendanceStartDate: string | null;
+  onboardedAt: string | null;
+}
+
 export interface MyProfile {
   id: string;
   /**
@@ -160,16 +177,13 @@ export interface MyProfile {
    */
   customerCount?: number;
   /**
-   * AD-17 attendance mirror (Story 15-7): the four fields the app reads on
-   * FIRST LOAD to seed the entry-point gate — refetches go through the
-   * light `GET /attendance/me/access`, never a full profile pull. Optional:
-   * owners have no attendance state, and the store treats an
-   * absent/malformed mirror as `none` (tab hidden until proven otherwise).
+   * AD-17 attendance mirror — issued on BOTH roles (the owner branch was
+   * added 2026-09-30 so the Home attendance tile gates without a second
+   * round trip). Nested under `attendance` on the wire; optional in the
+   * type so an older-deployed backend (no mirror on owners) fails HIDDEN —
+   * the tile just doesn't render — instead of crashing.
    */
-  attendanceEnabled?: boolean;
-  attendanceAccess?: AttendanceAccessState;
-  attendanceStartDate?: string | null;
-  onboardedAt?: string | null;
+  attendance?: ProfileAttendanceMirror;
   customers: Paginated<unknown>;
   jobs: Paginated<ProfileJob>;
   jobCounts: JobCounts;

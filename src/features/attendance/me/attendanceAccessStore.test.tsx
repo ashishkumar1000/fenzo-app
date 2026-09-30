@@ -123,10 +123,12 @@ describe('seedAccessFromProfile — the /users/me mirror', () => {
     renderProbe();
     act(() => {
       seedAccessFromProfile({
-        attendanceEnabled: true,
-        attendanceAccess: 'active',
-        attendanceStartDate: '2026-10-01',
-        onboardedAt: '2026-09-01T09:00:00Z',
+        attendance: {
+          attendanceEnabled: true,
+          attendanceAccess: 'active',
+          attendanceStartDate: '2026-10-01',
+          onboardedAt: '2026-09-01T09:00:00Z',
+        },
       });
     });
 
@@ -151,7 +153,7 @@ describe('seedAccessFromProfile — the /users/me mirror', () => {
   it('a mirror with a missing enabled flag seeds it as false (strict-true)', () => {
     renderProbe();
     act(() => {
-      seedAccessFromProfile({ attendanceAccess: 'upcoming' });
+      seedAccessFromProfile({ attendance: { attendanceAccess: 'upcoming' } });
     });
 
     expect(probe.access?.attendanceEnabled).toBe(false);
@@ -162,12 +164,23 @@ describe('seedAccessFromProfile — the /users/me mirror', () => {
     renderProbe();
     for (const bad of [undefined, 'ACTIVE', 'tracking', '']) {
       act(() => {
-        seedAccessFromProfile({ attendanceAccess: bad });
+        seedAccessFromProfile({ attendance: { attendanceAccess: bad } });
       });
       expect(probe.status).toBe('unknown');
       expect(probe.access).toBeNull();
       expect(isAttendanceReachable()).toBe(false);
     }
+  });
+
+  it('a profile without the nested attendance mirror is ignored (older backend fails hidden)', () => {
+    renderProbe();
+    act(() => {
+      seedAccessFromProfile({});
+      seedAccessFromProfile({ attendance: null });
+    });
+
+    expect(probe.status).toBe('unknown');
+    expect(probe.access).toBeNull();
   });
 
   it('a null/undefined profile is ignored', () => {
@@ -183,8 +196,8 @@ describe('seedAccessFromProfile — the /users/me mirror', () => {
   it('NEVER overrides a resolved state (me/access is the only refresher after the seed)', () => {
     renderProbe();
     act(() => {
-      seedAccessFromProfile({ attendanceAccess: 'active' });
-      seedAccessFromProfile({ attendanceAccess: 'none' }); // a stale mirror lands late
+      seedAccessFromProfile({ attendance: { attendanceAccess: 'active' } });
+      seedAccessFromProfile({ attendance: { attendanceAccess: 'none' } }); // a stale mirror lands late
     });
 
     expect(probe.access?.attendanceAccess).toBe('active');
@@ -196,7 +209,7 @@ describe('applyOnboardedAt', () => {
   it('records the intro completion locally, preserving the rest of the access', () => {
     renderProbe();
     act(() => {
-      seedAccessFromProfile({ attendanceAccess: 'active' });
+      seedAccessFromProfile({ attendance: { attendanceAccess: 'active' } });
     });
     act(() => {
       applyOnboardedAt('2026-09-28T09:00:00Z');
@@ -214,7 +227,7 @@ describe('applyOnboardedAt', () => {
   it('a null timestamp records too (the server answers a null for a drifted payload)', () => {
     renderProbe();
     act(() => {
-      seedAccessFromProfile({ attendanceAccess: 'active', onboardedAt: '2026-09-28T09:00:00Z' });
+      seedAccessFromProfile({ attendance: { attendanceAccess: 'active', onboardedAt: '2026-09-28T09:00:00Z' } });
     });
     act(() => {
       applyOnboardedAt(null);
@@ -311,7 +324,7 @@ describe('refreshAccess — the shared min-gap', () => {
   it('a failed refetch leaves the last state standing (no-flicker) — active stays active', async () => {
     renderProbe();
     act(() => {
-      seedAccessFromProfile({ attendanceAccess: 'active' });
+      seedAccessFromProfile({ attendance: { attendanceAccess: 'active' } });
     });
     getAccess.mockRejectedValue({ status: 500, code: 'SERVER_ERROR' });
     act(() => {
@@ -327,7 +340,7 @@ describe('refreshAccess — the shared min-gap', () => {
   it('a failed refetch is NOT gap-blocked — the next trigger retries immediately', async () => {
     renderProbe();
     act(() => {
-      seedAccessFromProfile({ attendanceAccess: 'active', attendanceStartDate: '2026-10-01' });
+      seedAccessFromProfile({ attendance: { attendanceAccess: 'active', attendanceStartDate: '2026-10-01' } });
     });
     getAccess.mockRejectedValueOnce({ status: 500 });
     act(() => {
@@ -368,7 +381,7 @@ describe('reachability mirrors the tab’s existence', () => {
   ])('%s → reachable %p', (state, expected) => {
     renderProbe();
     act(() => {
-      seedAccessFromProfile({ attendanceAccess: state as AttendanceAccess['attendanceAccess'] });
+      seedAccessFromProfile({ attendance: { attendanceAccess: state as AttendanceAccess['attendanceAccess'] } });
     });
 
     expect(isAttendanceReachable()).toBe(expected);
@@ -385,7 +398,7 @@ describe('ensureAttendanceAccessInitialised — boot + seams', () => {
     getAccess.mockResolvedValue(access());
     renderProbe();
     act(() => {
-      seedAccessFromProfile({ attendanceAccess: 'active' });
+      seedAccessFromProfile({ attendance: { attendanceAccess: 'active' } });
     });
     act(() => {
       ensureAttendanceAccessInitialised();

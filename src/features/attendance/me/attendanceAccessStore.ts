@@ -130,30 +130,38 @@ function refreshAccess(force = false): Promise<void> {
 }
 
 /**
- * Seeds the store from the `/users/me` mirror (AD-17: first load only) —
- * called from the profile store's success path, so the tab exists on the
- * first render without waiting for a second request. A mirror without a
- * usable access state (owners; absent field) is ignored — 'unknown' keeps
- * the tab hidden and the initial fetch resolves it. NEVER overrides a
- * resolved state: `me/access` is the only refresher after the seed.
+ * Seeds the store from the `/users/me` `attendance` mirror (AD-17: first
+ * load only) — called from the profile store's success path, so the tab
+ * exists on the first render without waiting for a second request. The
+ * mirror arrives NESTED under `attendance` on the wire (both roles since
+ * 2026-09-30; earlier this read flat fields that no backend ever sent, so
+ * the seed was a silent no-op until the initial me/access fetch resolved).
+ * A profile without a usable mirror (old backend; malformed) is ignored —
+ * 'unknown' keeps the tab hidden and the initial fetch resolves it. NEVER
+ * overrides a resolved state: `me/access` is the only refresher after the
+ * seed.
  */
 export function seedAccessFromProfile(profile: {
-  attendanceEnabled?: boolean;
-  attendanceAccess?: string;
-  attendanceStartDate?: string | null;
-  onboardedAt?: string | null;
+  attendance?: {
+    attendanceEnabled?: boolean;
+    attendanceAccess?: string;
+    attendanceStartDate?: string | null;
+    onboardedAt?: string | null;
+  } | null;
 } | null | undefined): void {
   if (state.status === 'ready' || !profile) return;
+  const mirror = profile.attendance;
+  if (!mirror) return;
   const valid = ['none', 'upcoming', 'active', 'history_only'];
-  if (!valid.includes(profile.attendanceAccess ?? '')) return;
+  if (!valid.includes(mirror.attendanceAccess ?? '')) return;
   setState({
     status: 'ready',
     access: {
-      attendanceEnabled: profile.attendanceEnabled === true,
-      attendanceAccess: profile.attendanceAccess as AttendanceAccess['attendanceAccess'],
-      attendanceStartDate: profile.attendanceStartDate ?? null,
+      attendanceEnabled: mirror.attendanceEnabled === true,
+      attendanceAccess: mirror.attendanceAccess as AttendanceAccess['attendanceAccess'],
+      attendanceStartDate: mirror.attendanceStartDate ?? null,
       enabledAt: null,
-      onboardedAt: profile.onboardedAt ?? null,
+      onboardedAt: mirror.onboardedAt ?? null,
       officeId: null,
       officeName: null,
     },

@@ -194,12 +194,16 @@ export default function MoreScreen({ navigation }: Props) {
         {/* Story 15-6 — Attendance Home shim (FR-5 + FR-18/19/20). Routes
             through the Home shim so the Settings tile is reachable; the
             offices tile inside the shim is what actually navigates to
-            AttendanceOffices. */}
+            AttendanceOffices. Deliberately UNGATED (2026-09-30 triage):
+            this row is the only funnel into attendance SETUP — the hub's
+            focus gate is the sole navigation into the 15-8 wizard — so it
+            must render before attendance is enabled, unlike Home's tile.
+            Subtitle aligned with the hub-first framing (2026-09-30 review). */}
         <MoreRow
           icon={<Building2 size={20} color={colors.status.scheduled.solid} strokeWidth={1.5} />}
           iconBg={colors.status.scheduled.bg}
           title="Attendance"
-          subtitle="Offices, weekly off & holidays"
+          subtitle="Who's in, leave & monthly review"
           onPress={() => navigation.navigate('AttendanceHome')}
         />
 

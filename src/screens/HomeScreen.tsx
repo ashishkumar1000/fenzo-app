@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Calendar, CloudOff, RefreshCw } from 'lucide-react-native';
+import { Calendar, CalendarCheck, CloudOff, RefreshCw } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -17,6 +17,7 @@ import type { MainTabParamList, RootStackParamList } from '../navigation/types';
 import type { JobScope } from '../services';
 import HomeHeader from '../components/HomeHeader';
 import { Card, EmptyState, InlineError } from '../components/ui';
+import { Tile } from '../components/Tile';
 import { colors, radius, spacing, typography } from '../theme';
 import { firstName, loadMyProfile, useMyProfile } from '../features/profile';
 import { QuickActions, TodaysJobsSection, hasAnyJobCount } from '../features/home';
@@ -164,6 +165,30 @@ export default function HomeScreen({ navigation }: Props) {
   const businessName = profile.tenant.companyName;
   const { jobCounts, technicianCount } = profile;
 
+  // The Attendance entry (2026-09-30): shown only while the tenant's
+  // attendance module is enabled. The flag rides the profile's `attendance`
+  // mirror — no second request — and an absent mirror (older backend,
+  // pre-onboarding) fails HIDDEN. The hub's own focus gate covers the
+  // stale-mirror race: a tap that somehow lands before setup completes is
+  // replaced into the wizard, never an empty dashboard. (Defined after the
+  // loading/error early returns, where `profile` is narrowed non-null.)
+  const attendanceTile =
+    profile.attendance?.attendanceEnabled === true ? (
+      <Tile
+        icon={
+          <CalendarCheck
+            size={20}
+            color={colors.status.progress.solid}
+            strokeWidth={1.5}
+          />
+        }
+        iconBg={colors.status.progress.bg}
+        title="Attendance"
+        subtitle="Who's in, leave & monthly review"
+        onPress={() => navigation.navigate('AttendanceHome')}
+      />
+    ) : null;
+
   // First-run: simplified Home until the account has a team and a job. Both
   // facts come from the server, so an account set up on another device shows
   // the right Home here too. `hasAnyJobCount` is the extracted pure helper
@@ -186,6 +211,7 @@ export default function HomeScreen({ navigation }: Props) {
           refreshControl={refreshControl}>
           {errorBanner}
           {quickActions}
+          {attendanceTile}
 
           <View style={styles.jobsSection}>
             <Text style={styles.sectionTitle}>Today's jobs</Text>
@@ -223,6 +249,7 @@ export default function HomeScreen({ navigation }: Props) {
         refreshControl={refreshControl}>
         {errorBanner}
         {quickActions}
+        {attendanceTile}
 
         <TodaysJobsSection
           jobs={profile.jobs.data}
