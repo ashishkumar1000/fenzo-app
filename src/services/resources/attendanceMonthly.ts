@@ -3,10 +3,13 @@
  * ───────────────────────────────────────
  * The FR-25 owner monthly read (Story 19-5 over the shipped 19-3 route —
  * contract source: spec-19-1-to-19-3 §D6 + fenzit-be
- * `src/attendance/monthly-response.model.ts`). Plain function on the
- * shared `apiClient` (the attendanceDashboard.ts shape).
+ * `src/attendance/monthly-response.model.ts`) and the FR-26 SELF read
+ * (Story 19-6, `GET /attendance/me/monthly` — identity-scoped, no key
+ * param). Plain functions on the shared `apiClient` (the
+ * attendanceDashboard.ts shape).
  *
- *   fetchMonthly   GET /attendance/monthly?from=&to=[&officeId=]  [owner]
+ *   fetchMonthly    GET /attendance/monthly?from=&to=[&officeId=]  [owner]
+ *   fetchMyMonthly  GET /attendance/me/monthly?from=&to=           [me]
  *
  * `from`/`to` are ALWAYS sent; `officeId` goes RAW in the params object —
  * apiClient's paramsSerializer percent-encodes the value exactly once, so
@@ -25,11 +28,15 @@
  *     today-covering assignment) — display-only.
  *   - Unknown-but-well-formed officeId → 200 with ZERO rows (a filter is
  *     not an entity fetch — no FE existence check).
+ *   - me/monthly 422s a `to` past the tenant clock — the 19-6 hook never
+ *     draws a fetch boundary before an echo exists (D3's gate).
  *
  * The normalizer is FAIL-CLOSED (the 18-3 fetch-level rule): one bad field
  * rejects the whole fetch. Nine numbers feed the summary chips — a
  * partially-trusted row would render a confidently wrong month, which is
- * exactly the misrepresentation this forbids.
+ * exactly the misrepresentation this forbids. The summary validator is ONE
+ * function shared by both envelopes (the owner rows and the me payload) —
+ * FR-11's one-aggregation parity extends to the FE's trust rule.
  */
 import { apiClient } from '../api/apiClient';
 
@@ -116,9 +123,14 @@ function isoDate(value: unknown, field: string): string {
   return value as string;
 }
 
-/** Whitelist-normalizes one summary — a missing key or a fractional count
- *  throws with the rest of the fetch. */
-function normalizeSummary(raw: unknown): MonthlyEmployeeSummary {
+/**
+ * Whitelist-normalizes one summary — a missing key or a fractional count
+ * throws with the rest of the fetch. Exported as THE shared validator
+ * (19-6 D3): the owner row path and the me envelope both call this one
+ * implementation, so the two surfaces can never disagree about what a
+ * trustworthy summary is.
+ */
+export function normalizeSummary(raw: unknown): MonthlyEmployeeSummary {
   if (!isObject(raw)) {
     fail('a summary is not an object');
   }
@@ -202,4 +214,78 @@ export async function fetchMonthly(
     { params },
   );
   return normalizeMonthly(res.data);
+}
+
+/** The FR-26 self envelope — the technician's OWN month (19-6 D3). The
+ *  summary is the SAME nine-key shape the owner rows carry; the identity
+ *  is the JWT, so no employeeId ever exists on this route. */
+export interface MeMonthlyData {
+  from: string;
+  to: string;
+  /** The tenant-local clock echo — REQUIRED, regex-checked (the clamp is
+   *  request math; the hook gates every fetch on an echo existing). */
+  today: string;
+  summary: MonthlyEmployeeSummary;
+  /** ISO weekday numbers 1=Mon..7=Sun, sorted ascending. */
+  weeklyOffs: number[];
+  /** Rows `«holidayName» · «12 Oct»` renders — wire order kept. */
+  upcomingHolidays: Array<{ holidayDate: string; holidayName: string }>;
+}
+
+/** Fail-closed the whole me envelope (19-6 D3): `today` required; each
+ *  weekly off a 1..7 integer (sorted); each holiday row a real date plus
+ *  a non-empty name; the summary through the ONE shared validator. */
+export function normalizeMyMonthly(raw: unknown): MeMonthlyData {
+  if (!isObject(raw)) {
+    fail('the response is not an object');
+  }
+  const record = raw as Record<string, unknown>;
+  if (!Array.isArray(record.weeklyOffs)) {
+    fail('`weeklyOffs` is not a list');
+  }
+  const weeklyOffs = (record.weeklyOffs as unknown[])
+    .map(day => {
+      if (typeof day !== 'number' || !Number.isInteger(day) || day < 1 || day > 7) {
+        fail(`a weekly off is not an integer 1..7 ${JSON.stringify(day ?? null)}`);
+      }
+      return day as number;
+    })
+    .sort((a, b) => a - b);
+  if (!Array.isArray(record.upcomingHolidays)) {
+    fail('`upcomingHolidays` is not a list');
+  }
+  const upcomingHolidays = (record.upcomingHolidays as unknown[]).map(row => {
+    if (!isObject(row)) {
+      fail('an upcomingHolidays row is not an object');
+    }
+    const holiday = row as Record<string, unknown>;
+    if (typeof holiday.holidayName !== 'string' || holiday.holidayName.length === 0) {
+      fail('an upcomingHolidays row is missing its holidayName');
+    }
+    return {
+      holidayDate: isoDate(holiday.holidayDate, 'holidayDate'),
+      holidayName: holiday.holidayName as string,
+    };
+  });
+  return {
+    from: isoDate(record.from, 'from'),
+    to: isoDate(record.to, 'to'),
+    today: isoDate(record.today, 'today'),
+    summary: normalizeSummary(record.summary),
+    weeklyOffs,
+    upcomingHolidays,
+  };
+}
+
+/** `GET /attendance/me/monthly?from=&to=` — the technician's OWN month
+ *  summary (FR-26). Identity-scoped: the params object carries from/to
+ *  ONLY — no employeeId key may ever exist here (the JWT is the key). */
+export async function fetchMyMonthly(
+  from: string,
+  to: string,
+): Promise<MeMonthlyData> {
+  const res = await apiClient.get<MeMonthlyData>('/attendance/me/monthly', {
+    params: { from, to },
+  });
+  return normalizeMyMonthly(res.data);
 }

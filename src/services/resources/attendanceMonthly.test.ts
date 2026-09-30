@@ -16,7 +16,13 @@ jest.mock('../api/apiClient', () => ({
 }));
 
 import { apiClient } from '../api/apiClient';
-import { fetchMonthly, normalizeMonthly } from './attendanceMonthly';
+import {
+  fetchMonthly,
+  fetchMyMonthly,
+  normalizeMonthly,
+  normalizeMyMonthly,
+  normalizeSummary,
+} from './attendanceMonthly';
 
 const get = apiClient.get as jest.Mock;
 
@@ -230,5 +236,122 @@ describe('normalizeMonthly — fail-closed envelope', () => {
     await expect(fetchMonthly('2026-08-01', '2026-08-31')).rejects.toThrow(
       'monthly:',
     );
+  });
+});
+
+/** The FR-26 self envelope (19-6 D3) — the same summary shape, me-scoped. */
+function meEnvelope(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    from: '2026-09-01',
+    to: '2026-09-30',
+    today: '2026-09-30',
+    summary: {
+      daysWorked: 14.5,
+      halfDays: 2,
+      lateCount: 1,
+      leave: 1,
+      weeklyOffs: 3,
+      holidays: 1,
+      workedOnHoliday: 0,
+      absent: 1,
+      checkoutMissing: 2,
+    },
+    weeklyOffs: [7],
+    upcomingHolidays: [{ holidayDate: '2026-10-02', holidayName: 'Gandhi Jayanti' }],
+    ...overrides,
+  };
+}
+
+describe('fetchMyMonthly (19-6 D3 — the self read)', () => {
+  it('GETs /attendance/me/monthly with from+to and NO employeeId param (the JWT is the key)', async () => {
+    get.mockResolvedValueOnce({ data: meEnvelope() });
+    await fetchMyMonthly('2026-09-01', '2026-09-15');
+    expect(get).toHaveBeenCalledWith('/attendance/me/monthly', {
+      params: { from: '2026-09-01', to: '2026-09-15' },
+    });
+    const params = get.mock.calls[0][1].params as Record<string, unknown>;
+    expect(Object.keys(params).sort()).toEqual(['from', 'to']);
+  });
+
+  it('passes the nine summary numbers, the echoes, weekly offs and holiday rows through', async () => {
+    get.mockResolvedValueOnce({ data: meEnvelope() });
+    const res = await fetchMyMonthly('2026-09-01', '2026-09-30');
+    expect(res.today).toBe('2026-09-30');
+    expect(res.summary).toEqual(meEnvelope().summary);
+    expect(res.weeklyOffs).toEqual([7]);
+    expect(res.upcomingHolidays).toEqual([
+      { holidayDate: '2026-10-02', holidayName: 'Gandhi Jayanti' },
+    ]);
+  });
+
+  it('empty weeklyOffs / upcomingHolidays are legitimate data', async () => {
+    get.mockResolvedValueOnce({
+      data: meEnvelope({ weeklyOffs: [], upcomingHolidays: [] }),
+    });
+    const res = await fetchMyMonthly('2026-09-01', '2026-09-30');
+    expect(res.weeklyOffs).toEqual([]);
+    expect(res.upcomingHolidays).toEqual([]);
+  });
+
+  it('sorts weeklyOffs ascending regardless of wire order', () => {
+    const res = normalizeMyMonthly(meEnvelope({ weeklyOffs: [7, 1, 3] }));
+    expect(res.weeklyOffs).toEqual([1, 3, 7]);
+  });
+});
+
+describe('normalizeMyMonthly — fail-closed (19-6 D3)', () => {
+  const cases: Array<[string, unknown]> = [
+    ['the response is not an object', null],
+    ['the from echo is missing', meEnvelope({ from: undefined })],
+    ['the to echo is not ISO', meEnvelope({ to: '2026-9-30' })],
+    ['the today echo is missing', meEnvelope({ today: undefined })],
+    ['the today echo is malformed', meEnvelope({ today: '20260930' })],
+    ['the summary is missing', meEnvelope({ summary: undefined })],
+    [
+      'a summary count is fractional (the shared validator rule)',
+      meEnvelope({ summary: { ...(meEnvelope().summary as object), lateCount: 1.5 } }),
+    ],
+    ['weeklyOffs is missing', meEnvelope({ weeklyOffs: undefined })],
+    ['weeklyOffs is not a list', meEnvelope({ weeklyOffs: 'Sundays' })],
+    ['a weekly off is 0', meEnvelope({ weeklyOffs: [0] })],
+    ['a weekly off is 8', meEnvelope({ weeklyOffs: [8] })],
+    ['a weekly off is fractional', meEnvelope({ weeklyOffs: [1.5] })],
+    ['upcomingHolidays is missing', meEnvelope({ upcomingHolidays: undefined })],
+    ['upcomingHolidays is not a list', meEnvelope({ upcomingHolidays: {} })],
+    ['an upcomingHolidays row is not an object', meEnvelope({ upcomingHolidays: ['Diwali'] })],
+    [
+      'an upcomingHolidays row has an empty holidayName',
+      meEnvelope({ upcomingHolidays: [{ holidayDate: '2026-11-08', holidayName: '' }] }),
+    ],
+    [
+      'an upcomingHolidays row has a malformed holidayDate',
+      meEnvelope({ upcomingHolidays: [{ holidayDate: '08/11/2026', holidayName: 'Diwali' }] }),
+    ],
+  ];
+
+  for (const [name, bad] of cases) {
+    it(`throws on ${name} — never a partially-trusted self month`, () => {
+      expect(() => normalizeMyMonthly(bad)).toThrow('monthly:');
+    });
+  }
+
+  it('the summary validator is the SAME function the owner path uses (one implementation)', () => {
+    // The import pin (spec §5.1): normalizeSummary is exported once and
+    // both normalizers call it — a fork would let the two surfaces drift.
+    expect(typeof normalizeSummary).toBe('function');
+    expect(() => normalizeSummary({ daysWorked: '18' })).toThrow('monthly:');
+    expect(() =>
+      normalizeSummary({
+        daysWorked: 18,
+        halfDays: 0,
+        lateCount: 0,
+        leave: 0,
+        weeklyOffs: 0,
+        holidays: 0,
+        workedOnHoliday: 0,
+        absent: 0,
+        checkoutMissing: 0,
+      }),
+    ).not.toThrow();
   });
 });

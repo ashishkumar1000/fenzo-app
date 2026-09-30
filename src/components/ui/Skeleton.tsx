@@ -7,9 +7,13 @@
  * no native gradient module).
  *
  * The dashboard is its first NEW consumer ("used here first"); the monthly
- * view and the self view (19-5/19-6) reuse it, never rebuild. The old
- * report-local component is deleted — `ReportsScreen` renders `<Skeleton />`
- * unchanged in output (row count, anatomy and animation are identical).
+ * view (19-5) reuses it, never rebuild. The self view (19-6) rides the DS
+ * loading vocabulary through the month pane's spinner + InlineError
+ * postures instead — no row-shaped stand-in exists in a tab-embedded
+ * block (a skeleton would promise list rows the section does not have).
+ * The old report-local component is deleted — `ReportsScreen` renders
+ * `<Skeleton />` unchanged in output (row count, anatomy and animation
+ * are identical).
  *
  * Rows carry the `colors.borderSubtle` block colour (never a status hue):
  * a skeleton promises "content is coming", not "content is fine".

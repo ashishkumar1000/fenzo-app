@@ -3,12 +3,13 @@
  * month views (Story 18-3 D1 / DESIGN.md StatusBadge + Flag tables).
  *
  * Three consumers read this one mapping — MonthCalendar's cell glyphs, the
- * DayDetailSheet's StatusBadge, and the ComponentLab's proof month — so a
- * table drift breaks the lab loudly instead of silently mis-rendering.
- * Labels are the DESIGN.md table verbatim; tone is `soft` everywhere in
- * this module (`in_progress` renders on the EXISTING `progress` key —
- * don't invent synonyms). All 16 icons verified present in
- * lucide-react-native 1.48 (the Circle* renames keep their aliases).
+ * DayDetailSheet's StatusBadge, and (since 19-6) the self view's read-only
+ * day sheet — so a table drift breaks a production surface loudly instead
+ * of silently mis-rendering. Labels are the DESIGN.md table verbatim; tone
+ * is `soft` everywhere in this module (`in_progress` renders on the
+ * EXISTING `progress` key — don't invent synonyms). All 16 icons verified
+ * present in lucide-react-native 1.48 (the Circle* renames keep their
+ * aliases).
  */
 import {
   AlertCircle,

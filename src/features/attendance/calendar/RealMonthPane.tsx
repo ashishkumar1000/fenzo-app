@@ -1,9 +1,10 @@
 /**
  * RealMonthPane — the PRODUCTION month pane (Story 19-5 D6): one
  * employee's month nav + the live `useMonthStatuses` grid over real data.
- * 19-5's drill-down host (AttendanceEmployeeMonthScreen) embeds it
- * owner-scoped; the dev Component-lab screen keeps hosting it unchanged
- * (it retires with 19-6). 19-6's self view embeds the same pane me-scoped.
+ * Fully production since 19-6: it has exactly TWO hosts — the owner
+ * drill-down (AttendanceEmployeeMonthScreen, owner-scoped via `employeeId`)
+ * and the technician's self view (AttendanceMyMonth, me-scoped when
+ * `employeeId` is ABSENT — the JWT identity is the key).
  *
  * Data ownership stays in the pane; the parent (which owns only the
  * picked day + the sheet wiring) receives a RealMonthReport — the rows,
@@ -11,12 +12,11 @@
  * non-clearing `refresh` handle (D5).
  *
  * 19-5's three patches (D6): the `nextDisabled` prop (the host passes
- * `today == null || yearMonth === today.slice(0,7)` — the day-statuses
- * route does NOT 422 a future range, so a future month would be a silent
- * all-not_tracked grid; the lab passes nothing — unchanged behaviour); nav
- * buttons 44×44 `radius.pill` (the pane's 40×40 was below `touch.min`);
- * and the EMPTY-GRID GATE — `runFetch` clears the map on every month
- * change, so the pane gates `<MonthCalendar>` on
+ * its month bound — the day-statuses route does NOT 422 a future range,
+ * so a future month would be a silent all-not_tracked grid); nav buttons
+ * 44×44 `radius.pill` (the pane's 40×40 was below `touch.min`); and the
+ * EMPTY-GRID GATE — `runFetch` clears the map on every month change, so
+ * the pane gates `<MonthCalendar>` on
  * `data.size > 0 || (!loading && error == null)`: first load and switches
  * show the spinner only (no flash of a full month of "didn't work"
  * cells), a first-load error shows error + Retry with no ghost grid, an
@@ -64,18 +64,24 @@ export function RealMonthPane({
   onData,
   nextDisabled = false,
 }: {
-  employeeId: string;
+  /** Absent = ME scope (the JWT identity, 19-6's self view); present =
+   *  OWNER scope (the drill-down). The union keeps the two hosts on the
+   *  ONE pane so their data lifecycle can never fork. */
+  employeeId?: string;
   yearMonth: string;
   onShiftMonth: (delta: number) => void;
   onPickDay: (workDate: string) => void;
   onData: (report: RealMonthReport) => void;
-  /** 19-5 D6: the host's › bound (`today == null || yearMonth ===
-   *  today.slice(0,7)`) — disabled-until-known on the drill-down; the
-   *  lab passes nothing (unchanged behaviour). */
+  /** 19-5 D6: the host's month bound — disabled-until-known on both
+   *  hosts (the self view stops forward travel at the current/ended
+   *  month); omitted means never disabled (no host does that today). */
   nextDisabled?: boolean;
 }) {
   const month = useMonthStatuses({
-    scope: { kind: 'owner', employeeId },
+    scope:
+      employeeId === undefined
+        ? { kind: 'me' }
+        : { kind: 'owner', employeeId },
     yearMonth,
   });
 

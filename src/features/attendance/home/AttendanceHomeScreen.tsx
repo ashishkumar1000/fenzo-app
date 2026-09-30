@@ -20,7 +20,7 @@
  */
 import { useCallback, useEffect, useRef } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
-import { Building2, CalendarDays, CalendarOff, FlaskConical, LayoutDashboard, Settings as SettingsIcon } from 'lucide-react-native';
+import { Building2, CalendarDays, CalendarOff, LayoutDashboard, Settings as SettingsIcon } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { colors, spacing } from '../../../theme';
@@ -129,17 +129,6 @@ export default function AttendanceHomeScreen({ navigation }: Props) {
           subtitle="Weekly off & holidays"
           onPress={() => navigation.navigate('AttendanceSettings')}
         />
-        {__DEV__ ? (
-          // Story 18-3 (spec D7) — the dev-only Component lab entry; the
-          // route (and its screen module) exist only in development builds.
-          <Tile
-            icon={<FlaskConical size={20} color={colors.status.neutral.solid} strokeWidth={1.5} />}
-            iconBg={colors.status.neutral.bg}
-            title="Component lab (dev)"
-            subtitle="Month calendar & day detail"
-            onPress={() => navigation.navigate('ComponentLab')}
-          />
-        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

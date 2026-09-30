@@ -2,9 +2,10 @@
  * The D1 visual table (Story 18-3, spec §3 test plan): 12/12 wire keys
  * covered with exact {badgeStatus, icon, label} identities; distinct icons
  * WITHIN each hue family (the amber Clock-vs-AlertCircle pair, the blue
- * trio, the four neutral glyphs, the green pair) — coverage only: the AC-1
- * proof is the ComponentLab screenshot, not this test (the Floor rejects
- * token-table-only evidence). Plus the flag-tag derivation.
+ * trio, the four neutral glyphs, the green pair) — coverage only: the
+ * production proof is the hosted month surfaces' walkthroughs (the 19-6
+ * self view is the third consumer; the Floor rejects token-table-only
+ * evidence). Plus the flag-tag derivation.
  */
 import {
   AlertCircle,
@@ -30,7 +31,7 @@ import {
   dayStatusColors,
 } from './dayStatusVisual';
 
-/** Every wire key, once — the exhaustive list the lab also maps through. */
+/** Every wire key, once — the exhaustive list every consumer maps through. */
 const ALL_KEYS: DayStatusKey[] = [
   'not_tracked',
   'not_checked_in_yet',

@@ -12,11 +12,12 @@
  * 18-4 stages (spec D1/D2 — a morph INSIDE this sheet, never a stacked
  * sheet; the 17-7 doctrine): `detail → correct → detail`. The owner-only
  * "Correct day" entry renders only when `canCorrectDay` holds AND the host
- * passed the write plumbing; the proof pane passes `readOnly` (canned data
- * + a placeholder UUID would 404 no-leak) and never sees it. The correct
- * stage keeps the day title and shows the day's times line as the subtitle
- * (the mock's sub-slot), mounts CorrectionStage FRESH per entry, and
- * morphs back on a saved write (D5), after which the host refreshes.
+ * passed the write plumbing; the 19-6 self view passes `readOnly` — once
+ * the proof pane's posture, now PRODUCTION (employees never correct; the
+ * entry is doubly dead with the me-scope gate) and never sees it. The
+ * correct stage keeps the day title and shows the day's times line as the
+ * subtitle (the mock's sub-slot), mounts CorrectionStage FRESH per entry,
+ * and morphs back on a saved write (D5), after which the host refreshes.
  *
  * Write posture (D4): the press LATCHES in a ref (no idempotency key on
  * the wire — a same-tick double-tap would file TWO audit rows), one

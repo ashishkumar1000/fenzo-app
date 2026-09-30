@@ -32,6 +32,30 @@ jest.mock('./useAttendanceSummary', () => ({
   useAttendanceSummary: jest.fn(),
 }));
 
+// 19-6: the real section mounts TWO fetches (pane + summary) — the tab
+// suite is the state ROUTER, so the section is a recording probe: its
+// MOUNTS (in order), the posture prop and the wire date are what the
+// router pins live on. (The factory may only reference `mock`-prefixed
+// out-of-scope variables, hence the require-built element.)
+jest.mock('./AttendanceMyMonth', () => ({
+  AttendanceMyMonth: (props: { attendanceEndedOn: string | null; historyOnly: boolean }) => {
+    // Mount-scoped (review 2026-09-30): the log gains an entry ONLY on a
+    // true remount — a hoisted single-instance section that merely
+    // re-renders on a flip must FAIL this pin, or the
+    // fresh-bootstrap-on-flip doctrine could be refactored away silently.
+    const { createElement, useEffect } = require('react');
+    const { Text } = require('react-native');
+    useEffect(() => {
+      mockMyMonthMounts.push(
+        `historyOnly=${props.historyOnly} endedOn=${props.attendanceEndedOn ?? 'null'}`,
+      );
+      // The MOUNT-time posture is the datum; deps stay empty by design.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    return createElement(Text, null, 'MY_MONTH_PROBE');
+  },
+}));
+
 // Story 17-6: the Leave section now embeds the history rows — their list
 // GET is mocked to an empty first page (the real barrel stays for the
 // rest of the tree).
@@ -56,11 +80,18 @@ import type { AttendanceSummaryState } from './useAttendanceSummary';
 import type { AttendanceAccessStateSnapshot } from './attendanceAccessStore';
 import type { AttendanceAccess, AttendanceSummary } from '../../../services';
 import { attendanceLeaveService } from '../../../services';
+import { LeaveHistorySection } from '../leave/LeaveHistorySection';
 import AttendanceTabScreen from './AttendanceTabScreen';
 
 const useAttendanceAccessMock = useAttendanceAccess as jest.Mock;
 const useAttendanceSummaryMock = useAttendanceSummary as jest.Mock;
 const refreshOnFocusMock = refreshAttendanceAccessOnFocus as jest.Mock;
+
+/** 19-6 — the probe section's MOUNT log (one entry per true mount, in
+ *  order — the probe pushes from a mount-scoped effect, so a flip that
+ *  reuses the instance adds no entry, which is exactly the regression the
+ *  FLIP pin exists to catch). */
+const mockMyMonthMounts: string[] = [];
 
 // The LeaveHistorySection fetch — armed per-test after the reset below
 // (the preset wipes module-factory implementations).
@@ -84,6 +115,7 @@ function access(
     attendanceEnabled: true,
     attendanceAccess: 'active',
     attendanceStartDate: null,
+    attendanceEndedOn: null,
     enabledAt: '2026-09-28T10:00:00Z',
     onboardedAt: null,
     officeId: 'o1',
@@ -208,6 +240,7 @@ function textNodes(root: ReactTestRenderer.ReactTestInstance, value: string) {
 beforeEach(() => {
   jest.resetAllMocks();
   consumed = 0;
+  mockMyMonthMounts.length = 0;
   // The history GET stays PENDING: this suite renders and asserts
   // SYNCHRONOUSLY (the 15-10 state-router pins), so a resolving promise
   // would settle AFTER the test — a setState outside act whose scheduler
@@ -275,7 +308,7 @@ describe('the state router', () => {
     ).toBeUndefined();
   });
 
-  it('history_only → the ended banner only, no summary rows', () => {
+  it('history_only → the ended note, no summary rows, and no check-in control', () => {
     const screen = renderScreen(HISTORY_ONLY);
 
     expect(textNodes(screen.root, 'Attendance tracking has ended').length).toBeGreaterThan(0);
@@ -314,6 +347,75 @@ describe('the state router', () => {
     expect(textContaining(active.root, 'Check in').length).toBeGreaterThan(0);
     expect(textNodes(active.root, 'Today')).toHaveLength(0);
     expect(textNodes(active.root, 'Attendance').length).toBe(1); // the header
+  });
+});
+
+describe('the 19-6 My month routing (D1/D6)', () => {
+  it('active → My month sits BETWEEN Summary and Leave; the section rides the active posture', () => {
+    const screen = renderScreen(ACTIVE);
+    const labels = screen.root
+      .findAll((n) => n.type === Text)
+      .map((n) =>
+        Array.isArray(n.props.children)
+          ? n.props.children.join('')
+          : String(n.props.children ?? ''),
+      );
+    const probe = labels.indexOf('MY_MONTH_PROBE');
+    expect(probe).toBeGreaterThan(labels.indexOf('Office'));
+    expect(probe).toBeLessThan(labels.indexOf('Leave'));
+    expect(mockMyMonthMounts).toEqual(['historyOnly=false endedOn=null']);
+  });
+
+  it('upcoming → NO My month at all (absent, not disabled — the zero-fetch posture)', () => {
+    renderScreen(ready('upcoming', { attendanceStartDate: '2026-11-01' }));
+
+    expect(mockMyMonthMounts).toEqual([]);
+  });
+
+  it('history_only → the dated headline, My month in the history posture, and the Leave history WITHOUT the Apply row', () => {
+    const screen = renderScreen(
+      ready('history_only', { attendanceEndedOn: '2026-08-31' }),
+    );
+
+    expect(textContaining(screen.root, 'Attendance tracking ended on')).toHaveLength(1);
+    expect(textContaining(screen.root, '31 Aug')).toHaveLength(1);
+    expect(mockMyMonthMounts).toEqual(['historyOnly=true endedOn=2026-08-31']);
+    expect(screen.root.findAllByType(AttendanceSummaryView)).toHaveLength(0);
+    expect(textContaining(screen.root, 'Apply for leave')).toHaveLength(0);
+    expect(screen.root.findAllByType(LeaveHistorySection)).toHaveLength(1);
+  });
+
+  it('history_only with a null date (older BE) → the dateless fallback headline', () => {
+    const screen = renderScreen(HISTORY_ONLY);
+
+    expect(textNodes(screen.root, 'Attendance tracking has ended').length).toBeGreaterThan(0);
+    expect(mockMyMonthMounts).toEqual(['historyOnly=true endedOn=null']);
+  });
+
+  it('a posture flip REMOUNTS My month (fresh bootstrap) in BOTH directions', () => {
+    const screen = renderScreen(ACTIVE);
+    expect(mockMyMonthMounts).toEqual(['historyOnly=false endedOn=null']);
+
+    useAttendanceAccessMock.mockReturnValue(
+      ready('history_only', { attendanceEndedOn: '2026-08-31' }),
+    );
+    act(() => {
+      screen.renderer.update(screen.element(screen.navigation));
+    });
+    expect(mockMyMonthMounts).toEqual([
+      'historyOnly=false endedOn=null',
+      'historyOnly=true endedOn=2026-08-31',
+    ]);
+
+    useAttendanceAccessMock.mockReturnValue(ACTIVE);
+    act(() => {
+      screen.renderer.update(screen.element(screen.navigation));
+    });
+    expect(mockMyMonthMounts).toEqual([
+      'historyOnly=false endedOn=null',
+      'historyOnly=true endedOn=2026-08-31',
+      'historyOnly=false endedOn=null',
+    ]);
   });
 });
 

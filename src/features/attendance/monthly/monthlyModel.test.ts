@@ -10,16 +10,21 @@
  * QA stance: these pin the requirement's behaviour — if the model changed
  * but the FR-25 contract did not, these must still pass.
  */
-import type { EmployeeMonthlyRow } from '../../../services/resources/attendanceMonthly';
+import type {
+  EmployeeMonthlyRow,
+  MonthlyEmployeeSummary,
+} from '../../../services/resources/attendanceMonthly';
 import {
   captionSegments,
   formatCredit,
+  formatHolidayShortDate,
   monthlyCaption,
   monthlyRowA11yLabel,
   monthlyWindow,
   monthTitle,
   shiftYearMonth,
   summaryChips,
+  summaryMetaSegments,
 } from './monthlyModel';
 
 /** A wire-valid row — override any field per test. */
@@ -166,6 +171,49 @@ describe('summaryChips', () => {
   });
 });
 
+describe('formatHolidayShortDate (19-6 — the «d MMM» surgery)', () => {
+  it('renders the bare day plus the short month from the ONE table', () => {
+    expect(formatHolidayShortDate('2026-10-02')).toBe('2 Oct');
+    expect(formatHolidayShortDate('2026-09-14')).toBe('14 Sep');
+    expect(formatHolidayShortDate('2026-01-26')).toBe('26 Jan');
+    expect(formatHolidayShortDate('2026-12-25')).toBe('25 Dec');
+  });
+
+  it('drops the leading zero on single-digit days', () => {
+    expect(formatHolidayShortDate('2026-08-05')).toBe('5 Aug');
+  });
+});
+
+describe('summaryMetaSegments (19-6 — the shared count segments)', () => {
+  it('builds weekly offs → holidays → worked-on-holiday, sharing plural/formatCredit', () => {
+    expect(
+      summaryMetaSegments(
+        row({ summary: { weeklyOffs: 4, holidays: 1, workedOnHoliday: 1 } }).summary,
+      ),
+    ).toEqual(['4 weekly offs', '1 holiday', '1 worked on holiday']);
+  });
+
+  it('suppresses zeros and singularises at 1', () => {
+    const summary: Partial<MonthlyEmployeeSummary> = {
+      weeklyOffs: 1,
+      holidays: 0,
+      workedOnHoliday: 2.5,
+    };
+    expect(summaryMetaSegments(row({ summary }).summary)).toEqual([
+      '1 weekly off',
+      '2.5 worked on holiday',
+    ]);
+  });
+
+  it('all zero → the empty array (the line is omitted)', () => {
+    expect(
+      summaryMetaSegments(
+        row({ summary: { weeklyOffs: 0, holidays: 0, workedOnHoliday: 0 } }).summary,
+      ),
+    ).toEqual([]);
+  });
+});
+
 describe('captionSegments + monthlyCaption', () => {
   it('builds office → weekly offs → holidays → worked-on-holiday', () => {
     const segments = captionSegments(
@@ -214,6 +262,31 @@ describe('captionSegments + monthlyCaption', () => {
         row({ officeName: null, summary: { weeklyOffs: 0, holidays: 0, workedOnHoliday: 0 } }),
       ),
     ).toBe('');
+  });
+
+  it('19-6: captionSegments is byte-identical after the summaryMetaSegments refactor', () => {
+    // The owner output must not move by one byte when the segments split
+    // out (the 19-6 D5 ruling) — the full row, the nullable office, the
+    // all-zero row.
+    expect(captionSegments(row({ summary: { workedOnHoliday: 1 } }))).toEqual([
+      'Andheri West',
+      '4 weekly offs',
+      '1 holiday',
+      '1 worked on holiday',
+    ]);
+    expect(monthlyCaption(row({ summary: { workedOnHoliday: 1 } }))).toBe(
+      'Andheri West · 4 weekly offs · 1 holiday · 1 worked on holiday',
+    );
+    expect(
+      captionSegments(
+        row({ officeId: null, officeName: null, summary: { weeklyOffs: 2, holidays: 0 } }),
+      ),
+    ).toEqual(['2 weekly offs']);
+    expect(
+      captionSegments(
+        row({ officeName: null, summary: { weeklyOffs: 0, holidays: 0, workedOnHoliday: 0 } }),
+      ),
+    ).toEqual([]);
   });
 });
 

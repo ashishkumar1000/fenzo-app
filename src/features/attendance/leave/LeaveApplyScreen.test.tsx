@@ -465,6 +465,7 @@ function ready(
       attendanceEnabled: true,
       attendanceAccess,
       attendanceStartDate: '2026-11-01',
+      attendanceEndedOn: null,
       enabledAt: '2026-09-28T10:00:00Z',
       onboardedAt: '2026-09-28T09:00:00Z',
       officeId: 'o1',

@@ -34,6 +34,7 @@ function access(
     attendanceEnabled: true,
     attendanceAccess: 'active',
     attendanceStartDate: null,
+    attendanceEndedOn: null,
     enabledAt: '2026-09-20T10:00:00Z',
     onboardedAt: null,
     officeId: 'o1',

@@ -102,7 +102,7 @@ function findTile(
 }
 
 describe('AttendanceHomeScreen', () => {
-  it('renders the Leave/Offices/Settings/Monthly tiles + the __DEV__ lab row', () => {
+  it('renders the Today/Monthly/Leave/Offices/Settings tiles', () => {
     const { renderer } = renderHome();
     const texts = renderer.root
       .findAll(node => typeof node.props.children === 'string')
@@ -117,13 +117,9 @@ describe('AttendanceHomeScreen', () => {
     expect(texts).toContain('Locations & timing rules');
     expect(texts).toContain('Settings');
     expect(texts).toContain('Weekly off & holidays');
-    // Story 18-3 (spec D7): the dev-only Component lab row — jest runs
-    // with __DEV__ true, so it renders here (and must NOT in release).
-    expect(texts).toContain('Component lab (dev)');
-    expect(texts).toContain('Month calendar & day detail');
   });
 
-  it('renders the full tappable inventory: the four tiles + the dev row', () => {
+  it('renders the full tappable inventory: the five tiles (the dev lab row retired with 19-6)', () => {
     const { renderer } = renderHome();
     // NO pre-filter: every button-role label on the screen, deduped (RTR
     // mirrors Pressables through host Views, so a raw findAll counts each
@@ -138,7 +134,6 @@ describe('AttendanceHomeScreen', () => {
       ),
     );
     expect(labels.sort()).toEqual([
-      'Component lab (dev)',
       'Go back',
       'Leave',
       'Monthly',
@@ -198,15 +193,6 @@ describe('AttendanceHomeScreen', () => {
       settingsButton.props.onPress();
     });
     expect(navigation.navigate).toHaveBeenCalledWith('AttendanceSettings');
-  });
-
-  it('tapping the dev row navigates to ComponentLab (18-3 spec D7)', () => {
-    const { renderer, navigation } = renderHome();
-    const labButton = findTile(renderer, 'Component lab (dev)');
-    act(() => {
-      labButton.props.onPress();
-    });
-    expect(navigation.navigate).toHaveBeenCalledWith('ComponentLab');
   });
 
   it('back goes back when there is a screen beneath (test gap)', () => {

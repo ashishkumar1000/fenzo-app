@@ -32,6 +32,7 @@ function accessRow(
     attendanceEnabled: true,
     attendanceAccess: 'active',
     attendanceStartDate: '2026-10-01',
+    attendanceEndedOn: null,
     enabledAt: '2026-09-20T10:00:00Z',
     onboardedAt: null,
     officeId: 'o1',
@@ -86,6 +87,7 @@ describe('attendanceMeService.getAccess', () => {
         attendanceEnabled: false,
         attendanceAccess: 'none',
         attendanceStartDate: null,
+        attendanceEndedOn: null,
         enabledAt: null,
         onboardedAt: null,
         officeId: null,
@@ -100,6 +102,7 @@ describe('attendanceMeService.getAccess', () => {
         attendanceEnabled: 'true', // truthy but not === true
         attendanceAccess: 'upcoming',
         attendanceStartDate: 20261001, // number, not string
+        attendanceEndedOn: 20260831, // number, not string
         enabledAt: null,
         onboardedAt: undefined,
         officeId: 12,
@@ -113,11 +116,27 @@ describe('attendanceMeService.getAccess', () => {
       attendanceEnabled: false,
       attendanceAccess: 'upcoming',
       attendanceStartDate: null,
+      attendanceEndedOn: null,
       enabledAt: null,
       onboardedAt: null,
       officeId: null,
       officeName: null,
     });
+  });
+
+  it('19-6: passes attendanceEndedOn through and degrades an ABSENT field (older BE) to null', async () => {
+    get.mockResolvedValueOnce({
+      data: accessRow({ attendanceAccess: 'history_only', attendanceEndedOn: '2026-08-31' }),
+    });
+    await expect(attendanceMeService.getAccess()).resolves.toMatchObject({
+      attendanceAccess: 'history_only',
+      attendanceEndedOn: '2026-08-31',
+    });
+
+    const { attendanceEndedOn: _kept, ...older } = accessRow();
+    get.mockResolvedValueOnce({ data: older });
+    const returned = await attendanceMeService.getAccess();
+    expect(returned.attendanceEndedOn).toBeNull();
   });
 
   it('propagates a documented failure (403 for non-technicians) unchanged', async () => {

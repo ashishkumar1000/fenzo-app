@@ -7,14 +7,20 @@
  *                  state; this body is the defensive in-between frame).
  *   none         → nothing (the tab cannot normally be focused in this
  *                  state — FR-3: no attendance UI anywhere).
- *   active       → summary screen (NO check-in control in this story —
- *                  Epic 16 owns it; the header always reads "Attendance",
- *                  never bare "Today", per the UX naming-collision rule).
+ *   active       → summary screen + the 19-6 "My month" self view (the
+ *                  check-in control arrived with Epic 16; the header
+ *                  always reads "Attendance", never bare "Today", per
+ *                  the UX naming-collision rule).
  *   upcoming     → "Attendance starts on {date}" + summary + the early
  *                  onboarding CTA; no check-in control (absent, not
- *                  disabled).
- *   history_only → ended banner only (no office rows exist for this state;
- *                  records surfaces are Epics 18/19).
+ *                  disabled) and NO My month (an all-zero render would
+ *                  read "counted, worked nothing" — absent, not disabled).
+ *   history_only → the dated ended note (19-6) + My month + the Leave
+ *                  history (the 15-10 promise that records surfaces are
+ *                  Epics 18/19 — fulfilled; the Apply row is absent).
+ *
+ * Section mounting stays INSIDE each posture branch — an active↔
+ * history_only flip REMOUNTS My month (fresh bootstrap), deliberately.
  *
  * Focus refetches access (min-gap shared with the store) so a state flip
  * (upcoming → active, tracked → disabled) lands without a restart. If a
@@ -23,14 +29,14 @@
  * never strand the user on a blank content area (spec finding #9).
  */
 import { useCallback, useEffect, useRef } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronRight } from 'lucide-react-native';
 import { useFocusEffect, type CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button, SectionHead } from '../../../components/ui';
-import { colors, fontSize, spacing, touch, typography } from '../../../theme';
+import { Button } from '../../../components/ui';
+import { colors, fontSize, spacing } from '../../../theme';
+import { formatLongDate } from '../../../utils';
 import {
   refreshAttendanceAccessNow,
   refreshAttendanceAccessOnFocus,
@@ -38,8 +44,9 @@ import {
 } from './attendanceAccessStore';
 import { useAttendanceSummary } from './useAttendanceSummary';
 import { AttendanceSummaryView } from './AttendanceSummaryView';
+import { AttendanceMyMonth } from './AttendanceMyMonth';
+import { AttendanceLeaveSection } from './AttendanceLeaveSection';
 import { AttendanceTodayView } from '../today/AttendanceTodayView';
-import { LeaveHistorySection } from '../leave/LeaveHistorySection';
 import {
   formatStartsOnCopy,
   shouldShowIntro,
@@ -112,6 +119,15 @@ export default function AttendanceTabScreen({ navigation }: Props) {
     navigation.navigate('LeaveApply', { today: summaryToday });
   }, [navigation, summaryToday]);
 
+  // 19-6 — the My month check-in BRIDGE's fingerprint: today's date plus
+  // the record's instants. A check-in/out mutates the record (the summary
+  // refetch lands), and this string changing is the section's cue to
+  // refresh the pane's day map — without it, today's cell reads "Not
+  // tracked" seconds after the card above says "Checked in".
+  const todaySignal = summaryState.summary?.today
+    ? `${summaryState.summary.today.date}|${summaryState.summary.todayRecord?.checkinAt ?? ''}|${summaryState.summary.todayRecord?.checkoutAt ?? ''}`
+    : null;
+
   // A refresh that returns `none` while this tab is focused strands the
   // content area when the tab bar removes the screen — leave for Today
   // in the same update (spec finding #9).
@@ -146,15 +162,32 @@ export default function AttendanceTabScreen({ navigation }: Props) {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}>
           {accessState === 'history_only' ? (
-            <View style={styles.endedWrap}>
-              <Text style={styles.endedHeadline} accessibilityRole="header">
-                Attendance tracking has ended
-              </Text>
-              <Text style={styles.endedBody}>
-                You can no longer check in or out, and nothing new is being
-                recorded.
-              </Text>
-            </View>
+            <>
+              {/* 19-6 D6 — the dated ended note (the {date} is the wire's
+                  attendanceEndedOn; a null date — an older BE — degrades
+                  to the dateless 15-10 headline). */}
+              <View style={styles.endedWrap}>
+                <Text style={styles.endedHeadline} accessibilityRole="header">
+                  {access?.attendanceEndedOn
+                    ? `Attendance tracking ended on ${formatLongDate(access.attendanceEndedOn)}`
+                    : 'Attendance tracking has ended'}
+                </Text>
+                <Text style={styles.endedBody}>
+                  You can no longer check in or out, and nothing new is being
+                  recorded.
+                </Text>
+              </View>
+              {/* 19-6 D1 — history_only keeps a live My month (past truth:
+                  the bootstrap opens on the ended month) and the Leave
+                  history BELOW it; the Apply row is absent (subtraction in
+                  service of "your record is closed"). */}
+              <AttendanceMyMonth
+                attendanceEndedOn={access?.attendanceEndedOn ?? null}
+                historyOnly
+                todaySignal={todaySignal}
+              />
+              <AttendanceLeaveSection applyable={false} onApply={openLeave} />
+            </>
           ) : (
             <>
               {accessState === 'upcoming' && (
@@ -178,25 +211,20 @@ export default function AttendanceTabScreen({ navigation }: Props) {
                 />
               )}
               <AttendanceSummaryView state={summaryState} onRetry={onRetrySummary} />
+              {/* 19-6 D1 — My month between Summary and Leave (active only;
+                  upcoming hides it entirely — the tab reads NOW → YOUR
+                  SETUP → YOUR MONTH → YOUR REQUESTS). */}
+              {accessState === 'active' && (
+                <AttendanceMyMonth
+                  attendanceEndedOn={access?.attendanceEndedOn ?? null}
+                  historyOnly={false}
+                  todaySignal={todaySignal}
+                />
+              )}
               {/* 17-5 — the Leave section: rendered in active AND upcoming
                   (upcoming can apply; the date floor is server-side);
-                  history_only/none never reach this branch (D1). 17-6 adds
-                  the tappable history rows under the apply entry. */}
-              <View style={styles.leaveSection}>
-                <SectionHead title="Leave" />
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Apply for leave"
-                  onPress={openLeave}
-                  style={({ pressed }) => [
-                    styles.leaveRow,
-                    pressed && styles.leaveRowPressed,
-                  ]}>
-                  <Text style={styles.leaveRowText}>Apply for leave</Text>
-                  <ChevronRight size={18} color={colors.textMuted} strokeWidth={2} />
-                </Pressable>
-                <LeaveHistorySection />
-              </View>
+                  history_only/none never reach this branch (D1). */}
+              <AttendanceLeaveSection applyable onApply={openLeave} />
               {accessState === 'upcoming' && shouldShowIntro(access) && (
                 <Button variant="secondary" size="md" onPress={openIntro}>
                   Finish the intro now
@@ -261,22 +289,5 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     lineHeight: Math.round(fontSize.sm * 1.45),
     color: colors.textMuted,
-  },
-  leaveSection: {
-    gap: spacing.s2,
-  },
-  leaveRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.s2,
-    minHeight: touch.comfort,
-  },
-  leaveRowPressed: {
-    opacity: 0.85,
-  },
-  leaveRowText: {
-    ...typography.body,
-    color: colors.textStrong,
-    flex: 1,
   },
 });

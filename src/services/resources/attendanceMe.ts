@@ -52,6 +52,11 @@ export interface AttendanceAccess {
   attendanceAccess: AttendanceAccessState;
   /** `YYYY-MM-DD` tenant-local; the upcoming state's start date. */
   attendanceStartDate: string | null;
+  /** The last tracked day, `YYYY-MM-DD` (19-6) — the "tracking ended on"
+   *  note's {date}. history_only-ONLY by the view's CASE gate: null in
+   *  every other state, and null (an older BE) degrades to the dateless
+   *  note. Never gate on this alone — `attendanceAccess` decides state. */
+  attendanceEndedOn: string | null;
   enabledAt: string | null;
   onboardedAt: string | null;
   officeId: string | null;
@@ -126,6 +131,9 @@ function normalizeAccess(raw: Partial<AttendanceAccess> | null | undefined): Att
       ? (raw?.attendanceAccess as AttendanceAccessState)
       : 'none',
     attendanceStartDate: typeof raw?.attendanceStartDate === 'string' ? raw.attendanceStartDate : null,
+    // Absent on the wire (a pre-19-6 BE) degrades to null — the dateless
+    // ended-note posture, never an undefined leak into the feature layer.
+    attendanceEndedOn: typeof raw?.attendanceEndedOn === 'string' ? raw.attendanceEndedOn : null,
     enabledAt: typeof raw?.enabledAt === 'string' ? raw.enabledAt : null,
     onboardedAt: typeof raw?.onboardedAt === 'string' ? raw.onboardedAt : null,
     officeId: typeof raw?.officeId === 'string' ? raw.officeId : null,

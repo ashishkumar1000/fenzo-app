@@ -160,6 +160,10 @@ export function seedAccessFromProfile(profile: {
       attendanceEnabled: mirror.attendanceEnabled === true,
       attendanceAccess: mirror.attendanceAccess as AttendanceAccess['attendanceAccess'],
       attendanceStartDate: mirror.attendanceStartDate ?? null,
+      // 19-6: the mirror is the tab-gating vocabulary (four frozen fields)
+      // — it never carries the ended date; the seed answers null and the
+      // first me/access refetch replaces it with the real value.
+      attendanceEndedOn: null,
       enabledAt: null,
       onboardedAt: mirror.onboardedAt ?? null,
       officeId: null,

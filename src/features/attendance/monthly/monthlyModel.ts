@@ -1,10 +1,12 @@
 /**
- * monthlyModel.ts — the owner monthly view's pure helpers (Story 19-5).
- * No React, no I/O — the screen renders, this decides: the month shift
- * (extracted verbatim from ComponentLabScreen, 18-3's original), the ONE
- * month-name table (shared by the list screen and RealMonthPane — the
- * 19-4 review's no-third-MONTH_NAMES rule), the fetch-window clamp, the
- * decimal credit formatter and the chips/caption/a11y builders.
+ * monthlyModel.ts — the monthly views' pure helpers (Stories 19-5/19-6).
+ * No React, no I/O — the screens render, this decides: the month shift
+ * (18-3's original, whose surviving home is this module — the lab screen
+ * retired with 19-6 and the drill-down imports it from here), the ONE
+ * month-name table (shared by the list screen, the self view and
+ * RealMonthPane — the 19-4 review's no-third-MONTH_NAMES rule), the
+ * fetch-window clamp, the decimal credit formatter and the chips/caption/
+ * meta/a11y builders.
  *
  * All date work is string surgery on `YYYY-MM` / `YYYY-MM-DD` (the
  * dayDetailModel doctrine — never a Date built from the device zone);
@@ -18,9 +20,9 @@ import type {
   MonthlyEmployeeSummary,
 } from '../../../services/resources/attendanceMonthly';
 
-/** 'YYYY-MM' shifted by n months (UTC math on the explicit 1st) —
- *  extracted VERBATIM from ComponentLabScreen (18-3), which now imports
- *  it from here so the two screens can never drift. */
+/** 'YYYY-MM' shifted by n months (UTC math on the explicit 1st) — 18-3's
+ *  original, housed here since the lab retired: the drill-down and the
+ *  self view both import it, so the screens can never drift. */
 export function shiftYearMonth(yearMonth: string, months: number): string {
   const next = new Date(
     Date.UTC(Number(yearMonth.slice(0, 4)), Number(yearMonth.slice(5, 7)) - 1 + months, 1),
@@ -42,6 +44,16 @@ export function monthTitle(yearMonth: string): string {
   // own raw string, never "undefined YYYY".
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonth)) return yearMonth;
   return `${MONTH_NAMES[Number(yearMonth.slice(5, 7)) - 1]} ${yearMonth.slice(0, 4)}`;
+}
+
+/** 'YYYY-MM-DD' → "12 Oct" (19-6's holiday rows) — string surgery on the
+ *  wire date, short-named from the ONE month table; never a Date built
+ *  from the device zone (the customers-local formatter is Date-based and
+ *  deliberately not reused). */
+export function formatHolidayShortDate(holidayDate: string): string {
+  return `${Number(holidayDate.slice(8, 10))} ${MONTH_NAMES[
+    Number(holidayDate.slice(5, 7)) - 1
+  ].slice(0, 3)}`;
 }
 
 /**
@@ -117,26 +129,37 @@ export function summaryChips(summary: MonthlyEmployeeSummary): MonthlyChipSpec[]
 }
 
 /**
- * The caption line's segments (all zero-suppressed; the office first when
- * the wire carried one): `«office»`, `«n» weekly off«s»`, `«n» holiday«s»`,
+ * The meta line's count segments (19-6 D5; extracted from captionSegments
+ * so the owner caption and the self view's meta line stay ONE
+ * implementation): `«n» weekly off«s»`, `«n» holiday«s»`,
  * `«n» worked on holiday` ("on holiday" alone reads as LEAVE — the a11y
- * pass's noun-anchored fix). An empty array means the whole line is
- * omitted.
+ * pass's noun-anchored fix), each zero-suppressed. An empty array means
+ * the whole line is omitted.
+ */
+export function summaryMetaSegments(summary: MonthlyEmployeeSummary): string[] {
+  const segments: string[] = [];
+  if (summary.weeklyOffs > 0) {
+    segments.push(plural(summary.weeklyOffs, 'weekly off'));
+  }
+  if (summary.holidays > 0) {
+    segments.push(plural(summary.holidays, 'holiday'));
+  }
+  if (summary.workedOnHoliday > 0) {
+    segments.push(`${formatCredit(summary.workedOnHoliday)} worked on holiday`);
+  }
+  return segments;
+}
+
+/**
+ * The caption line's segments (all zero-suppressed; the office first when
+ * the wire carried one, then the shared meta counts).
  */
 export function captionSegments(row: EmployeeMonthlyRow): string[] {
   const segments: string[] = [];
   if (row.officeName !== null) {
     segments.push(row.officeName);
   }
-  if (row.summary.weeklyOffs > 0) {
-    segments.push(plural(row.summary.weeklyOffs, 'weekly off'));
-  }
-  if (row.summary.holidays > 0) {
-    segments.push(plural(row.summary.holidays, 'holiday'));
-  }
-  if (row.summary.workedOnHoliday > 0) {
-    segments.push(`${formatCredit(row.summary.workedOnHoliday)} worked on holiday`);
-  }
+  segments.push(...summaryMetaSegments(row.summary));
   return segments;
 }
 

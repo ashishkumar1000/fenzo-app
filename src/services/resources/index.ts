@@ -92,10 +92,11 @@ export type {
   DashboardOfficeStat,
   FakeLocationRow,
 } from './attendanceDashboard';
-export { fetchMonthly } from './attendanceMonthly';
+export { fetchMonthly, fetchMyMonthly, normalizeSummary } from './attendanceMonthly';
 export type {
   AttendanceMonthlyData,
   EmployeeMonthlyRow,
+  MeMonthlyData,
   MonthlyEmployeeSummary,
 } from './attendanceMonthly';
 export { customerService } from './customers';
