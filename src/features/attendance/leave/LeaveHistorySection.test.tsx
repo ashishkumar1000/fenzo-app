@@ -1,19 +1,28 @@
 /**
  * Section tests for `LeaveHistorySection` (Story 17-6, spec §5 — the
- * employee surface): compact rows (dates line first, count + part-day
- * caption, split suffix, status chip right); a row tap opens the SAME
- * detail sheet READ-ONLY (identity block hidden, actions absent, the
- * reason and per-day split block visible); "Load more" appends and only
- * renders while a cursor remains; the empty state is the single muted
- * line (never an EmptyState); a load failure with nothing loaded shows
- * the inline error.
+ * employee surface; 17-7 adds the Cancel wiring): compact rows (dates
+ * line first, count + part-day caption, split suffix, status chip right);
+ * a row tap opens the SAME detail sheet (identity hidden, the reason and
+ * per-day split block visible); "Load more" appends and only renders
+ * while a cursor remains; the empty state is the single muted line (never
+ * an EmptyState); a load failure with nothing loaded shows the inline
+ * error. 17-7 (spec D4): Pending/Approved rows gain the outline-danger
+ * "Cancel request" entry; the stage swaps the sheet title/subtitle and
+ * fetches the preview per entry; the cancel write succeeds with the row
+ * replaced + the first page refetched + the announcement; 409
+ * LEAVE_NOT_CANCELLABLE closes the whole sheet on OK and refetches; the
+ * offline line names the action.
  *
  * RTR gotchas honoured: text matching flattens; row taps drive the Row's
- * own props (the Card/Pressable mirrors duplicate a11y labels).
+ * own props (the Card/Pressable mirrors duplicate a11y labels); Buttons
+ * are driven BY TYPE + children; async work flushes through
+ * `await act(async () => {})`.
  */
 jest.mock('../../../services', () => ({
   attendanceLeaveService: {
     listMyLeave: jest.fn(),
+    previewCancel: jest.fn(),
+    cancelLeave: jest.fn(),
   },
 }));
 
@@ -24,15 +33,18 @@ jest.mock('@react-navigation/native', () => ({
 
 import type ReactTestRenderer from 'react-test-renderer';
 import { act, create } from 'react-test-renderer';
-import { Text } from 'react-native';
-import { Button, InlineError } from '../../../components/ui';
+import { AccessibilityInfo, Text } from 'react-native';
+import { Button, InlineError, InlineNotice, Sheet } from '../../../components/ui';
 import { attendanceLeaveService } from '../../../services';
-import type { LeaveRequestRow } from '../../../services/resources/attendanceLeave';
+import type { LeaveActionPreview, LeaveRequestRow } from '../../../services/resources/attendanceLeave';
 import { LeaveDetailSheet } from './LeaveDetailSheet';
 import { LeaveRequestRow as Row } from './LeaveRequestRow';
 import { LeaveHistorySection } from './LeaveHistorySection';
 
 const listMyLeave = attendanceLeaveService.listMyLeave as jest.Mock;
+const previewCancel = attendanceLeaveService.previewCancel as jest.Mock;
+const cancelLeave = attendanceLeaveService.cancelLeave as jest.Mock;
+const announce = AccessibilityInfo.announceForAccessibility as jest.Mock;
 
 function compactRow(overrides: Partial<LeaveRequestRow> = {}): LeaveRequestRow {
   return {
@@ -54,6 +66,20 @@ function compactRow(overrides: Partial<LeaveRequestRow> = {}): LeaveRequestRow {
     ],
     ...overrides,
   };
+}
+
+function cancelPreview(overrides: Partial<LeaveActionPreview> = {}): LeaveActionPreview {
+  return {
+    action: 'cancel',
+    actionDates: ['2026-10-05', '2026-10-06', '2026-10-07'],
+    keepDates: [],
+    request: compactRow(),
+    ...overrides,
+  };
+}
+
+function findButtonByText(root: ReactTestRenderer.ReactTestInstance, text: string) {
+  return root.findAllByType(Button).find(b => b.props.children === text);
 }
 
 const page = (data: LeaveRequestRow[], nextCursor: string | null, hasMore = nextCursor !== null) => ({
@@ -206,5 +232,260 @@ describe('Load more (spec D3 — embedded pagination)', () => {
     expect(
       root.findAllByType(Button).find(b => b.props.children === 'Load more'),
     ).toBeUndefined();
+  });
+});
+
+describe('cancel — the employee stage inside the detail sheet (17-7 spec D4)', () => {
+  function pendingRow(): LeaveRequestRow {
+    return compactRow({
+      status: 'pending',
+      dates: [
+        { date: '2026-10-05', state: 'pending' },
+        { date: '2026-10-06', state: 'pending' },
+        { date: '2026-10-07', state: 'pending' },
+      ],
+    });
+  }
+
+  async function openRow(row: LeaveRequestRow) {
+    listMyLeave.mockResolvedValueOnce(page([row], null));
+    const renderer = await renderSection();
+    await act(async () => {
+      renderer.root.findAllByType(Row)[0].props.onPress();
+    });
+    return renderer;
+  }
+
+  it('Pending and Approved rows gain the entry; a terminal row does not', async () => {
+    const rejected = compactRow({
+      id: 'r2',
+      status: 'rejected',
+      dates: [{ date: '2026-10-05', state: 'rejected' }],
+    });
+    listMyLeave.mockResolvedValueOnce(page([pendingRow(), rejected], null));
+    let renderer!: ReactTestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<LeaveHistorySection />);
+    });
+    lastRenderer = renderer;
+    // Open the PENDING row: the entry is there.
+    await act(async () => {
+      renderer.root.findAllByType(Row)[0].props.onPress();
+    });
+    expect(findButtonByText(renderer.root, 'Cancel request')).toBeDefined();
+    // Back out, then open the REJECTED row: no entry.
+    await act(async () => {
+      renderer.root.findAllByType(LeaveDetailSheet)[0].props.onClose();
+    });
+    await act(async () => {
+      renderer.root.findAllByType(Row)[1].props.onPress();
+    });
+    expect(findButtonByText(renderer.root, 'Cancel request')).toBeUndefined();
+  });
+
+  it('entering the stage swaps the title/subtitle and fetches the preview', async () => {
+    previewCancel.mockResolvedValue(cancelPreview());
+    const renderer = await openRow(pendingRow());
+    await act(async () => {
+      findButtonByText(renderer.root, 'Cancel request')!.props.onPress();
+    });
+    const sheet = renderer.root.findAllByType(Sheet)[0];
+    expect(sheet.props.title).toBe('Cancel this leave request?');
+    expect(sheet.props.subtitle).toBe('5–7 Oct 2026 · 3 working days');
+    expect(previewCancel).toHaveBeenCalledWith('r1');
+    expect(findButtonByText(renderer.root, 'Cancel request')!.props.disabled).toBe(false);
+  });
+
+  it('success replaces the row, refetches the first page, announces, and morphs back', async () => {
+    previewCancel.mockResolvedValue(cancelPreview());
+    const cancelledView = compactRow({ status: 'cancelled' });
+    cancelLeave.mockResolvedValue(cancelledView);
+    listMyLeave
+      .mockResolvedValueOnce(page([pendingRow()], null)) // initial load
+      .mockResolvedValue(page([cancelledView], null)); // the post-write reload
+    let renderer!: ReactTestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<LeaveHistorySection />);
+    });
+    lastRenderer = renderer;
+    await act(async () => {
+      renderer.root.findAllByType(Row)[0].props.onPress();
+    });
+    // Entry press (the detail-stage outline-danger button)…
+    await act(async () => {
+      findButtonByText(renderer.root, 'Cancel request')!.props.onPress();
+    });
+    // …then the stage confirm (same label — the whole-request context).
+    await act(async () => {
+      findButtonByText(renderer.root, 'Cancel request')!.props.onPress();
+    });
+    expect(cancelLeave).toHaveBeenCalledWith('r1');
+    expect(announce).toHaveBeenCalledWith('Leave cancelled');
+    // The sheet morphed back to the refreshed detail — OPEN on it.
+    const sheet = renderer.root.findAllByType(Sheet)[0];
+    expect(sheet.props.visible).toBe(true);
+    expect(sheet.props.title).toBe('Leave request');
+    // The row replaced (grey chip) + the first page refetched (cursor reset).
+    expect(renderer.root.findAllByType(Row)[0].props.request.status).toBe('cancelled');
+    expect(listMyLeave).toHaveBeenCalledTimes(2);
+  });
+
+  it('409 LEAVE_NOT_CANCELLABLE: the notice + OK closes the WHOLE sheet and refetches', async () => {
+    previewCancel.mockResolvedValue(cancelPreview());
+    cancelLeave.mockRejectedValue({
+      status: 409,
+      code: 'LEAVE_NOT_CANCELLABLE',
+      message: 'No future dates left to cancel',
+    });
+    const renderer = await openRow(pendingRow());
+    await act(async () => {
+      findButtonByText(renderer.root, 'Cancel request')!.props.onPress();
+    });
+    await act(async () => {
+      findButtonByText(renderer.root, 'Cancel request')!.props.onPress();
+    });
+    const notices = renderer.root.findAllByType(InlineNotice);
+    expect(notices).toHaveLength(1);
+    expect(notices[0].props.message).toBe('This request was already handled');
+    expect(listMyLeave).toHaveBeenCalledTimes(2); // the truth refetched
+    await act(async () => {
+      findButtonByText(renderer.root, 'OK')!.props.onPress();
+    });
+    expect(renderer.root.findAllByType(LeaveDetailSheet)[0].props.visible).toBe(false);
+  });
+
+  it('an offline cancel names the action in the transport line', async () => {
+    previewCancel.mockResolvedValue(cancelPreview());
+    cancelLeave.mockRejectedValue({ status: 0, code: 'NETWORK_ERROR', message: 'x' });
+    const renderer = await openRow(pendingRow());
+    await act(async () => {
+      findButtonByText(renderer.root, 'Cancel request')!.props.onPress();
+    });
+    await act(async () => {
+      findButtonByText(renderer.root, 'Cancel request')!.props.onPress();
+    });
+    const errors = renderer.root.findAllByType(InlineError);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].props.message).toBe(
+      "You're offline. Cancelling needs a working connection.",
+    );
+    expect(announce).not.toHaveBeenCalledWith('Leave cancelled');
+  });
+
+  it('the split preview (a past-Pending standing reality) confirms with "Cancel remaining days"', async () => {
+    previewCancel.mockResolvedValue(
+      cancelPreview({
+        actionDates: ['2026-10-06', '2026-10-07'],
+        keepDates: [{ date: '2026-10-05', state: 'pending', reason: 'past' }],
+      }),
+    );
+    const renderer = await openRow(pendingRow());
+    await act(async () => {
+      findButtonByText(renderer.root, 'Cancel request')!.props.onPress();
+    });
+    expect(findButtonByText(renderer.root, 'Cancel remaining days')).toBeDefined();
+  });
+});
+
+describe('the employee cancel lifecycle gaps (17-7 review triage)', () => {
+  function pendingRow(): LeaveRequestRow {
+    return compactRow({
+      status: 'pending',
+      dates: [
+        { date: '2026-10-05', state: 'pending' },
+        { date: '2026-10-06', state: 'pending' },
+        { date: '2026-10-07', state: 'pending' },
+      ],
+    });
+  }
+
+  async function openRow(row: LeaveRequestRow) {
+    listMyLeave.mockResolvedValueOnce(page([row], null));
+    const renderer = await renderSection();
+    await act(async () => {
+      renderer.root.findAllByType(Row)[0].props.onPress();
+    });
+    return renderer;
+  }
+
+  it('an APPROVED row gains the entry too (the in-progress cancel case)', async () => {
+    const approved = compactRow({
+      id: 'r3',
+      status: 'approved',
+      dates: [
+        { date: '2026-10-05', state: 'approved' },
+        { date: '2026-10-06', state: 'approved' },
+        { date: '2026-10-07', state: 'approved' },
+      ],
+    });
+    listMyLeave.mockResolvedValueOnce(page([approved], null));
+    let renderer!: ReactTestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<LeaveHistorySection />);
+    });
+    lastRenderer = renderer;
+    await act(async () => {
+      renderer.root.findAllByType(Row)[0].props.onPress();
+    });
+    expect(findButtonByText(renderer.root, 'Cancel request')).toBeDefined();
+    expect(findButtonByText(renderer.root, 'Approve')).toBeUndefined();
+    expect(findButtonByText(renderer.root, 'Reject')).toBeUndefined();
+  });
+
+  it('re-entering the stage refetches the preview (per-entry, never cached)', async () => {
+    previewCancel.mockResolvedValue(cancelPreview());
+    const renderer = await openRow(pendingRow());
+    await act(async () => {
+      findButtonByText(renderer.root, 'Cancel request')!.props.onPress();
+    });
+    expect(previewCancel).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      renderer.root.findAllByType(Button).find(b => b.props.children === 'Back')!.props.onPress();
+    });
+    await act(async () => {
+      findButtonByText(renderer.root, 'Cancel request')!.props.onPress();
+    });
+    expect(previewCancel).toHaveBeenCalledTimes(2);
+  });
+
+  it('the sheet is dismissible={false} while the cancel write is in flight', async () => {
+    previewCancel.mockResolvedValue(cancelPreview());
+    let releaseWrite: (v: unknown) => void = () => undefined;
+    cancelLeave.mockImplementationOnce(
+      () => new Promise(resolve => (releaseWrite = resolve)),
+    );
+    const renderer = await openRow(pendingRow());
+    await act(async () => {
+      findButtonByText(renderer.root, 'Cancel request')!.props.onPress();
+    });
+    await act(async () => {
+      findButtonByText(renderer.root, 'Cancel request')!.props.onPress();
+    });
+    const sheet = renderer.root.findAllByType(Sheet)[0];
+    expect(sheet.props.dismissible).toBe(false);
+    await act(async () => {
+      releaseWrite(compactRow({ status: 'cancelled' }));
+    });
+    await act(async () => {});
+  });
+
+  it('an own-retry bare view (no cancelledDates) still lands as success', async () => {
+    previewCancel.mockResolvedValue(cancelPreview());
+    // The own-retry replay answers the BARE request view — no split
+    // arrays ride along; the FE treats any 200 as success.
+    const bareView: LeaveRequestRow = compactRow({ status: 'cancelled' });
+    cancelLeave.mockResolvedValue(bareView);
+    // openRow arms the initial page; the post-write reload gets the
+    // cancelled row back.
+    listMyLeave.mockResolvedValue(page([bareView], null));
+    const renderer = await openRow(pendingRow());
+    await act(async () => {
+      findButtonByText(renderer.root, 'Cancel request')!.props.onPress();
+    });
+    await act(async () => {
+      findButtonByText(renderer.root, 'Cancel request')!.props.onPress();
+    });
+    expect(announce).toHaveBeenCalledWith('Leave cancelled');
+    expect(renderer.root.findAllByType(Row)[0].props.request.status).toBe('cancelled');
   });
 });

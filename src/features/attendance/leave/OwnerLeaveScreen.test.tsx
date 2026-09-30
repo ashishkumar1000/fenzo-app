@@ -1,14 +1,19 @@
 /**
- * Screen tests for `OwnerLeaveScreen` (Story 17-6, spec §5). Pins: the
- * first-load spinner → rows; the per-tab cache with the cursor-safety
- * invariant (a Pending cursor never paginates All); pull-to-refresh
- * resetting the ACTIVE tab only (announced); approve on Pending REMOVES
- * the row + announcement; approve on All replaces in place; the 409
- * LEAVE_NOT_PENDING sheet (notice + OK + row refetch — no timer);
- * own-retry-200 = success; the two-stage reject (1→2→Back→1) with the
- * empty reason valid; `dismissible={false}` mid-write; the double-tap
- * latch; the CTA card; the status chip omitted on Pending / present on
- * All; per-tab empty states; the load failure + Retry.
+ * Screen tests for `OwnerLeaveScreen` (Story 17-6, spec §5; 17-7 adds the
+ * revoke wiring). Pins: the first-load spinner → rows; the per-tab cache
+ * with the cursor-safety invariant (a Pending cursor never paginates All);
+ * pull-to-refresh resetting the ACTIVE tab only (announced); approve on
+ * Pending REMOVES the row + announcement; approve on All replaces in
+ * place; the 409 LEAVE_NOT_PENDING sheet (notice + OK + row refetch — no
+ * timer); own-retry-200 = success; the two-stage reject (1→2→Back→1) with
+ * the empty reason valid; `dismissible={false}` mid-write; the
+ * double-tap latch; the CTA card; the status chip omitted on Pending /
+ * present on All; per-tab empty states; the load failure + Retry. 17-7:
+ * the outline-danger revoke entry on an Approved row, the stage morph
+ * (title swap, preview per entry), the reason gate, the success morph
+ * back to the refreshed detail (split keeps the derived chip; full flips
+ * grey), own-retry bare-view success, 409 LEAVE_NOT_REVOKABLE
+ * whole-sheet close + refetch, divergence absorption, offline line.
  *
  * RTR gotchas honoured (spec-17-5 §4): text matching flattens JSX array
  * children; buttons are found by role + label (never findAllByProps with
@@ -21,16 +26,19 @@ jest.mock('../../../services', () => ({
     listOwnerLeave: jest.fn(),
     approveLeave: jest.fn(),
     rejectLeave: jest.fn(),
+    previewRevoke: jest.fn(),
+    revokeLeave: jest.fn(),
   },
 }));
 
 import type ReactTestRenderer from 'react-test-renderer';
 import { act, create } from 'react-test-renderer';
 import { AccessibilityInfo, AppState, FlatList, Text } from 'react-native';
-import { Button, SegmentedControl, Sheet } from '../../../components/ui';
+import { Button, Input, SegmentedControl, Sheet } from '../../../components/ui';
 import { InlineNotice } from '../../../components/ui';
+import { colors } from '../../../theme';
 import { attendanceLeaveService } from '../../../services';
-import type { LeaveRequestRow } from '../../../services/resources/attendanceLeave';
+import type { LeaveActionPreview, LeaveRequestRow } from '../../../services/resources/attendanceLeave';
 import { LeaveDetailSheet } from './LeaveDetailSheet';
 import { LeaveRequestRow as LeaveRequestRowView } from './LeaveRequestRow';
 import OwnerLeaveScreen from './OwnerLeaveScreen';
@@ -38,6 +46,8 @@ import OwnerLeaveScreen from './OwnerLeaveScreen';
 const listOwnerLeave = attendanceLeaveService.listOwnerLeave as jest.Mock;
 const approveLeave = attendanceLeaveService.approveLeave as jest.Mock;
 const rejectLeave = attendanceLeaveService.rejectLeave as jest.Mock;
+const previewRevoke = attendanceLeaveService.previewRevoke as jest.Mock;
+const revokeLeave = attendanceLeaveService.revokeLeave as jest.Mock;
 const announce = AccessibilityInfo.announceForAccessibility as jest.Mock;
 
 function leaveRow(overrides: Partial<LeaveRequestRow> = {}): LeaveRequestRow {
@@ -574,5 +584,321 @@ describe('the load-more interleave guards (17-6 review P2)', () => {
       list.props.refreshControl.props.onRefresh();
     });
     expect(listOwnerLeave.mock.calls.length).toBe(callsDuringLoadMore);
+  });
+});
+
+describe('revoke — the owner stage inside the detail sheet (17-7 spec D3)', () => {
+  function approvedRow(overrides: Partial<LeaveRequestRow> = {}): LeaveRequestRow {
+    return leaveRow({
+      id: 'a1',
+      status: 'approved',
+      startDate: '2026-10-05',
+      endDate: '2026-10-09',
+      totalDays: 5,
+      dates: [
+        { date: '2026-10-05', state: 'approved' },
+        { date: '2026-10-06', state: 'approved' },
+        { date: '2026-10-07', state: 'approved' },
+        { date: '2026-10-08', state: 'approved' },
+        { date: '2026-10-09', state: 'approved' },
+      ],
+      ...overrides,
+    });
+  }
+
+  function revokePreview(overrides: Partial<LeaveActionPreview> = {}): LeaveActionPreview {
+    return {
+      action: 'revoke',
+      actionDates: ['2026-10-07', '2026-10-08', '2026-10-09'],
+      keepDates: [
+        { date: '2026-10-05', state: 'approved', reason: 'past' },
+        { date: '2026-10-06', state: 'approved', reason: 'cutoff_passed' },
+      ],
+      request: approvedRow(),
+      ...overrides,
+    };
+  }
+
+  /** Opens the All tab with one Approved row, then its detail sheet. */
+  async function openApprovedRow() {
+    listOwnerLeave
+      .mockResolvedValueOnce(page([], null))
+      .mockResolvedValueOnce(page([approvedRow()], null));
+    const ctx = await renderScreen();
+    await act(async () => {
+      ctx.root.findAllByType(SegmentedControl)[0].props.onChange('all');
+    });
+    await act(async () => {
+      ctx.root.findAllByType(LeaveRequestRowView)[0].props.onPress();
+    });
+    return ctx;
+  }
+
+  it('an Approved row gains the outline-danger entry; a Pending row keeps Reject/Approve', async () => {
+    listOwnerLeave
+      .mockResolvedValueOnce(page([leaveRow()], null))
+      .mockResolvedValueOnce(page([approvedRow()], null));
+    const { root } = await renderScreen();
+    await act(async () => {
+      root.findAllByType(LeaveRequestRowView)[0].props.onPress();
+    });
+    expect(findButtonByText(root, 'Revoke leave')).toBeUndefined();
+    // Switch to All and open the approved row.
+    await act(async () => {
+      root.findAllByType(SegmentedControl)[0].props.onChange('all');
+    });
+    await act(async () => {
+      root.findAllByType(LeaveRequestRowView)[0].props.onPress();
+    });
+    const entry = findButtonByText(root, 'Revoke leave')!;
+    expect(entry).toBeDefined();
+    expect(entry.props.variant).toBe('secondary');
+    expect(entry.props.labelColor).toBe(colors.danger);
+  });
+
+  it('entering the stage swaps the title/subtitle and refetches the preview per entry', async () => {
+    previewRevoke.mockResolvedValue(revokePreview());
+    const { root } = await openApprovedRow();
+    await act(async () => {
+      findButtonByText(root, 'Revoke leave')!.props.onPress();
+    });
+    const sheet = root.findAllByType(Sheet)[0];
+    expect(sheet.props.title).toBe('Revoke leave');
+    expect(sheet.props.subtitle).toBe('Arya · 5–9 Oct 2026');
+    expect(previewRevoke).toHaveBeenCalledWith('a1');
+    // Back returns to the detail stage…
+    await act(async () => {
+      findButtonByText(root, 'Back')!.props.onPress();
+    });
+    expect(sheet.props.title).toBe('Arya');
+    // …and re-entering fetches the preview AGAIN (never cached).
+    const callsAfterFirstEntry = previewRevoke.mock.calls.length;
+    await act(async () => {
+      findButtonByText(root, 'Revoke leave')!.props.onPress();
+    });
+    expect(previewRevoke.mock.calls.length).toBe(callsAfterFirstEntry + 1);
+  });
+
+  it('the split preview gates the confirm on the reason; the trimmed reason travels', async () => {
+    previewRevoke.mockResolvedValue(revokePreview());
+    revokeLeave.mockResolvedValue(approvedRow());
+    const { root } = await openApprovedRow();
+    await act(async () => {
+      findButtonByText(root, 'Revoke leave')!.props.onPress();
+    });
+    const confirm = findButtonByText(root, 'Revoke remaining days')!;
+    expect(confirm).toBeDefined();
+    expect(confirm.props.disabled).toBe(true);
+    expect(confirm.props.accessibilityState).toEqual({ disabled: true });
+    await act(async () => {
+      root.findAllByType(Input)[0].props.onChangeText('  Policy violation  ');
+    });
+    expect(confirm.props.disabled).toBe(false);
+    await act(async () => {
+      confirm.props.onPress();
+    });
+    expect(revokeLeave).toHaveBeenCalledWith('a1', 'Policy violation');
+  });
+
+  it('success morphs back to the refreshed detail; the row is replaced and BOTH tabs go stale', async () => {
+    previewRevoke.mockResolvedValue(revokePreview());
+    revokeLeave.mockResolvedValue(
+      approvedRow({
+        dates: [
+          { date: '2026-10-05', state: 'approved' },
+          { date: '2026-10-06', state: 'approved' },
+          { date: '2026-10-07', state: 'revoked' },
+          { date: '2026-10-08', state: 'revoked' },
+          { date: '2026-10-09', state: 'revoked' },
+        ],
+      }),
+    );
+    const { root } = await openApprovedRow();
+    await act(async () => {
+      findButtonByText(root, 'Revoke leave')!.props.onPress();
+    });
+    await act(async () => {
+      root.findAllByType(Input)[0].props.onChangeText('Policy violation');
+    });
+    await act(async () => {
+      findButtonByText(root, 'Revoke remaining days')!.props.onPress();
+    });
+    expect(announce).toHaveBeenCalledWith('Leave revoked');
+    const sheet = root.findAllByType(Sheet)[0];
+    // The stage morphed back to the refreshed detail view — the sheet is
+    // OPEN on it (approve/reject close; revoke stays).
+    expect(sheet.props.visible).toBe(true);
+    expect(sheet.props.title).toBe('Arya');
+    // The All tab's row is the WRITE view (split revoke: chip stays
+    // Approved; the suffix appears).
+    const data = root.findByType(FlatList).props.data as LeaveRequestRow[];
+    expect(data[0].status).toBe('approved');
+    expect(data[0].dates.map(d => d.state)).toEqual([
+      'approved',
+      'approved',
+      'revoked',
+      'revoked',
+      'revoked',
+    ]);
+    // The RENDERED row carries the split suffix next to the still-Approved
+    // chip (17-7 review P7 — the walkthrough's headline visual).
+    expect(textsInOrder(root)).toContain(
+      '5–9 Oct 2026 · 3 working days · 3 of 5 days revoked',
+    );
+    // The refresh morph re-fetched the preview; the stale mark refetches
+    // the Pending tab on entry.
+    const callsBeforeSwitch = listOwnerLeave.mock.calls.length;
+    await act(async () => {
+      root.findAllByType(SegmentedControl)[0].props.onChange('pending');
+    });
+    expect(listOwnerLeave.mock.calls.length).toBe(callsBeforeSwitch + 1);
+  });
+
+  it('a FULL revoke flips the chip — the refreshed detail has no revoke entry', async () => {
+    previewRevoke.mockResolvedValue(revokePreview());
+    revokeLeave.mockResolvedValue(
+      approvedRow({
+        status: 'revoked',
+        dates: approvedRow().dates.map(d => ({ ...d, state: 'revoked' })),
+      }),
+    );
+    const { root } = await openApprovedRow();
+    await act(async () => {
+      findButtonByText(root, 'Revoke leave')!.props.onPress();
+    });
+    await act(async () => {
+      root.findAllByType(Input)[0].props.onChangeText('Policy violation');
+    });
+    await act(async () => {
+      findButtonByText(root, 'Revoke remaining days')!.props.onPress();
+    });
+    expect(root.findAllByType(Sheet)[0].props.title).toBe('Arya');
+    expect(findButtonByText(root, 'Revoke leave')).toBeUndefined();
+  });
+
+  it('own-retry 200 answers the BARE view (no split arrays) and still succeeds', async () => {
+    previewRevoke.mockResolvedValue(revokePreview());
+    // The own-retry view carries NO revokedDates — handlers must never
+    // read the optional arrays unconditionally.
+    const bare: Record<string, unknown> = { ...approvedRow() };
+    delete bare.revokedDates;
+    delete bare.employeeName;
+    revokeLeave.mockResolvedValue(bare as unknown as LeaveRequestRow);
+    const { root } = await openApprovedRow();
+    await act(async () => {
+      findButtonByText(root, 'Revoke leave')!.props.onPress();
+    });
+    await act(async () => {
+      root.findAllByType(Input)[0].props.onChangeText('Second attempt');
+    });
+    await act(async () => {
+      findButtonByText(root, 'Revoke remaining days')!.props.onPress();
+    });
+    expect(announce).toHaveBeenCalledWith('Leave revoked');
+    expect(root.findAllByType(Sheet)[0].props.title).toBe('Arya');
+  });
+
+  it('409 LEAVE_NOT_REVOKABLE: the notice + OK closes the WHOLE sheet and refetches', async () => {
+    previewRevoke.mockResolvedValue(revokePreview());
+    revokeLeave.mockRejectedValue({
+      status: 409,
+      code: 'LEAVE_NOT_REVOKABLE',
+      message: 'No future dates left to revoke',
+    });
+    const { root } = await openApprovedRow();
+    await act(async () => {
+      findButtonByText(root, 'Revoke leave')!.props.onPress();
+    });
+    await act(async () => {
+      root.findAllByType(Input)[0].props.onChangeText('Policy violation');
+    });
+    await act(async () => {
+      findButtonByText(root, 'Revoke remaining days')!.props.onPress();
+    });
+    const notices = root.findAllByType(InlineNotice);
+    expect(notices).toHaveLength(1);
+    expect(notices[0].props.message).toBe('This request was already handled');
+    // The visible tab refetched the row's truth.
+    expect(listOwnerLeave.mock.calls.length).toBeGreaterThanOrEqual(3);
+    await act(async () => {
+      findButtonByText(root, 'OK')!.props.onPress();
+    });
+    expect(root.findAllByType(LeaveDetailSheet)[0].props.visible).toBe(false);
+  });
+
+  it('an offline revoke names the action in the transport line', async () => {
+    previewRevoke.mockResolvedValue(revokePreview());
+    revokeLeave.mockRejectedValue({ status: 0, code: 'NETWORK_ERROR', message: 'x' });
+    const { root } = await openApprovedRow();
+    await act(async () => {
+      findButtonByText(root, 'Revoke leave')!.props.onPress();
+    });
+    await act(async () => {
+      root.findAllByType(Input)[0].props.onChangeText('Policy violation');
+    });
+    await act(async () => {
+      findButtonByText(root, 'Revoke remaining days')!.props.onPress();
+    });
+    expect(textsInOrder(root)).toContain(
+      "You're offline. Revoking needs a working connection.",
+    );
+  });
+
+  it('the sheet is dismissible={false} while the revoke write is in flight', async () => {
+    previewRevoke.mockResolvedValue(revokePreview());
+    let releaseWrite!: (v: LeaveRequestRow) => void;
+    revokeLeave.mockReturnValue(
+      new Promise<LeaveRequestRow>(resolve => {
+        releaseWrite = resolve;
+      }),
+    );
+    const { root } = await openApprovedRow();
+    await act(async () => {
+      findButtonByText(root, 'Revoke leave')!.props.onPress();
+    });
+    await act(async () => {
+      root.findAllByType(Input)[0].props.onChangeText('Policy violation');
+    });
+    expect(root.findAllByType(Sheet)[0].props.dismissible).toBe(true);
+    await act(async () => {
+      findButtonByText(root, 'Revoke remaining days')!.props.onPress();
+    });
+    expect(root.findAllByType(Sheet)[0].props.dismissible).toBe(false);
+    releaseWrite(approvedRow());
+    await act(async () => {});
+    expect(root.findAllByType(Sheet)[0].props.dismissible).toBe(true);
+  });
+
+  it('divergence is absorbed silently: the WRITE response drives the detail, not the preview', async () => {
+    // The preview promised 3 actionable days; by confirm time an employee
+    // check-in had auto-cancelled one — the write view is authoritative.
+    previewRevoke.mockResolvedValue(revokePreview());
+    revokeLeave.mockResolvedValue(
+      approvedRow({
+        dates: [
+          { date: '2026-10-05', state: 'approved' },
+          { date: '2026-10-06', state: 'approved' },
+          { date: '2026-10-07', state: 'cancelled' },
+          { date: '2026-10-08', state: 'revoked' },
+          { date: '2026-10-09', state: 'revoked' },
+        ],
+      }),
+    );
+    const { root } = await openApprovedRow();
+    await act(async () => {
+      findButtonByText(root, 'Revoke leave')!.props.onPress();
+    });
+    await act(async () => {
+      root.findAllByType(Input)[0].props.onChangeText('Policy violation');
+    });
+    await act(async () => {
+      findButtonByText(root, 'Revoke remaining days')!.props.onPress();
+    });
+    // The refreshed detail renders the WRITE view's per-day truth (the
+    // auto-cancelled day visible in the split block).
+    expect(root.findAllByType(Sheet)[0].props.title).toBe('Arya');
+    expect(textsInOrder(root)).toContain('7 Oct 2026');
+    const data = root.findByType(FlatList).props.data as LeaveRequestRow[];
+    expect(data[0].dates[2].state).toBe('cancelled');
   });
 });

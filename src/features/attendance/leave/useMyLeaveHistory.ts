@@ -113,6 +113,19 @@ export function useMyLeaveHistory() {
       });
   }, [cursor, endReached]);
 
+  /** Swaps a WRITE response's refreshed view into the visible rows in
+   *  place (17-7's cancel) — the write view carries no `employeeName`, so
+   *  the row's own value is kept (the 17-6 replaceRow discipline). */
+  const applyWriteView = useCallback((view: LeaveRequestRow) => {
+    setItems(prev =>
+      prev.map(item =>
+        item.id === view.id
+          ? { ...view, employeeName: view.employeeName ?? item.employeeName }
+          : item,
+      ),
+    );
+  }, []);
+
   return {
     items,
     hasCursor: cursor != null && !endReached,
@@ -122,5 +135,6 @@ export function useMyLeaveHistory() {
     loaded: loadedRef.current,
     reload: fetchFirst,
     loadMore,
+    applyWriteView,
   };
 }

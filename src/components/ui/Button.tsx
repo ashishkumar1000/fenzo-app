@@ -56,6 +56,13 @@ export type ButtonProps = {
   onPress?: PressableProps['onPress'];
   /** Test/e2e hook, forwarded to the underlying Pressable. */
   testID?: string;
+  /**
+   * Accessibility state forwarded to the underlying Pressable (e.g.
+   * `{ disabled: true }` on a gate-gated confirm — the Correction-sheet
+   * idiom — so screen readers announce the disabled state, not just the
+   * dimmed visuals).
+   */
+  accessibilityState?: PressableProps['accessibilityState'];
   style?: StyleProp<ViewStyle>;
 };
 
@@ -92,6 +99,7 @@ export function Button({
   labelColor,
   onPress,
   testID,
+  accessibilityState,
   style,
 }: ButtonProps) {
   const s = sizeStyles[size];
@@ -122,6 +130,7 @@ export function Button({
         disabled={disabled || loading}
         onPress={onPress}
         testID={testID}
+        accessibilityState={accessibilityState}
         onPressIn={disabled || loading ? undefined : pressIn}
         onPressOut={disabled || loading ? undefined : pressOut}
         android_ripple={{ color: 'transparent' }}

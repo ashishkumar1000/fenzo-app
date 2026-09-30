@@ -208,32 +208,72 @@ export function ownerLeaveReducer(
   }
 }
 
-// --- The decision-write error posture (spec D2/D4) ------------------------
+// --- The decision-write error posture (spec D2/D4; 17-7 extends the
+// --- vocabulary to the revoke/cancel actions for BOTH roles — the one
+// --- home for the leave write/preview failure classification).
 
 /** The FE-owned transport line (§4 copy table) — the action is named so a
  *  rejected-while-offline owner isn't told about "Approving" (review P2). */
-export function leaveWriteOfflineMessage(action: 'approve' | 'reject'): string {
-  return action === 'reject'
-    ? "You're offline. Rejecting needs a working connection."
-    : "You're offline. Approving needs a working connection.";
+export type LeaveWriteAction = 'approve' | 'reject' | 'revoke' | 'cancel';
+
+export function leaveWriteOfflineMessage(action: LeaveWriteAction): string {
+  switch (action) {
+    case 'reject':
+      return "You're offline. Rejecting needs a working connection.";
+    case 'revoke':
+      return "You're offline. Revoking needs a working connection.";
+    case 'cancel':
+      return "You're offline. Cancelling needs a working connection.";
+    default:
+      return "You're offline. Approving needs a working connection.";
+  }
 }
 export const LEAVE_WRITE_GENERIC_MESSAGE = 'Something went wrong. Please try again.';
 
+/** The preview-fetch transport fallback (17-7 D5: transport line). */
+export const LEAVE_PREVIEW_GENERIC_MESSAGE =
+  "Couldn't load the preview. Check your connection.";
+
 export type LeaveWriteFailure =
-  /** 409 LEAVE_NOT_PENDING — the sheet swaps to the already-handled notice. */
+  /** 409 — the request moved to a terminal state under us
+   *  (LEAVE_NOT_PENDING / LEAVE_NOT_REVOKABLE / LEAVE_NOT_CANCELLABLE);
+   *  the sheet swaps to the already-handled notice. */
   | { kind: 'already-handled' }
   /** The FE-owned transport line (§4 copy table). */
   | { kind: 'offline'; message: string }
   /** Any other failure — `ApiError.message` verbatim. */
   | { kind: 'failed'; message: string };
 
+/** The 409 state-conflict codes that all share the already-handled posture. */
+const ALREADY_HANDLED_CODES = new Set([
+  'LEAVE_NOT_PENDING',
+  'LEAVE_NOT_REVOKABLE',
+  'LEAVE_NOT_CANCELLABLE',
+]);
+
 export function classifyLeaveWriteFailure(
   err: ApiError,
-  action: 'approve' | 'reject',
+  action: LeaveWriteAction,
 ): LeaveWriteFailure {
-  if (err.code === 'LEAVE_NOT_PENDING') return { kind: 'already-handled' };
+  if (ALREADY_HANDLED_CODES.has(err.code)) return { kind: 'already-handled' };
   if (err.code === 'NETWORK_ERROR' || err.code === 'TIMEOUT') {
     return { kind: 'offline', message: leaveWriteOfflineMessage(action) };
   }
   return { kind: 'failed', message: err.message || LEAVE_WRITE_GENERIC_MESSAGE };
+}
+
+/**
+ * The PREVIEW-fetch failure (17-7 D5): offline keeps the action-named
+ * line; any HTTP failure surfaces the server message verbatim; only a
+ * message-less non-offline failure falls back to the transport line.
+ */
+export function classifyLeavePreviewFailure(
+  err: ApiError,
+  action: LeaveWriteAction,
+): { message: string } {
+  if (err.code === 'NETWORK_ERROR' || err.code === 'TIMEOUT') {
+    return { message: leaveWriteOfflineMessage(action) };
+  }
+  const message = err.message?.trim();
+  return { message: message ? message : LEAVE_PREVIEW_GENERIC_MESSAGE };
 }

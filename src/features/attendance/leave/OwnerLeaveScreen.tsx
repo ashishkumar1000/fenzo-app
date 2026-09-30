@@ -7,10 +7,12 @@
  * lives in `useOwnerLeaveQueue`.
  *
  * The row tap opens LeaveDetailSheet; the decision writes live here so the
- * outcome can drive the list branches: success REMOVES the row from
- * Pending (a filtered list) / REPLACES it in All, marks both tabs stale,
- * announces, and closes the sheet; 409 LEAVE_NOT_PENDING leaves the sheet
- * open on the already-handled notice and refetches the row's truth.
+ * outcome can drive the list branches: approve/reject success REMOVES the
+ * row from Pending (a filtered list) / REPLACES it in All, marks both tabs
+ * stale, announces, and closes the sheet; a revoke success (17-7) does the
+ * list work the same way but morphs the sheet back to the REFRESHED detail
+ * view; 409 already-handled leaves the sheet open on the notice and
+ * refetches the row's truth.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
@@ -65,28 +67,42 @@ export default function OwnerLeaveScreen({ navigation, route }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navTab]);
 
-  // --- The decision write (D2 lifecycle). ----------------------------------
+  // --- The decision write (D2 lifecycle; 17-7 D3 adds the revoke). --------
   const runWrite = useCallback(
-    (action: 'approve' | 'reject', reason?: string) => {
+    (action: 'approve' | 'reject' | 'revoke', reason?: string) => {
       if (detail == null || writeLatch.current) return; // double-tap no-op
       writeLatch.current = true;
       setActionState({ kind: 'submitting', action });
       const call =
         action === 'approve'
           ? attendanceLeaveService.approveLeave(detail.id)
-          : attendanceLeaveService.rejectLeave(detail.id, reason ? reason : undefined);
+          : action === 'reject'
+            ? attendanceLeaveService.rejectLeave(detail.id, reason ? reason : undefined)
+            : attendanceLeaveService.revokeLeave(detail.id, reason ?? '');
       call
         .then(view => {
           if (!mounted.current) return;
-          // Own-retry answers 200 here too — one success path, one server
-          // event (BE D7). The refreshed view drives the list branches.
+          // Own-retry answers 200 here too — one success path (BE D7).
           AccessibilityInfo.announceForAccessibility(
-            action === 'approve' ? 'Leave approved' : 'Leave rejected',
+            action === 'approve'
+              ? 'Leave approved'
+              : action === 'reject'
+                ? 'Leave rejected'
+                : 'Leave revoked',
           );
           queue.dispatch({ type: 'removeRow', id: view.id }); // Pending: filtered
           queue.dispatch({ type: 'replaceRow', row: view }); // All: in place
           queue.dispatch({ type: 'markStale', tabs: ['pending', 'all'] });
-          setDetail(null);
+          if (action === 'revoke') {
+            // D3: the stage morphs back to the REFRESHED detail view (the
+            // write response is authoritative — divergence is absorbed;
+            // the optional split arrays are never required). The write
+            // view carries no employeeName (list-only wire truth) — keep
+            // the row's list-earned name (the replaceRow discipline).
+            setDetail({ ...view, employeeName: view.employeeName ?? detail.employeeName });
+          } else {
+            setDetail(null);
+          }
           setActionState({ kind: 'idle' });
         })
         .catch((err: ApiError) => {
@@ -210,6 +226,7 @@ export default function OwnerLeaveScreen({ navigation, route }: Props) {
         }}
         onApprove={() => runWrite('approve')}
         onReject={reason => runWrite('reject', reason)}
+        onRevoke={reason => runWrite('revoke', reason)}
         onDismissHandled={() => {
           setDetail(null);
           setActionState({ kind: 'idle' });

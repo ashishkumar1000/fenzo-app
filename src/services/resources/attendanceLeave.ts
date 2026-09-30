@@ -74,9 +74,46 @@ export interface ApplyOnBehalfBody {
   startDate: string;
   /** Omitted for a single date (the BE defaults startDate). */
   endDate?: string;
-  /** Omitted for full_day (the BE DTO defaults it). */
+  /** Omitted for full_day (the BE defaults it). */
   part?: LeavePart;
   reason: string;
+}
+
+// --- Story 17-7 — the revoke/cancel split preview + write shapes -----------
+
+/** One `keepDates[]` entry — a day the action will NOT touch (wire-exact:
+ *  the BE's `LeaveActionPreview`, fenzit-be leave.model.ts). `reason` is
+ *  wire truth the FE deliberately never branches on (spec D2). */
+export interface LeaveKeepDay {
+  date: string;
+  state: string;
+  reason: 'past' | 'cutoff_passed';
+}
+
+/**
+ * The split preview (FR-14/FR-15): exactly which dates the action would
+ * change vs keep. `GET .../preview` answers 200 even with an EMPTY
+ * `actionDates` (previews never 409 — BE D13); the empty case is a state
+ * the FE renders, not an error. `request` is the live request view.
+ */
+export interface LeaveActionPreview {
+  action: 'revoke' | 'cancel';
+  actionDates: string[];
+  keepDates: LeaveKeepDay[];
+  request: LeaveRequestView;
+}
+
+/**
+ * A write response (revoke/cancel): the refreshed view plus the action's
+ * split array — OPTIONAL on the wire (spec D6 wire lens #1): an own-retry
+ * 200 answers the bare view without it, so handlers never read the arrays
+ * unconditionally. Like every write view it carries no `employeeName`.
+ */
+export interface LeaveActionView extends LeaveRequestRow {
+  /** Present only when the write actually transitioned days. */
+  revokedDates?: string[];
+  /** Present only when the write actually transitioned days. */
+  cancelledDates?: string[];
 }
 
 /**
@@ -193,6 +230,65 @@ export const attendanceLeaveService = {
       .post<LeaveRequestRow>('/attendance/leave/on-behalf', body, {
         headers: { 'X-Idempotency-Key': idempotencyKey },
       })
+      .then(res => res.data);
+  },
+
+  // --- Story 17-7 (spec D6) — the revoke/cancel previews + writes.
+
+  /**
+   * `GET /attendance/leave/:id/preview` — the owner's revoke split (FR-14).
+   * Empty `actionDates` is a 200 shape (nothing left to revoke), never an
+   * error; the preview runs the same access gate as the write (403 both
+   * ways, 404 cross-tenant).
+   */
+  previewRevoke(id: string): Promise<LeaveActionPreview> {
+    return apiClient
+      .get<LeaveActionPreview>(
+        `/attendance/leave/${encodeURIComponent(id)}/preview`,
+      )
+      .then(res => res.data);
+  },
+
+  /**
+   * `GET /attendance/me/leave/:id/preview` — the employee's cancel split
+   * (FR-15). Same contract as the revoke preview.
+   */
+  previewCancel(id: string): Promise<LeaveActionPreview> {
+    return apiClient
+      .get<LeaveActionPreview>(
+        `/attendance/me/leave/${encodeURIComponent(id)}/preview`,
+      )
+      .then(res => res.data);
+  },
+
+  /**
+   * `POST /attendance/leave/:id/revoke` — the reason is REQUIRED on the
+   * wire (RevokeLeaveDto trims + rejects empty-after-trim); the FE's
+   * disabled-until-filled gate makes the 422 unreachable. No idempotency
+   * key (BE D7: state-guarded own-retry answers 200 with the refreshed
+   * view — WITHOUT `revokedDates`). 409 `LEAVE_NOT_REVOKABLE` = someone
+   * else moved it first.
+   */
+  revokeLeave(id: string, reason: string): Promise<LeaveActionView> {
+    return apiClient
+      .post<LeaveActionView>(
+        `/attendance/leave/${encodeURIComponent(id)}/revoke`,
+        { reason },
+      )
+      .then(res => res.data);
+  },
+
+  /**
+   * `POST /attendance/me/leave/:id/cancel` — NO body (FR-15 needs no
+   * reason). Own-retry answers 200 with the bare view (no
+   * `cancelledDates`); 409 `LEAVE_NOT_CANCELLABLE` = the request moved
+   * under us.
+   */
+  cancelLeave(id: string): Promise<LeaveActionView> {
+    return apiClient
+      .post<LeaveActionView>(
+        `/attendance/me/leave/${encodeURIComponent(id)}/cancel`,
+      )
       .then(res => res.data);
   },
 };
