@@ -102,34 +102,44 @@ function findTile(
 }
 
 describe('AttendanceHomeScreen', () => {
-  it('renders both tiles with their titles + subtitles', () => {
+  it('renders the Leave/Offices/Settings tiles + the __DEV__ lab row', () => {
     const { renderer } = renderHome();
     const texts = renderer.root
       .findAll(node => typeof node.props.children === 'string')
       .map(node => node.props.children as string);
+    expect(texts).toContain('Leave');
+    expect(texts).toContain('Pending requests & history');
     expect(texts).toContain('Offices');
     expect(texts).toContain('Locations & timing rules');
     expect(texts).toContain('Settings');
     expect(texts).toContain('Weekly off & holidays');
+    // Story 18-3 (spec D7): the dev-only Component lab row — jest runs
+    // with __DEV__ true, so it renders here (and must NOT in release).
+    expect(texts).toContain('Component lab (dev)');
+    expect(texts).toContain('Month calendar & day detail');
   });
 
-  it('renders exactly two tiles (no dashboard chrome)', () => {
+  it('renders the full tappable inventory: the three tiles + the dev row', () => {
     const { renderer } = renderHome();
-    const buttons = renderer.root.findAll(
-      node => node.props.accessibilityRole === 'button'
-        && typeof node.props.accessibilityLabel === 'string'
-        && (node.props.accessibilityLabel === 'Offices'
-          || node.props.accessibilityLabel === 'Settings'),
-    );
-    // react-test-renderer mirrors each `Pressable` down through its host
-    // `View`s, so a raw `findAll` counts every tile several times over.
-    // The contract is the DEDUPED set of labels: exactly these two tiles
-    // and nothing else.
+    // NO pre-filter: every button-role label on the screen, deduped (RTR
+    // mirrors Pressables through host Views, so a raw findAll counts each
+    // tile several times over). The contract is the CLOSED set — an extra
+    // tile (or a regression to dashboard chrome) fails this.
     const labels = Array.from(
-      new Set(buttons.map(node => node.props.accessibilityLabel as string)),
+      new Set(
+        renderer.root
+          .findAll(node => node.props.accessibilityRole === 'button')
+          .map(node => node.props.accessibilityLabel as string)
+          .filter(Boolean),
+      ),
     );
-    expect(labels.sort()).toEqual(['Offices', 'Settings']);
-    expect(buttons.length).toBeGreaterThanOrEqual(labels.length);
+    expect(labels.sort()).toEqual([
+      'Component lab (dev)',
+      'Go back',
+      'Leave',
+      'Offices',
+      'Settings',
+    ]);
   });
 
   it('tapping "Offices" navigates to AttendanceOffices', () => {
@@ -148,6 +158,15 @@ describe('AttendanceHomeScreen', () => {
       settingsButton.props.onPress();
     });
     expect(navigation.navigate).toHaveBeenCalledWith('AttendanceSettings');
+  });
+
+  it('tapping the dev row navigates to ComponentLab (18-3 spec D7)', () => {
+    const { renderer, navigation } = renderHome();
+    const labButton = findTile(renderer, 'Component lab (dev)');
+    act(() => {
+      labButton.props.onPress();
+    });
+    expect(navigation.navigate).toHaveBeenCalledWith('ComponentLab');
   });
 
   it('back goes back when there is a screen beneath (test gap)', () => {

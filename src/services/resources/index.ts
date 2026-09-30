@@ -68,6 +68,22 @@ export type {
   LeavePreviewErrorCode,
   LeaveRequestView,
 } from './attendanceLeave';
+export { fetchDayStatuses, fetchMyDayStatuses, monthRange } from './attendanceDayStatus';
+export type {
+  AttendanceSource,
+  CorrectionValue,
+  DayMarker,
+  DayStatusKey,
+  DayStatusRow,
+  DayStatusesResponse,
+  LatestCorrectionView,
+  MeDayStatusesResponse,
+} from './attendanceDayStatus';
+export { fetchCorrections, formatCorrectionValue } from './attendanceCorrections';
+export type {
+  CorrectionEntry,
+  CorrectionsQuery,
+} from './attendanceCorrections';
 export { customerService } from './customers';
 export type {
   ApiCustomer,

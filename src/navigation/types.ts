@@ -215,6 +215,15 @@ export type RootStackParamList = {
    * read-once-clear contract as `LeaveApplyParams` (wire-truth F4).
    */
   ApplyOnBehalf: ApplyOnBehalfParams | undefined;
+  /**
+   * Story 18-3 — the DEV-ONLY Component lab (spec D7): the AC-1 proof
+   * month + a real month through the shared MonthCalendar/DayDetailSheet.
+   * The SCREEN module is required only inside an `if (__DEV__)` branch of
+   * RootNavigator, so release bundles never carry it (verified by a
+   * build-step grep for the lab's marker string); this type entry is
+   * erased at runtime. Retires when 19-5/19-6 ship.
+   */
+  ComponentLab: undefined;
 };
 
 /**

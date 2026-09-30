@@ -10,7 +10,7 @@
     "android:standalone": "react-native run-android --mode metroDebug --no-packager && bun scripts/verify-metro-debug-bundle.js",
     "android:build:debug": "react-native build-android --tasks assembleDebug",
     "android:build:standalone": "react-native build-android --tasks assembleMetroDebug",
-    "android:build:release": "react-native build-android --tasks assembleRelease && bun scripts/verify-release-signing.js",
+    "android:build:release": "react-native build-android --tasks assembleRelease && bun scripts/verify-release-signing.js && bun scripts/verify-no-component-lab.js",
     "android:build:aab": "react-native build-android --tasks bundleRelease",
     "ios": "react-native run-ios",
     "lint": "eslint .",

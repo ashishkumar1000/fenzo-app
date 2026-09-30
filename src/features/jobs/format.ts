@@ -6,11 +6,22 @@ import type { StatusKey } from '../../theme';
 import type { JobStatusApi } from '../../services';
 
 /**
+ * The JOB badge subset of `StatusKey`. Attendance's day-status keys (spec
+ * 18-3) share the same `colors.status` palette but are not job vocabulary
+ * — keeping this narrow is what keeps the label/record maps over job
+ * statuses total and the job rendering byte-identical.
+ */
+export type JobBadgeStatus = Extract<
+  StatusKey,
+  'done' | 'progress' | 'scheduled' | 'cancelled'
+>;
+
+/**
  * API status → the Badge vocabulary (`StatusKey`). `in_progress` collapses to
  * `progress` — the theme's key for that state, and the one title-case
  * exception in Badge labels ("In Progress").
  */
-export function statusToBadge(s: JobStatusApi): Exclude<StatusKey, 'neutral'> {
+export function statusToBadge(s: JobStatusApi): JobBadgeStatus {
   const map = {
     scheduled: 'scheduled',
     in_progress: 'progress',

@@ -20,10 +20,9 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Clock } from 'lucide-react-native';
 import { Avatar, Badge, Card } from '../../../components/ui';
 import { colors, spacing, typography } from '../../../theme';
-import type { StatusKey } from '../../../theme';
 import { daysOverdue, formatIstDateLabel } from '../../../utils';
 import type { ApiJob, JobScope } from '../types';
-import { formatTimeLabel, statusToBadge } from '../format';
+import { formatTimeLabel, statusToBadge, type JobBadgeStatus } from '../format';
 import { jobUrgency } from '../urgency';
 import type { JobUrgency } from '../urgency';
 
@@ -62,7 +61,7 @@ type Props = {
 };
 
 /** Badge labels — the one title-case exception in the design system. */
-const STATUS_LABEL: Record<Exclude<StatusKey, 'neutral'>, string> = {
+const STATUS_LABEL: Record<JobBadgeStatus, string> = {
   done: 'Done',
   progress: 'In Progress',
   scheduled: 'Scheduled',

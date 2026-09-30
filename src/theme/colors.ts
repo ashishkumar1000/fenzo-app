@@ -117,7 +117,13 @@ export const colors = {
   // Focus ring color (used with shadow on web; border emphasis on native)
   ringFocus: palette.blue200,
 
-  // Status — the heart of Fenzit (badges everywhere)
+  // Status — the heart of Fenzit (badges everywhere).
+  // The first five keys are the job vocabulary. The rest are the attendance
+  // day-status keys (spec 18-3 D1 / DESIGN.md StatusBadge table) — additive
+  // only, mapped to the SAME five hue families (values reused, no new palette
+  // entries); job code never passes them, so job rendering stays
+  // byte-identical. `in_progress` deliberately reuses `progress` — don't
+  // invent synonyms.
   status: {
     done: {
       fg: palette.green700,
@@ -148,6 +154,55 @@ export const colors = {
       bg: palette.gray100,
       solid: palette.gray500,
       border: palette.gray200,
+    },
+    // --- Attendance day statuses (18-3) ---
+    leave: {
+      fg: palette.blue700,
+      bg: palette.blue50,
+      solid: palette.blue600,
+      border: palette.blue200,
+    },
+    halfDayLeave: {
+      fg: palette.blue700,
+      bg: palette.blue50,
+      solid: palette.blue600,
+      border: palette.blue200,
+    },
+    weeklyOff: {
+      fg: palette.gray600,
+      bg: palette.gray100,
+      solid: palette.gray500,
+      border: palette.gray200,
+    },
+    holiday: {
+      fg: palette.gray600,
+      bg: palette.gray100,
+      solid: palette.gray500,
+      border: palette.gray200,
+    },
+    notTracked: {
+      fg: palette.gray600,
+      bg: palette.gray100,
+      solid: palette.gray500,
+      border: palette.gray200,
+    },
+    notCheckedIn: {
+      fg: palette.gray600,
+      bg: palette.gray100,
+      solid: palette.gray500,
+      border: palette.gray200,
+    },
+    workedHoliday: {
+      fg: palette.green700,
+      bg: palette.green50,
+      solid: palette.green500,
+      border: palette.green200,
+    },
+    checkoutMissing: {
+      fg: palette.amber700,
+      bg: palette.amber50,
+      solid: palette.amber500,
+      border: palette.amber200,
     },
   },
 } as const;

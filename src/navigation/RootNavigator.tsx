@@ -162,6 +162,17 @@ export default function RootNavigator() {
         component={ApplyOnBehalfScreen}
         options={{ headerShown: false }}
       />
+      {/* Story 18-3 — the DEV-ONLY Component lab (spec D7). The require()
+          sits INSIDE the __DEV__ gate so the module (and its bytes) are
+          behaviourally absent from release bundles — Metro DCE kills the
+          whole branch; scripts/verify-no-component-lab.js pins the absence (android:build:release). */}
+      {__DEV__ ? (
+        <Stack.Screen
+          name="ComponentLab"
+          component={require('../features/attendance/calendar/ComponentLabScreen').default}
+          options={{ headerShown: false }}
+        />
+      ) : null}
     </Stack.Navigator>
   );
 }
