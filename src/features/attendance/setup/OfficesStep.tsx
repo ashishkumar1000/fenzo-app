@@ -4,15 +4,16 @@
  * ("Manage offices" pushes `AttendanceOffices`, which owns create/edit/
  * archive + their loading/error/save handling — the wizard owns progress
  * only). The tri-state follows the `useOffices` contract: first-load
- * spinner, first-load InlineError + Retry, stale banner over live rows.
+ * shimmer, first-load InlineError + Retry, stale banner over live rows.
  */
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { MapPin, Plus } from 'lucide-react-native';
 import {
   Button,
   Card,
   EmptyState,
   InlineError,
+  Skeleton,
 } from '../../../components/ui';
 import { colors, spacing, typography } from '../../../theme';
 import type { ApiError } from '../../../services';
@@ -38,9 +39,10 @@ export function OfficesStep({
   onManageOffices,
 }: Props) {
   if (isLoading && !hasLoaded) {
+    // First load: a card-shaped shimmer, labelled (the 19-5 idiom).
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={styles.skeleton} accessibilityLabel="Loading attendance">
+        <Skeleton rows={4} height={64} />
       </View>
     );
   }
@@ -97,10 +99,8 @@ const styles = StyleSheet.create({
   stack: {
     gap: spacing.s3,
   },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  skeleton: {
+    paddingVertical: spacing.s8,
   },
   officeName: {
     ...typography.body,

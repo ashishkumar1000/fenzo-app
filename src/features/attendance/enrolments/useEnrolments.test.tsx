@@ -1,6 +1,7 @@
 /**
  * Hook tests for `useEnrolments` (Story 15-8, extended by 15-9): the
- * useOffices tri-state contract (first-load spinner / first-load error /
+ * useOffices tri-state contract (first-load loading window — rendered as
+ * the shimmer / first-load error /
  * stale banner over kept rows), the per-row write lifecycle (server-truth
  * merges — never an optimistic flip), the per-row latch, the special error
  * branches (404 EMPLOYEE_NOT_FOUND + 422 ASSIGNMENT_NOT_ENROLLED → roster

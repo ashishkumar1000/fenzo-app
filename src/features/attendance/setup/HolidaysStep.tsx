@@ -5,9 +5,9 @@
  * step — the footer's "Skip for now" advances the marker to Employees
  * without any holiday data (15-2 made skipping a FE concern).
  */
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { CalendarX2 } from 'lucide-react-native';
-import { Button, Card, EmptyState, InlineError } from '../../../components/ui';
+import { Button, Card, EmptyState, InlineError, Skeleton } from '../../../components/ui';
 import { colors, spacing, typography } from '../../../theme';
 import type { ApiError, Holiday } from '../../../services';
 
@@ -36,9 +36,11 @@ export function HolidaysStep({
   onManageHolidays,
 }: Props) {
   if (isLoading && !hasLoaded) {
+    // First load: a list-shaped shimmer (the MAX_ROWS rows), labelled
+    // (the 19-5 idiom).
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={styles.skeleton} accessibilityLabel="Loading attendance">
+        <Skeleton rows={5} height={32} />
       </View>
     );
   }
@@ -114,10 +116,8 @@ const styles = StyleSheet.create({
   stack: {
     gap: spacing.s3,
   },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  skeleton: {
+    paddingVertical: spacing.s8,
   },
   count: {
     ...typography.body,

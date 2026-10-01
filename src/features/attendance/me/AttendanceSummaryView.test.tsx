@@ -4,7 +4,7 @@
  * InlineError (role=alert) + a Retry button (the frozen contract, OfficesScreen
  * precedent), a refetch failure over live rows renders a NON-DISMISSIBLE stale
  * InlineError (a dismiss that retried was the wrong affordance), loading →
- * spinner, loaded → the FR-4 rows.
+ * the labelled shimmer, loaded → the FR-4 rows.
  */
 jest.mock('../../../services', () => ({
   attendanceMeService: {
@@ -16,8 +16,8 @@ jest.mock('../../../services', () => ({
 
 import type ReactTestRenderer from 'react-test-renderer';
 import { act, create } from 'react-test-renderer';
-import { ActivityIndicator, Button, Text } from 'react-native';
-import { InlineError } from '../../../components/ui';
+import { Button, Text } from 'react-native';
+import { InlineError, Skeleton } from '../../../components/ui';
 import { AttendanceSummaryView } from './AttendanceSummaryView';
 import type { AttendanceSummaryState } from './useAttendanceSummary';
 
@@ -49,13 +49,30 @@ function renderView(s: AttendanceSummaryState, onRetry = jest.fn()) {
   act(() => {
     renderer = create(<AttendanceSummaryView state={s} onRetry={onRetry} />);
   });
+  // The shimmer's animation loops must be stopped at teardown or the
+  // Jest worker crashes (react-test-renderer has no auto-cleanup).
+  mountedRenderers.push(renderer);
   return { renderer, onRetry };
 }
 
+const mountedRenderers: ReactTestRenderer.ReactTestRenderer[] = [];
+
+afterEach(() => {
+  act(() => {
+    mountedRenderers.forEach((r) => r.unmount());
+  });
+  mountedRenderers.length = 0;
+});
+
 describe('AttendanceSummaryView tri-state affordances', () => {
-  it('loading renders the spinner and nothing else', () => {
+  it('loading renders the labelled shimmer block and nothing else', () => {
     const { renderer } = renderView(state({ isLoading: true, summary: null }));
-    expect(renderer.root.findAllByType(ActivityIndicator).length).toBe(1);
+    expect(
+      renderer.root.findAll(
+        (node) => node.props.accessibilityLabel === 'Loading attendance',
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(renderer.root.findAllByType(Skeleton as never).length).toBeGreaterThanOrEqual(1);
     expect(findInlineErrors(renderer.root)).toHaveLength(0);
     expect(renderer.root.findAllByType(Button)).toHaveLength(0);
   });

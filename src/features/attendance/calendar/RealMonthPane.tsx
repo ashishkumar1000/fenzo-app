@@ -18,7 +18,7 @@
  * EMPTY-GRID GATE — `runFetch` clears the map on every month change, so
  * the pane gates `<MonthCalendar>` on
  * `data.size > 0 || (!loading && error == null)`: first load and switches
- * show the spinner only (no flash of a full month of "didn't work"
+ * show the shimmer only (no flash of a full month of "didn't work"
  * cells), a first-load error shows error + Retry with no ghost grid, an
  * honest empty month still renders the grid (that IS the truth — the
  * all-neutral grid is the calendar's own empty state), and a
@@ -31,7 +31,6 @@
  */
 import { useEffect } from 'react';
 import {
-  ActivityIndicator,
   AppState,
   Pressable,
   StyleSheet,
@@ -39,7 +38,7 @@ import {
   View,
 } from 'react-native';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
-import { Button, InlineError } from '../../../components/ui';
+import { Button, InlineError, Skeleton } from '../../../components/ui';
 import { colors, fontSize, radius, spacing, weight } from '../../../theme';
 import type { DayStatusRow } from '../../../services/resources/attendanceDayStatus';
 import { useMonthStatuses } from './useMonthStatuses';
@@ -133,7 +132,11 @@ export function RealMonthPane({
         </Pressable>
       </View>
       {month.loading ? (
-        <ActivityIndicator size="large" color={colors.primary} style={styles.spinner} />
+        // A month-shaped shimmer, labelled — the skeleton is not silent to
+        // screen readers (the 19-5 "Loading attendance" idiom).
+        <View accessibilityLabel="Loading attendance" style={styles.skeleton}>
+          <Skeleton rows={6} height={52} />
+        </View>
       ) : null}
       {month.error != null ? (
         <>
@@ -176,7 +179,7 @@ const styles = StyleSheet.create({
     fontWeight: weight.semibold,
     color: colors.textStrong,
   },
-  spinner: {
+  skeleton: {
     paddingVertical: spacing.s3,
   },
 });

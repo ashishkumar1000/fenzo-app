@@ -13,9 +13,9 @@
  * on purpose: mostly whitespace, one CTA (DESIGN.md).
  */
 import { AccessibilityInfo } from 'react-native';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useCallback, useEffect, useRef } from 'react';
-import { Button } from '../../../components/ui';
+import { Button, Skeleton } from '../../../components/ui';
 import { colors, fontSize, radius, spacing } from '../../../theme';
 import type { AttendanceSummaryState } from '../me/useAttendanceSummary';
 import {
@@ -154,8 +154,11 @@ export function AttendanceTodayView({
       </Text>
 
       {summary.state.isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="small" color={colors.primary} />
+        // First load: the card's content placeholder — a shimmer, labelled
+        // (the 19-5 idiom); NO interactive button (the holiday pre-flight
+        // gate must be ABLE to fire before any check-in happens).
+        <View accessibilityLabel="Loading attendance" style={styles.skeleton}>
+          <Skeleton rows={2} height={64} />
         </View>
       ) : summary.state.error ? (
         <View style={styles.center}>
@@ -273,6 +276,9 @@ const styles = StyleSheet.create({
   center: {
     alignItems: 'center',
     gap: spacing.s2,
+    paddingVertical: spacing.s4,
+  },
+  skeleton: {
     paddingVertical: spacing.s4,
   },
   errorText: {

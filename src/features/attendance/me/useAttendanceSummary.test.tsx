@@ -1,7 +1,8 @@
 /**
  * Hook tests for `useAttendanceSummary` (Story 15-10) — the FR-4 summary
  * fetch's tri-state contract (the useOffices/useEnrolments shape): the
- * first-load spinner, the blocking first-load error, and a REFETCH failure
+ * first-load loading window (the view renders it as the shimmer), the
+ * blocking first-load error, and a REFETCH failure
  * that leaves the last-loaded rows standing under the stale flag. The
  * focus refetch shares the access store's ACCESS_REFRESH_MIN_GAP_MS, so
  * the gap (and its bypass after a failed refresh) is exercised against the

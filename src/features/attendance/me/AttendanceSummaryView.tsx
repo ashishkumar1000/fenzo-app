@@ -3,12 +3,13 @@
  * Late cut-off, Weekly offs) shared by the active and upcoming state
  * screens (Story 15-10). Pure presentation: rows derive in
  * `attendanceMeModel.buildSummaryRows`, and this renders the tri-state
- * contract around them — first-load spinner; blocking error + Retry when
- * there is nothing to show; InlineError over live rows when a refetch
+ * contract around them — a first-load shimmer (the summary-shaped
+ * Skeleton); blocking error + Retry when there is nothing to show;
+ * InlineError over live rows when a refetch
  * failed (the InlineError docblock's exact "stale" case).
  */
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, InlineError } from '../../../components/ui';
+import { StyleSheet, Text, View } from 'react-native';
+import { Button, Card, InlineError, Skeleton } from '../../../components/ui';
 import { colors, fontSize, radius, spacing } from '../../../theme';
 import { buildSummaryRows } from './attendanceMeModel';
 import type { AttendanceSummaryState } from './useAttendanceSummary';
@@ -20,9 +21,10 @@ type Props = {
 
 export function AttendanceSummaryView({ state, onRetry }: Props) {
   if (state.isLoading) {
+    // First load: a summary-shaped shimmer, labelled (the 19-5 idiom).
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="small" color={colors.primary} />
+      <View accessibilityLabel="Loading attendance">
+        <Skeleton rows={4} height={44} />
       </View>
     );
   }
@@ -74,10 +76,6 @@ const styles = StyleSheet.create({
     fontSize: fontSize.base,
     fontWeight: '600',
     color: colors.textStrong,
-  },
-  center: {
-    paddingVertical: spacing.s6,
-    alignItems: 'center',
   },
   errorWrap: {
     gap: spacing.s3,

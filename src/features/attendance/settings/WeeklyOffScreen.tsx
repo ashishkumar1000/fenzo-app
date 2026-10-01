@@ -25,7 +25,6 @@
  */
 import { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -33,7 +32,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button, InlineError, InlineNotice } from '../../../components/ui';
+import { Button, InlineError, InlineNotice, Skeleton } from '../../../components/ui';
 import { colors, spacing } from '../../../theme';
 import { useFlashMessage, useIstToday } from '../../../hooks';
 import ScreenHeader from '../offices/ScreenHeader';
@@ -170,8 +169,9 @@ export default function WeeklyOffScreen({ navigation, route }: Props) {
             P10): the overrides list below fetches independently and stays
             rendered, so one failed GET must not blank the whole screen. */}
         {isLoading && !hasLoaded ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color={colors.primary} />
+          // First load: a block-shaped shimmer, labelled (the 19-5 idiom).
+          <View style={styles.skeleton} accessibilityLabel="Loading attendance">
+            <Skeleton rows={4} height={48} />
           </View>
         ) : error && !hasLoaded ? (
           <View style={styles.contentInner}>
@@ -254,9 +254,7 @@ const styles = StyleSheet.create({
   staleError: {
     gap: spacing.s3,
   },
-  center: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  skeleton: {
     paddingVertical: spacing.s8,
   },
 });

@@ -21,7 +21,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Button, InlineError } from '../../../components/ui';
+import { Button, InlineError, Skeleton } from '../../../components/ui';
 import { colors, spacing, typography } from '../../../theme';
 import { attendanceLeaveService } from '../../../services';
 import type { ApiError } from '../../../services/api/apiError';
@@ -123,8 +123,10 @@ export function LeaveHistorySection() {
       ) : null}
 
       {history.loadingFirst && history.items.length === 0 ? (
-        <View style={styles.spinnerRow}>
-          <ActivityIndicator size="small" color={colors.primary} />
+        // First load: a history-shaped shimmer, labelled (the 19-5 idiom);
+        // the load-more append below keeps its inline spinner.
+        <View accessibilityLabel="Loading attendance" style={styles.skeletonRow}>
+          <Skeleton rows={2} height={56} />
         </View>
       ) : null}
 
@@ -169,6 +171,9 @@ const styles = StyleSheet.create({
   empty: {
     ...typography.bodySm,
     color: colors.textMuted,
+  },
+  skeletonRow: {
+    paddingVertical: spacing.s2,
   },
   spinnerRow: {
     paddingVertical: spacing.s2,

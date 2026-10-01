@@ -1,6 +1,6 @@
 /**
  * Tests for RosterScreen (Story 15-9) — the Team enrolment roster:
- *  - the tri-state contract (first-load spinner / first-load error + Retry
+ *  - the tri-state contract (first-load shimmer / first-load error + Retry
  *    / stale banner over kept rows);
  *  - raw-truth rows (never / upcoming / covering) with the UX-DR9 flows:
  *    toggle-on opens the picker inline with the switch uncommitted; the
@@ -38,8 +38,8 @@ jest.mock('../../../services', () => ({
 
 import type ReactTestRenderer from 'react-test-renderer';
 import { act, create } from 'react-test-renderer';
-import { ActivityIndicator, ScrollView, Switch, Text } from 'react-native';
-import { Button } from '../../../components/ui';
+import { ScrollView, Switch, Text } from 'react-native';
+import { Button, Skeleton } from '../../../components/ui';
 import { Calendar } from '../../../components/ui/Calendar';
 import RosterScreen from './RosterScreen';
 import { OfficePickerSheet } from './OfficePickerSheet';
@@ -142,6 +142,15 @@ type Screen = {
   readonly root: ReactTestRenderer.ReactTestInstance;
 };
 
+const mountedRenderers: ReactTestRenderer.ReactTestRenderer[] = [];
+
+afterEach(() => {
+  act(() => {
+    mountedRenderers.forEach((r) => r.unmount());
+  });
+  mountedRenderers.length = 0;
+});
+
 function renderScreen(): Screen {
   const navigation = {
     navigate: jest.fn(),
@@ -158,6 +167,9 @@ function renderScreen(): Screen {
       />,
     );
   });
+  // The shimmer's animation loops must be stopped at teardown or the
+  // Jest worker crashes (react-test-renderer has no auto-cleanup).
+  mountedRenderers.push(renderer);
   return {
     navigation,
     renderer,
@@ -216,21 +228,30 @@ beforeEach(() => {
 });
 
 describe('tri-state', () => {
-  it('the first load shows a spinner, then the rows', async () => {
+  it('the first load shows the labelled shimmer, then the rows', async () => {
     let resolveList!: (rows: EnrolmentOverview[]) => void;
     listMock.mockImplementationOnce(
       () => new Promise<EnrolmentOverview[]>((r) => (resolveList = r)),
     );
     const screen = renderScreen();
 
-    expect(screen.root.findAllByType(ActivityIndicator).length).toBe(1);
+    expect(
+      screen.root.findAll(
+        (node) => node.props.accessibilityLabel === 'Loading attendance',
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(screen.root.findAllByType(Skeleton as never).length).toBeGreaterThanOrEqual(1);
 
     await act(async () => {
       resolveList([PRIYA]);
       await flush();
     });
 
-    expect(screen.root.findAllByType(ActivityIndicator).length).toBe(0);
+    expect(
+      screen.root.findAll(
+        (node) => node.props.accessibilityLabel === 'Loading attendance',
+      ).length,
+    ).toBe(0);
     expect(textContaining(screen.root, 'Priya').length).toBeGreaterThan(0);
   });
 

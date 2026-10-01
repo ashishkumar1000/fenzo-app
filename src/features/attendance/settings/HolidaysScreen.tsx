@@ -20,7 +20,6 @@
  */
 import { useCallback, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -36,6 +35,7 @@ import {
   IconButton,
   InlineError,
   InlineNotice,
+  Skeleton,
 } from '../../../components/ui';
 import { colors, radius, spacing } from '../../../theme';
 import type { Holiday } from '../../../services';
@@ -148,8 +148,9 @@ export default function HolidaysScreen({ navigation }: Props) {
         ) : null}
 
         {isLoading && !hasLoaded ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color={colors.primary} />
+          // First load: a list-shaped shimmer, labelled (the 19-5 idiom).
+          <View style={styles.skeleton} accessibilityLabel="Loading attendance">
+            <Skeleton rows={4} height={48} />
           </View>
         ) : error && !hasLoaded ? (
           <View style={styles.content}>
@@ -264,10 +265,8 @@ const styles = StyleSheet.create({
     paddingTop: spacing.s3,
     gap: spacing.s2,
   },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  skeleton: {
+    padding: spacing.s4,
   },
   empty: {
     flex: 1,

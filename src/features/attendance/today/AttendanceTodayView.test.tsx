@@ -114,8 +114,20 @@ function renderView(
       />,
     );
   });
+  // The first-load shimmer's animation loops must be stopped at teardown
+  // or the Jest worker crashes (no auto-cleanup in react-test-renderer).
+  mountedRenderers.push(renderer);
   return renderer;
 }
+
+const mountedRenderers: ReactTestRenderer.ReactTestRenderer[] = [];
+
+afterEach(() => {
+  act(() => {
+    mountedRenderers.forEach(r => r.unmount());
+  });
+  mountedRenderers.length = 0;
+});
 
 beforeEach(() => {
   jest.resetAllMocks();
@@ -169,9 +181,12 @@ describe('the failure posture (facts unknown = no interactive check-in)', () => 
     expect(textContaining(view.root, 'Could not load your attendance details.')).toHaveLength(1);
   });
 
-  it('a first-load SPINNER renders and NO button', () => {
+  it('a first-load SHIMMER renders (labelled) and NO button', () => {
     const view = renderView(summaryState({ summary: null, isLoading: true }), {});
     expect(textContaining(view.root, 'Check in')).toHaveLength(0);
+    expect(
+      view.root.findAll(n => n.props.accessibilityLabel === 'Loading attendance').length,
+    ).toBeGreaterThan(0);
   });
 
   it('a summary whose today is explicitly null (contract break) renders a NOT-PRESSABLE button (fail-safe)', () => {

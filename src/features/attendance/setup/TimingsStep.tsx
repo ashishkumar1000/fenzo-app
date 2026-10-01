@@ -7,9 +7,9 @@
  * Continue's gate (≥1 live office, none missing a rule) lives in the
  * wizard model — the screen's footer renders its caption.
  */
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChevronRight, Plus } from 'lucide-react-native';
-import { Button, InlineError } from '../../../components/ui';
+import { Button, InlineError, Skeleton } from '../../../components/ui';
 import { colors, radius, spacing, typography } from '../../../theme';
 import type { ApiError } from '../../../services';
 import type { Office } from '../../../types/office';
@@ -36,9 +36,10 @@ export function TimingsStep({
   onAddOffice,
 }: Props) {
   if (isLoading && !hasLoaded) {
+    // First load: a row-shaped shimmer, labelled (the 19-5 idiom).
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={styles.skeleton} accessibilityLabel="Loading attendance">
+        <Skeleton rows={3} height={64} />
       </View>
     );
   }
@@ -104,10 +105,8 @@ const styles = StyleSheet.create({
   stack: {
     gap: spacing.s3,
   },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  skeleton: {
+    paddingVertical: spacing.s8,
   },
   emptyText: {
     ...typography.body,

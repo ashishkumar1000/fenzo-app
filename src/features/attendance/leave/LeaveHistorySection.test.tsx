@@ -5,7 +5,8 @@
  * a row tap opens the SAME detail sheet (identity hidden, the reason and
  * per-day split block visible); "Load more" appends and only renders
  * while a cursor remains; the empty state is the single muted line (never
- * an EmptyState); a load failure with nothing loaded shows the inline
+ * an EmptyState); the first load in flight renders the labelled shimmer;
+ * a load failure with nothing loaded shows the inline
  * error. 17-7 (spec D4): Pending/Approved rows gain the outline-danger
  * "Cancel request" entry; the stage swaps the sheet title/subtitle and
  * fetches the preview per entry; the cancel write succeeds with the row
@@ -160,6 +161,14 @@ describe('the compact rows (spec D3)', () => {
     const { root } = await renderSection();
     expect(texts(root)).toContain('5–7 Oct 2026');
     expect(texts(root)).toContain('3 working days · 2 of 3 days cancelled');
+  });
+
+  it('the first load in flight renders the labelled shimmer, not the empty line', async () => {
+    listMyLeave.mockReturnValueOnce(new Promise(() => undefined));
+    const { root } = await renderSection();
+    expect(
+      root.findAll(n => n.props.accessibilityLabel === 'Loading attendance').length,
+    ).toBeGreaterThan(0);
   });
 
   it('the empty history renders the single muted line (no EmptyState)', async () => {

@@ -25,6 +25,7 @@ import {
   Card,
   EmptyState,
   InlineError,
+  Skeleton,
   Switch,
 } from '../../../components/ui';
 import { colors, spacing, typography } from '../../../theme';
@@ -66,9 +67,11 @@ export function EmployeesStep({
   const [pickingId, setPickingId] = useState<string | null>(null);
 
   if (isLoading && !hasLoaded) {
+    // First load: a roster-shaped shimmer, labelled (the 19-5 idiom); the
+    // per-row write spinner below stays an action acknowledgment.
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={styles.skeleton} accessibilityLabel="Loading attendance">
+        <Skeleton rows={4} height={80} />
       </View>
     );
   }
@@ -198,10 +201,8 @@ const styles = StyleSheet.create({
   stack: {
     gap: spacing.s3,
   },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  skeleton: {
+    paddingVertical: spacing.s8,
   },
   rowHead: {
     marginBottom: spacing.s2,

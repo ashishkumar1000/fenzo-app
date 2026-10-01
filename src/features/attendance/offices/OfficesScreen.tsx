@@ -14,7 +14,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   AccessibilityInfo,
-  ActivityIndicator,
   FlatList,
   Pressable,
   RefreshControl,
@@ -32,6 +31,7 @@ import {
   IconButton,
   InlineError,
   Input,
+  Skeleton,
 } from '../../../components/ui';
 import { colors, radius, spacing, typography } from '../../../theme';
 import { useOffices } from './useOffices';
@@ -101,8 +101,9 @@ export default function OfficesScreen({ navigation }: Props) {
       ) : null}
 
       {isLoading && !hasLoaded ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
+        // First load: a list-shaped shimmer, labelled (the 19-5 idiom).
+        <View style={styles.content} accessibilityLabel="Loading attendance">
+          <Skeleton rows={4} height={80} />
         </View>
       ) : error && !hasLoaded ? (
         <View style={styles.content}>
@@ -228,11 +229,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.surfacePage,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   content: {
     padding: spacing.s4,

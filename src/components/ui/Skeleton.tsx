@@ -7,10 +7,11 @@
  * no native gradient module).
  *
  * The dashboard is its first NEW consumer ("used here first"); the monthly
- * view (19-5) reuses it, never rebuild. The self view (19-6) rides the DS
- * loading vocabulary through the month pane's spinner + InlineError
- * postures instead — no row-shaped stand-in exists in a tab-embedded
- * block (a skeleton would promise list rows the section does not have).
+ * view (19-5) reuses it, never rebuild. Since 2026-10-01 EVERY attendance
+ * content loader shimmers with it too — the self view (19-6) and the
+ * attendance screens' first-load postures render a labelled, content-shaped
+ * Skeleton in place of their old spinners (action-in-flight spinners stay;
+ * a skeleton is a content placeholder, not an action acknowledgment).
  * The old report-local component is deleted — `ReportsScreen` renders
  * `<Skeleton />` unchanged in output (row count, anatomy and animation
  * are identical).

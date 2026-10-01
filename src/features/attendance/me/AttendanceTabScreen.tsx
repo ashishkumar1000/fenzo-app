@@ -3,7 +3,7 @@
  * (Story 15-10): it routes on the access store's state (AD-17/FR-3) and
  * hosts the FR-4 intro gate.
  *
- *   unknown      → centered spinner (the tab itself is hidden in this
+ *   unknown      → a tab-shaped shimmer (the tab itself is hidden in this
  *                  state; this body is the defensive in-between frame).
  *   none         → nothing (the tab cannot normally be focused in this
  *                  state — FR-3: no attendance UI anywhere).
@@ -29,12 +29,12 @@
  * never strand the user on a blank content area (spec finding #9).
  */
 import { useCallback, useEffect, useRef } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, type CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button } from '../../../components/ui';
+import { Button, Skeleton } from '../../../components/ui';
 import { colors, fontSize, spacing } from '../../../theme';
 import { formatLongDate } from '../../../utils';
 import {
@@ -152,8 +152,9 @@ export default function AttendanceTabScreen({ navigation }: Props) {
         </Text>
       </View>
       {status === 'unknown' || accessState === null ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="small" color={colors.primary} />
+        // The access-unknown shimmer, labelled (the 19-5 idiom).
+        <View style={styles.skeleton} accessibilityLabel="Loading attendance">
+          <Skeleton rows={5} height={56} />
         </View>
       ) : accessState === 'none' ? (
         <View style={styles.center} />
@@ -261,8 +262,10 @@ const styles = StyleSheet.create({
   },
   center: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  },
+  skeleton: {
+    flex: 1,
+    padding: spacing.s4,
   },
   upcomingWrap: {
     gap: spacing.s1,

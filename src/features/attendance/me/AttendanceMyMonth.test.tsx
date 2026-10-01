@@ -324,12 +324,19 @@ describe('the summary block (D5/D9)', () => {
     expect(texts(renderer)).not.toContain('Days worked: 14.5 so far');
   });
 
-  it('no so-far line while the summary is in flight (the pane spinner covers first paint)', async () => {
+  it('no so-far line while the summary is in flight (the block shimmers, the pane no longer covers first paint)', async () => {
     fetchPane.mockResolvedValue(paneEnvelope([], TODAY_IN_SEED));
     fetchMe.mockReturnValue(new Promise(() => undefined));
     const renderer = renderSection({});
     await flush();
 
+    // The summary block carries its OWN labelled shimmer while in flight
+    // (the pane's shimmer covers the grid, never these rows).
+    expect(
+      renderer.root.findAll(
+        node => node.props.accessibilityLabel === 'Loading attendance',
+      ).length,
+    ).toBeGreaterThan(0);
     // No grouped a11y element exists while loading (D9: loading = no element).
     const groups = renderer.root.findAll(
       node =>

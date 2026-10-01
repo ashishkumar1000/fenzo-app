@@ -16,8 +16,7 @@ import { AccessibilityInfo, FlatList, RefreshControl, StyleSheet, Text, View } f
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Users } from 'lucide-react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ActivityIndicator } from 'react-native';
-import { Button, EmptyState, InlineError, InlineNotice } from '../../../components/ui';
+import { Button, EmptyState, InlineError, InlineNotice, Skeleton } from '../../../components/ui';
 import { colors, radius, spacing, typography } from '../../../theme';
 import { formatLongDate, istTodayDate } from '../../../utils';
 import type { RootStackParamList } from '../../../navigation/types';
@@ -153,8 +152,9 @@ export default function RosterScreen({ navigation, route }: Props) {
       <ScreenHeader title="Team enrolment" onBack={goBackSafely} />
 
       {enrolments.isLoading && !enrolments.hasLoaded ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
+        // First load: a roster-shaped shimmer, labelled (the 19-5 idiom).
+        <View style={styles.skeleton} accessibilityLabel="Loading attendance">
+          <Skeleton rows={8} height={80} />
         </View>
       ) : firstLoadFailed ? (
         <View style={styles.firstError}>
@@ -324,10 +324,8 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
   },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  skeleton: {
+    padding: spacing.s4,
   },
   firstError: {
     padding: spacing.s4,

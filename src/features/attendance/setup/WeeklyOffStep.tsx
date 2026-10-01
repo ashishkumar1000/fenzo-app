@@ -6,9 +6,9 @@
  * the footer's Continue gate requires `defaultDays !== null` (the model's
  * caption "Save your default weekly off first.").
  */
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { CalendarDays } from 'lucide-react-native';
-import { Button, Card, Eyebrow, InlineError } from '../../../components/ui';
+import { Button, Card, Eyebrow, InlineError, Skeleton } from '../../../components/ui';
 import { colors, spacing, typography } from '../../../theme';
 import type { ApiError, IsoWeekday } from '../../../services';
 import { describeDays } from '../settings/weeklyOffModel';
@@ -33,9 +33,10 @@ export function WeeklyOffStep({
   onManageWeeklyOff,
 }: Props) {
   if (isLoading && !hasLoaded) {
+    // First load: a card-shaped shimmer, labelled (the 19-5 idiom).
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={styles.skeleton} accessibilityLabel="Loading attendance">
+        <Skeleton rows={2} height={64} />
       </View>
     );
   }
@@ -80,10 +81,8 @@ const styles = StyleSheet.create({
   stack: {
     gap: spacing.s3,
   },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  skeleton: {
+    paddingVertical: spacing.s8,
   },
   days: {
     ...typography.title,

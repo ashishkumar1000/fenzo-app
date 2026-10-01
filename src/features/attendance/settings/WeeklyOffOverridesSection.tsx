@@ -17,7 +17,7 @@
  * Presentational only — the screen owns the hooks and the sheet wiring.
  * Split out to keep `WeeklyOffScreen.tsx` under the ~300-line file limit.
  */
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { UserPlus } from 'lucide-react-native';
 import {
   Button,
@@ -25,6 +25,7 @@ import {
   Eyebrow,
   InlineError,
   InlineNotice,
+  Skeleton,
 } from '../../../components/ui';
 import { colors, radius, spacing, typography } from '../../../theme';
 import type { WeeklyOffOverrideResponse } from '../../../services';
@@ -96,8 +97,9 @@ export function WeeklyOffOverridesSection({
       ) : null}
 
       {isLoading && !hasLoaded ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
+        // First load: a list-shaped shimmer, labelled (the 19-5 idiom).
+        <View style={styles.skeleton} accessibilityLabel="Loading attendance">
+          <Skeleton rows={3} height={64} />
         </View>
       ) : !hasLoaded && error ? (
         <View style={styles.firstLoadError}>
@@ -168,9 +170,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: spacing.s4,
   },
-  center: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  skeleton: {
     paddingVertical: spacing.s8,
   },
   firstLoadError: {

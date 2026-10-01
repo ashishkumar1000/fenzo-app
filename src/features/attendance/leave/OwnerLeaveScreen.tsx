@@ -19,7 +19,7 @@ import { AccessibilityInfo, ActivityIndicator, FlatList, Pressable, RefreshContr
 import { CalendarOff, Users } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button, EmptyState, InlineError, SegmentedControl } from '../../../components/ui';
+import { Button, EmptyState, InlineError, SegmentedControl, Skeleton } from '../../../components/ui';
 import { colors, radius, spacing, typography } from '../../../theme';
 import { attendanceLeaveService } from '../../../services';
 import type { ApiError } from '../../../services/api/apiError';
@@ -179,8 +179,10 @@ export default function OwnerLeaveScreen({ navigation, route }: Props) {
         }
         ListEmptyComponent={
           !page.loaded && page.loading ? (
-            <View style={styles.stateBlock}>
-              <ActivityIndicator size="large" color={colors.primary} />
+            // First load: a list-shaped shimmer, labelled (the 19-5
+            // idiom); the load-more footer keeps its inline spinner.
+            <View style={styles.skeletonBlock} accessibilityLabel="Loading attendance">
+              <Skeleton rows={6} height={76} />
             </View>
           ) : !page.loaded ? (
             <View style={styles.stateBlock} accessibilityLiveRegion="polite">
@@ -256,6 +258,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.s10,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  skeletonBlock: {
+    gap: spacing.s3,
+    paddingVertical: spacing.s10,
   },
   emptyWrap: {
     flexGrow: 1,

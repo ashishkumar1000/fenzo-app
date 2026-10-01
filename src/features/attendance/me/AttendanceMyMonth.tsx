@@ -7,7 +7,10 @@
  * Anatomy: SectionHead "My month", then (gap s3 — the Summary wrap's
  * rhythm) the me-scoped RealMonthPane at FULL height verbatim → the
  * summary block → the holidays block. Internal order is the UX ruling:
- * calendar → so-far line → chips → meta → holidays.
+ * calendar → so-far line → chips → meta → holidays. While the summary is
+ * in flight the block carries its OWN small shimmer (the pane's shimmer
+ * covers the grid, never these rows); the grouped a11y element waits for
+ * the numbers.
  *
  * The section owns yearMonth (the 19-5 bootstrap idiom, faithful): the
  * seed is the DEVICE month as declared navigation scaffolding (which
@@ -47,7 +50,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Eyebrow, InlineError, SectionHead } from '../../../components/ui';
+import { Eyebrow, InlineError, SectionHead, Skeleton } from '../../../components/ui';
 import { colors, radius, spacing, typography } from '../../../theme';
 import { DayDetailSheet } from '../calendar/DayDetailSheet';
 import { RealMonthPane } from '../calendar/RealMonthPane';
@@ -254,6 +257,13 @@ export function AttendanceMyMonth({
 
         {summary !== null ? (
           <MyMonthSummary summary={summary} isCurrentMonth={isCurrentMonth} />
+        ) : myMonth.loading ? (
+          // First paint: the summary block's OWN small shimmer (the pane's
+          // shimmer covers the grid, never these rows). A failed refresh
+          // keeps the error postures above; loading renders no numbers.
+          <View accessibilityLabel="Loading attendance">
+            <Skeleton rows={2} height={40} />
+          </View>
         ) : null}
 
         {!historyOnly && holidays.length > 0 ? (

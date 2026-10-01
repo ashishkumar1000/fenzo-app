@@ -2,7 +2,8 @@
  * Tests for AttendanceTabScreen (Story 15-10) — the tab's state ROUTER,
  * with the store, the summary hook and navigation mocked so the routing
  * logic stays isolated:
- *  - unknown → spinner; none → nothing (FR-3: no attendance UI anywhere);
+ *  - unknown → the labelled shimmer block; none → nothing (FR-3: no
+ *    attendance UI anywhere);
  *  - active → the summary view; upcoming → the start headline + the early
  *    onboarding CTA (only while the intro is still owed);
  *  - NO check-in control in ANY state (Epic 16 owns it — absent, not
@@ -71,8 +72,8 @@ jest.mock('../../../services', () => ({
 import type ReactTestRenderer from 'react-test-renderer';
 import { act, create } from 'react-test-renderer';
 import { useFocusEffect } from '@react-navigation/native';
-import { ActivityIndicator, Text } from 'react-native';
-import { Button } from '../../../components/ui';
+import { Text } from 'react-native';
+import { Button, Skeleton } from '../../../components/ui';
 import { useAttendanceAccess, refreshAttendanceAccessOnFocus } from './attendanceAccessStore';
 import { useAttendanceSummary } from './useAttendanceSummary';
 import { AttendanceSummaryView } from './AttendanceSummaryView';
@@ -183,6 +184,11 @@ function makeNavigation() {
 
 type Screen = ReturnType<typeof renderScreen>;
 
+// The tab renders a real Skeleton while unknown — its animation loops
+// must be stopped at teardown or the Jest worker crashes (the suite's
+// own teardown discipline; react-test-renderer has no auto-cleanup).
+const mountedRenderers: ReactTestRenderer.ReactTestRenderer[] = [];
+
 function renderScreen(storeState: AttendanceAccessStateSnapshot = ACTIVE) {
   const ctx = makeNavigation();
   useAttendanceAccessMock.mockReturnValue(storeState);
@@ -198,6 +204,7 @@ function renderScreen(storeState: AttendanceAccessStateSnapshot = ACTIVE) {
   act(() => {
     renderer = create(element(ctx.navigation));
   });
+  mountedRenderers.push(renderer);
   return {
     ...ctx,
     renderer,
@@ -233,6 +240,14 @@ function textContaining(root: ReactTestRenderer.ReactTestInstance, part: string)
   });
 }
 
+/** The labelled loading block(s) — the house shimmer idiom (one per
+ *  screen, the 19-5 vocabulary). */
+function loadingBlocks(root: ReactTestRenderer.ReactTestInstance) {
+  return root.findAll(
+    (node) => node.props.accessibilityLabel === 'Loading attendance',
+  );
+}
+
 function textNodes(root: ReactTestRenderer.ReactTestInstance, value: string) {
   return root.findAll((n) => n.type === Text && n.props.children === value);
 }
@@ -251,18 +266,26 @@ beforeEach(() => {
   listMyLeaveMock.mockReturnValue(new Promise(() => undefined));
 });
 
+afterEach(() => {
+  act(() => {
+    mountedRenderers.forEach((r) => r.unmount());
+  });
+  mountedRenderers.length = 0;
+});
+
 describe('the state router', () => {
-  it('unknown → the defensive spinner, nothing else', () => {
+  it('unknown → the defensive labelled shimmer block, nothing else', () => {
     const screen = renderScreen(UNKNOWN);
 
-    expect(screen.root.findAllByType(ActivityIndicator)).toHaveLength(1);
+    expect(loadingBlocks(screen.root).length).toBeGreaterThan(0);
+    expect(screen.root.findAllByType(Skeleton as never).length).toBeGreaterThanOrEqual(1);
     expect(screen.root.findAllByType(AttendanceSummaryView)).toHaveLength(0);
   });
 
   it('none → renders nothing (FR-3: no attendance UI anywhere)', () => {
     const screen = renderScreen(NONE);
 
-    expect(screen.root.findAllByType(ActivityIndicator)).toHaveLength(0);
+    expect(loadingBlocks(screen.root)).toHaveLength(0);
     expect(screen.root.findAllByType(AttendanceSummaryView)).toHaveLength(0);
     expect(textContaining(screen.root, 'Attendance tracking')).toHaveLength(0);
   });

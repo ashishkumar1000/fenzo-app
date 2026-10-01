@@ -24,7 +24,7 @@ import { useCallback, useEffect, type ReactNode } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button, InlineError } from '../../../components/ui';
+import { Button, InlineError, Skeleton } from '../../../components/ui';
 import { colors, spacing } from '../../../theme';
 import { useIstToday } from '../../../hooks';
 import type { RootStackParamList } from '../../../navigation/types';
@@ -146,8 +146,11 @@ export default function SetupWizardScreen({ navigation }: Props) {
     return (
       <SafeAreaView style={styles.root} edges={['top']}>
         <ScreenHeader title="Attendance setup" onBack={goBackSafely} />
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
+        {/* The bootstrap content load: a step-shaped shimmer, labelled
+            (the 19-5 idiom). The exit branch above keeps its spinner —
+            that one is a transition in flight, not content loading. */}
+        <View style={styles.skeleton} accessibilityLabel="Loading attendance">
+          <Skeleton rows={5} height={56} />
         </View>
       </SafeAreaView>
     );
@@ -316,6 +319,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  skeleton: {
+    flex: 1,
+    padding: spacing.s4,
   },
   centerContent: {
     flex: 1,

@@ -1,6 +1,6 @@
 /**
  * Screen tests for `OwnerLeaveScreen` (Story 17-6, spec §5; 17-7 adds the
- * revoke wiring). Pins: the first-load spinner → rows; the per-tab cache
+ * revoke wiring). Pins: the first-load shimmer → rows; the per-tab cache
  * with the cursor-safety invariant (a Pending cursor never paginates All);
  * pull-to-refresh resetting the ACTIVE tab only (announced); approve on
  * Pending REMOVES the row + announcement; approve on All replaces in
@@ -166,6 +166,14 @@ describe('first load and the CTA card (spec D1)', () => {
     const { root } = await renderScreen();
     expect(listOwnerLeave).toHaveBeenCalledWith({ status: 'pending', limit: 20 });
     expect(root.findAllByType(LeaveRequestRowView)).toHaveLength(1);
+  });
+
+  it('a first page still in flight renders the labelled shimmer (no spinner)', async () => {
+    listOwnerLeave.mockReturnValueOnce(new Promise(() => undefined));
+    const { root } = await renderScreen();
+    expect(
+      root.findAll(n => n.props.accessibilityLabel === 'Loading attendance').length,
+    ).toBeGreaterThan(0);
   });
 
   it('the CTA card leads the list on both tabs and navigates to ApplyOnBehalf', async () => {
