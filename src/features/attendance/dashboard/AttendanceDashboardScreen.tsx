@@ -66,6 +66,9 @@ const TILE_GAP = spacing.s3;
 /** KpiTile's minHeight (the tile's 158) — the loading placeholder keeps
  *  the grid's real height so the swap doesn't jump. */
 const KpiTileSkeletonHeight = 158;
+/** The settled grid is SIX tiles + the present card = 7 cells — the
+ *  skeleton pulses the SAME ragged 2/2/2/1 rows the settled content has. */
+const SkeletonCardCount = 7;
 
 export default function AttendanceDashboardScreen({ navigation }: Props) {
   const { width } = useWindowDimensions();
@@ -186,12 +189,13 @@ export default function AttendanceDashboardScreen({ navigation }: Props) {
 
         {(data === null && !hasSettled) || (data !== null && manualShimmer) ? (
           // Shimmer placeholders shaped as the cards they stand in for —
-          // the 2×3 tile grid pulses in place (the skeleton's row pulse on
-          // tile-shaped blocks, same primitive), so loading doesn't
-          // collapse the layout. ALSO on an explicit Refresh press
-          // (manualShimmer) — a manual pull re-shows the card shimmer.
+          // 7 placeholders (six tiles + the present card), so loading
+          // doesn't collapse or re-shape the grid. ALSO on every
+          // USER-INITIATED fetch (manualShimmer: the Refresh press
+          // or an office pick — a pick changes scope, so the previous
+          // office's numbers never sit under the picked office's name).
           <View style={styles.tileGrid}>
-            {Array.from({ length: 6 }).map((_, i) => (
+            {Array.from({ length: SkeletonCardCount }).map((_, i) => (
               <View key={i} style={{ width: tileWidth }}>
                 <Skeleton rows={1} height={KpiTileSkeletonHeight} />
               </View>

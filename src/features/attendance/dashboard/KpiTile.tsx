@@ -19,6 +19,7 @@ import {
   Check,
   Clock,
   Users,
+  XCircle,
 } from 'lucide-react-native';
 import type { LucideProps } from 'lucide-react-native';
 import { colors, radius, spacing, typography } from '../../../theme';
@@ -28,7 +29,11 @@ type TileKey = KpiTileSpec['key'];
 
 /** One status family per tile — every colour from the DS status tables,
  *  so a tile can never drift from the badges the owner already knows.
- *  (`tracked` is absent — the accent render owns that key.) */
+ *  (`tracked` is absent — the accent render owns that key.) The Short day
+ *  tile (20-2) rides the same family the day sheet's Absent badge uses
+ *  (`dayStatusVisual.ts` maps `absent → cancelled / XCircle`) — its rows
+ *  ARE engine-graded absent, the tile just answers the owner's "how many
+ *  punched in but didn't make a day". */
 const TILE_VISUALS: Record<
   Exclude<TileKey, 'tracked'>,
   {
@@ -52,6 +57,13 @@ const TILE_VISUALS: Record<
     fg: colors.status.neutral.fg,
     dot: colors.borderStrong,
     border: colors.borderSubtle,
+  },
+  shortDay: {
+    icon: XCircle,
+    chipBg: colors.status.cancelled.bg,
+    fg: colors.status.cancelled.fg,
+    dot: colors.status.cancelled.solid,
+    border: colors.status.cancelled.border,
   },
   late: {
     icon: AlertTriangle,
@@ -128,12 +140,15 @@ function FamilyTile({ tile }: { tile: KpiTileSpec }) {
   );
 }
 
-/** Label hue per family: the checked-in / late / on-leave labels read in
- *  their hue (the state word IS the family), not-checked-in stays neutral. */
+/** Label hue per family: the checked-in / short-day / late / on-leave
+ *  labels read in their hue (the state word IS the family),
+ *  not-checked-in stays neutral. */
 function visualLabel(key: TileKey): string {
   switch (key) {
     case 'checkedIn':
       return colors.status.done.fg;
+    case 'shortDay':
+      return colors.status.cancelled.fg;
     case 'late':
       return colors.status.scheduled.fg;
     case 'onLeave':

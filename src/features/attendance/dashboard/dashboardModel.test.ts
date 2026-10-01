@@ -25,6 +25,7 @@ type Counts = {
   tracked: number;
   checkedIn: number;
   notCheckedIn: number;
+  shortDay: number;
   late: number;
   onLeave: number;
 };
@@ -34,6 +35,7 @@ function counts(overrides: Partial<Counts> = {}): Counts {
     tracked: 9,
     checkedIn: 6,
     notCheckedIn: 2,
+    shortDay: 0,
     late: 1,
     onLeave: 1,
     ...overrides,
@@ -51,19 +53,28 @@ function fakeRow(overrides: Record<string, unknown> = {}) {
 }
 
 describe('kpiTiles', () => {
-  it('lists the five FR-24 answers in the spec order, labelled', () => {
-    const tiles = kpiTiles(counts());
+  it('lists the six FR-24 answers in the spec order, labelled', () => {
+    const tiles = kpiTiles(counts({ shortDay: 1 }));
     expect(tiles.map(t => [t.key, t.label, t.value])).toEqual([
       ['tracked', 'Tracked', 9],
       ['checkedIn', 'Checked in', 6],
       ['notCheckedIn', 'Not checked in', 2],
+      ['shortDay', 'Short day', 1],
       ['late', 'Late', 1],
       ['onLeave', 'On leave', 1],
     ]);
   });
 
+  it('Short day sits right AFTER Not checked in — both answer "who did not make a proper day", but a short day DID punch in', () => {
+    const tiles = kpiTiles(counts({ shortDay: 3 }));
+    const shortIx = tiles.findIndex(t => t.key === 'shortDay');
+    expect(tiles[shortIx - 1].key).toBe('notCheckedIn');
+    expect(tiles[shortIx - 1].label).toBe('Not checked in');
+    expect(tiles[shortIx + 1].key).toBe('late');
+  });
+
   it('pairs each count into the a11y label ("«Label»: «n»")', () => {
-    const zeros = { tracked: 0, checkedIn: 0, notCheckedIn: 0, late: 0, onLeave: 0 };
+    const zeros = { tracked: 0, checkedIn: 0, notCheckedIn: 0, shortDay: 0, late: 0, onLeave: 0 };
     for (const tile of kpiTiles(zeros)) {
       expect(tile.a11yLabel).toBe(`${tile.label}: ${tile.value}`);
     }
@@ -72,7 +83,7 @@ describe('kpiTiles', () => {
   });
 
   it('shows the checked-in share as a pct ONLY on the checkedIn tile', () => {
-    const tiles = kpiTiles({ tracked: 9, checkedIn: 6, notCheckedIn: 2, late: 1, onLeave: 1 });
+    const tiles = kpiTiles(counts());
     expect(tiles.find(t => t.key === 'checkedIn')!.pct).toBe(67);
     for (const tile of tiles.filter(t => t.key !== 'checkedIn')) {
       expect(tile.pct).toBeNull();
@@ -82,20 +93,20 @@ describe('kpiTiles', () => {
 
 describe('checkedInPct', () => {
   it('rounds to a whole percent', () => {
-    expect(checkedInPct({ tracked: 3, checkedIn: 2, notCheckedIn: 0, late: 0, onLeave: 0 })).toBe(67);
-    expect(checkedInPct({ tracked: 6, checkedIn: 1, notCheckedIn: 0, late: 0, onLeave: 0 })).toBe(17);
-    expect(checkedInPct({ tracked: 3, checkedIn: 3, notCheckedIn: 0, late: 0, onLeave: 0 })).toBe(100);
+    expect(checkedInPct(counts({ tracked: 3, checkedIn: 2, notCheckedIn: 0, late: 0, onLeave: 0 }))).toBe(67);
+    expect(checkedInPct(counts({ tracked: 6, checkedIn: 1, notCheckedIn: 0, late: 0, onLeave: 0 }))).toBe(17);
+    expect(checkedInPct(counts({ tracked: 3, checkedIn: 3, notCheckedIn: 0, late: 0, onLeave: 0 }))).toBe(100);
   });
 
   it('returns null at tracked 0 — the share has no denominator', () => {
-    expect(checkedInPct({ tracked: 0, checkedIn: 0, notCheckedIn: 0, late: 0, onLeave: 0 })).toBeNull();
+    expect(checkedInPct(counts({ tracked: 0, checkedIn: 0, notCheckedIn: 0, late: 0, onLeave: 0 }))).toBeNull();
   });
 
   it('flags a share ABOVE 100 as the envelope inconsistency it is', () => {
     // checkedIn > tracked is a broken envelope; the raw share exposes it
     // (PresentCard clamps the render, but the underlying share must stay
     // the raw arithmetic — the clamping lives one layer up).
-    expect(checkedInPct({ tracked: 1, checkedIn: 2, notCheckedIn: 0, late: 0, onLeave: 0 })).toBe(200);
+    expect(checkedInPct(counts({ tracked: 1, checkedIn: 2, notCheckedIn: 0, late: 0, onLeave: 0 }))).toBe(200);
   });
 });
 
@@ -212,9 +223,9 @@ describe('flagRowDetail', () => {
 
 describe('isTrackedEmpty', () => {
   it('is true ONLY at tracked 0 — the empty state is the roster question', () => {
-    expect(isTrackedEmpty({ tracked: 0, checkedIn: 0, notCheckedIn: 0, late: 0, onLeave: 0 })).toBe(true);
-    expect(isTrackedEmpty({ tracked: 1, checkedIn: 0, notCheckedIn: 0, late: 0, onLeave: 0 })).toBe(false);
-    // Today's roster can be all-absent — that is NOT an empty state.
-    expect(isTrackedEmpty({ tracked: 3, checkedIn: 0, notCheckedIn: 0, late: 0, onLeave: 3 })).toBe(false);
+    expect(isTrackedEmpty(counts({ tracked: 0, checkedIn: 0, notCheckedIn: 0, late: 0, onLeave: 0 }))).toBe(true);
+    expect(isTrackedEmpty(counts({ tracked: 1, checkedIn: 0, notCheckedIn: 0, late: 0, onLeave: 0 }))).toBe(false);
+    // Today's roster can be all-leave — that is NOT an empty state.
+    expect(isTrackedEmpty(counts({ tracked: 3, checkedIn: 0, notCheckedIn: 0, late: 0, onLeave: 3 }))).toBe(false);
   });
 });

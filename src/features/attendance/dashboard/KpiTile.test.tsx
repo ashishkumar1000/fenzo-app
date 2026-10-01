@@ -48,7 +48,7 @@ describe('KpiTile', () => {
   });
 
   it('is NON-interactive: no button role, no pressable subtree, no handlers', () => {
-    const keys = ['tracked', 'checkedIn', 'notCheckedIn', 'late', 'onLeave'] as const;
+    const keys = ['tracked', 'checkedIn', 'notCheckedIn', 'shortDay', 'late', 'onLeave'] as const;
     for (const key of keys) {
       const rendered = render(tile({ key, label: 'X', value: 1, a11yLabel: 'X: 1' }));
       const pressables = rendered.root.findAll(

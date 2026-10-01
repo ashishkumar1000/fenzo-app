@@ -9,6 +9,12 @@
  * Postures owned here (spec D9/D10):
  *   - First load → `firstLoadError` replaces the content region (nothing
  *     stale to keep).
+ *   - User-initiated fetches AFTER first load (the Refresh press and an
+ *     office pick) hold the card shimmer until they settle — a pick
+ *     changes scope, so the previous office's numbers never sit under
+ *     the picked office's name while loading (user direction
+ *     2026-10-02). Focus/AppState refetches stay silent in-place
+ *     updates (same scope — the D10 discipline).
  *   - Refetch failure keeps the last-good data and surfaces `refetchError`
  *     BELOW the content.
  *   - A pick whose refetch FAILS reverts the selector to where the
@@ -51,6 +57,10 @@ export function useDashboardData() {
    *  only for the manual press; focus/AppState refetches stay silent
    *  in-place updates (the D10 discipline). */
   const [manualShimmer, setManualShimmer] = useState(false);
+  /** How many in-flight fetches hold the shimmer up — two shimmering
+   *  callers never end each other's pull early (the first finally must
+   *  not drop the shimmer while the later fetch is still running). */
+  const shimmerRefs = useRef(0);
 
   // The picked office: the ref drives the fetch (a ref change never
   // re-fires the focus effect), the state drives the filter field.
@@ -137,25 +147,44 @@ export function useDashboardData() {
     }
   }, []);
 
+  /** The manual-shimmer pull — user-initiated fetches (the Refresh press
+   *  AND an office pick): the card shimmer holds until the fetch settles,
+   *  refcounted so overlapping pulls never drop it early. Focus/AppState
+   *  refetches never shimmer (same-scope silent in-place updates — a
+   *  PICK changes scope, so the previous office's numbers may not sit
+   *  under the new office's name). */
+  const runWithShimmer = useCallback(
+    (op: () => Promise<void>) => {
+      shimmerRefs.current += 1;
+      setManualShimmer(true);
+      void op().finally(() => {
+        shimmerRefs.current -= 1;
+        if (shimmerRefs.current === 0) setManualShimmer(false);
+      });
+    },
+    [],
+  );
+
   /** The manual Refresh press ALSO re-shows the card shimmer — only
    *  manual; focus/AppState refetches stay silent (the D10 discipline). */
   const refresh = useCallback(() => {
-    setManualShimmer(true);
-    void load().finally(() => setManualShimmer(false));
-  }, [load]);
+    runWithShimmer(load);
+  }, [load, runWithShimmer]);
 
   /** The pick commit from the filter sheet: the refs first (the SAME tick
    *  `load` reads them), then the field, then the reload. The sheet close
-   *  itself is the CALLER's (the screen owns sheet visibility). */
-  // The pick commit from the filter sheet — bound once per mount ([load]).
+   *  itself is the CALLER's (the screen owns sheet visibility). A pick
+   *  CHANGES SCOPE — the previous office's numbers must never sit under
+   *  the picked office's name while the fetch runs, so the pick holds the
+   *  card shimmer like a Refresh press (user direction 2026-10-02). */
   const onPickOffice = useCallback(
     (office: DashboardOfficePick) => {
       officeIdRef.current = office !== null ? office.id : null;
       pickedNameRef.current = office !== null ? office.name : null;
       setPickedOffice(office);
-      void load();
+      runWithShimmer(load);
     },
-    [load],
+    [load, runWithShimmer],
   );
 
   return {

@@ -8,7 +8,7 @@
  *    the tests simulate the navigator); no mount fetch ever runs.
  *  - first render shows the static chrome (header + WorkspaceSelector)
  *    with the Skeleton in the content region — THEN the tiles.
- *  - the tiles render the FIVE counts + the present-share card, and they
+ *  - the tiles render the SIX counts + the present-share card, and they
  *    are NON-interactive (no Pressable in a tile's subtree — an
  *    un-wired tap affordance is a future trap).
  *  - strips: absent at count 0; shown and TAPPABLE at count > 0 → the
@@ -57,7 +57,10 @@ const officesListMock = officesService.list as jest.Mock;
 function envelope(overrides: Record<string, unknown> = {}): AttendanceDashboardData {
   return {
     date: '2026-09-30',
-    counts: { tracked: 5, checkedIn: 3, notCheckedIn: 2, late: 1, onLeave: 1 },
+    // The four buckets PARTITION tracked (2 + 2 + 1 + 0 = 5; shortDay
+    // parked at 0 here, exercised with a 1 in the counts test) —
+    // 20-2's fail-closed shape, never a five-key envelope again.
+    counts: { tracked: 5, checkedIn: 2, notCheckedIn: 2, late: 1, onLeave: 1, shortDay: 0 },
     flags: { checkoutMissing: [], fakeLocationAttempt: [] },
     offices: [
       { id: 'o1', name: 'Hero wala', tracked: 3, checkedIn: 2 },
@@ -78,7 +81,7 @@ function flagRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-const EMPTY_COUNTS = { tracked: 0, checkedIn: 0, notCheckedIn: 0, late: 0, onLeave: 0 };
+const EMPTY_COUNTS = { tracked: 0, checkedIn: 0, notCheckedIn: 0, late: 0, onLeave: 0, shortDay: 0 };
 
 /** The tile pairing ("Tracked: 5") is an a11y LABEL on the tile's View —
  *  the value and word render as separate Texts. Any node carrying the
@@ -213,18 +216,25 @@ describe('AttendanceDashboardScreen — loading postures', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('renders the five counts + the present share, and the tiles are NOT interactive', async () => {
-    fetchMock.mockResolvedValueOnce(envelope());
+  it('renders the six counts + the present share, and the tiles are NOT interactive', async () => {
+    // An envelope with a SHORT DAY (partition-consistent: 2 + 1 + 1 + 1 = 5)
+    // — the sixth tile renders its pairing from the wire, not empty.
+    fetchMock.mockResolvedValueOnce(
+      envelope({
+        counts: { tracked: 5, checkedIn: 2, notCheckedIn: 1, late: 0, onLeave: 1, shortDay: 1 },
+      }),
+    );
     const { renderer } = renderScreen();
     await fireFocus();
     const shown = texts(renderer);
     hasA11yLabel(renderer, 'Tracked: 5', true);
-    hasA11yLabel(renderer, 'Checked in: 3', true);
-    hasA11yLabel(renderer, 'Not checked in: 2', true);
-    hasA11yLabel(renderer, 'Late: 1', true);
+    hasA11yLabel(renderer, 'Checked in: 2', true);
+    hasA11yLabel(renderer, 'Not checked in: 1', true);
+    hasA11yLabel(renderer, 'Short day: 1', true);
+    hasA11yLabel(renderer, 'Late: 0', true);
     hasA11yLabel(renderer, 'On leave: 1', true);
-    // The share derives from the counts themselves (3 of 5 → 60%).
-    expect(shown).toContain('60% workforce present today');
+    // The share derives from the counts themselves (2 of 5 → 40%).
+    expect(shown).toContain('40% workforce present today');
 
     // NON-interactive tiles — and the WHOLE press surface is the pinned
     // set, exactly (a subset `arrayContaining` could not fail if tiles or
@@ -260,7 +270,7 @@ describe('AttendanceDashboardScreen — loading postures', () => {
     expect(shown).toContain('No one is tracked today');
     expect(shown).toContain("Add employees to attendance to see today's summary here.");
     hasA11yLabel(renderer, 'Tracked: 0', false);
-    expect(shown).not.toContain('60% workforce present today');
+    expect(shown).not.toContain('40% workforce present today');
   });
 });
 
@@ -428,7 +438,7 @@ describe('AttendanceDashboardScreen — office filter', () => {
       .mockResolvedValueOnce(first)
       .mockResolvedValueOnce(
         envelope({
-          counts: { tracked: 3, checkedIn: 2, notCheckedIn: 1, late: 0, onLeave: 0 },
+          counts: { tracked: 3, checkedIn: 2, notCheckedIn: 1, late: 0, onLeave: 0, shortDay: 0 },
         }),
       );
     const { renderer } = renderScreen();
@@ -461,7 +471,7 @@ describe('AttendanceDashboardScreen — office filter', () => {
     fetchMock
       .mockResolvedValueOnce(
         envelope({
-          counts: { tracked: 3, checkedIn: 2, notCheckedIn: 1, late: 0, onLeave: 0 },
+          counts: { tracked: 3, checkedIn: 2, notCheckedIn: 1, late: 0, onLeave: 0, shortDay: 0 },
         }),
       )
       .mockResolvedValueOnce(envelope())
@@ -491,6 +501,55 @@ describe('AttendanceDashboardScreen — office filter', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls[2][0]).toBeUndefined();
     expect(texts(renderer)).toContain('3 Sites');
+  });
+
+  it("Apply's PICK refetch runs under the card shimmer — the previous office's numbers never sit under the picked name (20-2)", async () => {
+    let resolvePick!: (v: AttendanceDashboardData) => void;
+    fetchMock
+      .mockResolvedValueOnce(envelope())
+      // HOLD the pick's fetch — the sheet's Apply is what fires it.
+      .mockImplementationOnce(
+        () =>
+          new Promise<AttendanceDashboardData>(res => {
+            resolvePick = res;
+          }),
+      );
+    const { renderer } = renderScreen();
+    await fireFocus();
+
+    act(() => {
+      findButton(renderer, 'Filter by office, currently All offices').props.onPress();
+    });
+    const sheet = renderer.root.findAllByType(OfficeFilterSheet as never)[0];
+    await act(async () => {
+      sheet.props.onPick({ id: 'o1', name: 'Hero wala' });
+      await flush();
+    });
+
+    // The PICKED name is already up (the field updates instantly) while the
+    // content region shows the shimmer — the OLD numbers, not the new.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][0]).toBe('o1');
+    expect(texts(renderer)).toContain('Hero wala');
+    hasA11yLabel(renderer, 'Tracked: 5', false);
+    const shimmerRows = renderer.root.findAllByType(Skeleton as never).length;
+    expect(shimmerRows).toBeGreaterThanOrEqual(1);
+
+    // Settle → the PICKED office's numbers replace the shimmer (the
+    // refcount cleared, no lingering shimmer either).
+    await act(async () => {
+      resolvePick(
+        envelope({
+          counts: { tracked: 3, checkedIn: 2, notCheckedIn: 1, late: 0, onLeave: 0, shortDay: 0 },
+        }),
+      );
+      await flush();
+    });
+    hasA11yLabel(renderer, 'Tracked: 3', true);
+    hasA11yLabel(renderer, 'Tracked: 5', false);
+    expect(
+      renderer.root.findAllByType(OfficeFilterSheet as never)[0].props.visible,
+    ).toBe(false);
   });
 
   it('a DISMISSED sheet (X/drag/back) commits nothing and refetches nothing', async () => {

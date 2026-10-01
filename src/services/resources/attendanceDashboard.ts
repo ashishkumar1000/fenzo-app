@@ -8,7 +8,7 @@
  *
  *   fetchDashboard   GET /attendance/dashboard?officeId=   [owner]
  *
- * One round-trip serves the WHOLE screen: the five counts, both flag
+ * One round-trip serves the WHOLE screen: the six counts, both flag
  * strips AND (when the deployed BE includes the additive 19-4 field) the
  * office picker's per-office stats. No idempotency key (a read).
  *
@@ -21,17 +21,24 @@
  *     wire order, never re-sorts.
  *
  * The normalizer is FAIL-CLOSED (the 18-3 fetch-level rule): one bad field
- * rejects the whole fetch. Five counts feed KPI tiles and flags drive the
+ * rejects the whole fetch. Six counts feed KPI tiles and flags drive the
  * strips — a partially-trusted envelope would render a confidently wrong
  * summary, which is exactly the misrepresentation this forbids.
  */
 import { apiClient } from '../api/apiClient';
 
-/** The five FR-24 questions — each a non-negative integer. */
+/** The five FR-24 questions + story 20-2's Short day — each a
+ *  non-negative integer. `shortDay` holds the ENGINE-graded short-day
+ *  rows (a rule-7 `absent`: punch-in AND punch-out under the half-day
+ *  threshold, no owner status override); owner-adjudicated `absent`
+ *  overrides and the past-no-check-in `absent` stay in `notCheckedIn`.
+ *  The four buckets partition `tracked` — contract source: fenzit-be
+ *  `src/attendance/dashboard-response.model.ts`. */
 export interface AttendanceDashboardCounts {
   tracked: number;
   checkedIn: number;
   notCheckedIn: number;
+  shortDay: number;
   late: number;
   onLeave: number;
 }
@@ -83,6 +90,7 @@ const COUNT_FIELDS = [
   'tracked',
   'checkedIn',
   'notCheckedIn',
+  'shortDay',
   'late',
   'onLeave',
 ] as const;
@@ -212,6 +220,7 @@ export function normalizeDashboard(raw: unknown): AttendanceDashboardData {
       tracked: nonNegativeInt(counts.tracked, 'tracked'),
       checkedIn: nonNegativeInt(counts.checkedIn, 'checkedIn'),
       notCheckedIn: nonNegativeInt(counts.notCheckedIn, 'notCheckedIn'),
+      shortDay: nonNegativeInt(counts.shortDay, 'shortDay'),
       late: nonNegativeInt(counts.late, 'late'),
       onLeave: nonNegativeInt(counts.onLeave, 'onLeave'),
     },

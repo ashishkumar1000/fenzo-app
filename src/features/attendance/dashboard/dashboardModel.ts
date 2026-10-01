@@ -23,19 +23,27 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-/** One KPI tile — the five FR-24 questions in the spec's order. */
+/** One KPI tile — the FR-24 questions in the spec's order (story 20-2
+ *  added Short day right after Not checked in: both answer "who didn't
+ *  make a proper day", but a Short day DID punch in). */
 export interface KpiTileSpec {
-  key: 'tracked' | 'checkedIn' | 'notCheckedIn' | 'late' | 'onLeave';
+  key:
+    | 'tracked'
+    | 'checkedIn'
+    | 'notCheckedIn'
+    | 'shortDay'
+    | 'late'
+    | 'onLeave';
   label: string;
   value: number;
   /** `"«Label»: «n»"` — the screen reads the tile as this string. */
   a11yLabel: string;
   /** The checked-in share of today's tracked employees (rounded %), shown
-   *  as the tile's pill (19-4 redesign). null on the other four tiles. */
+   *  as the tile's pill (19-4 redesign). null on the other five tiles. */
   pct: number | null;
 }
 
-/** The five tiles (spec copy-table order). Colour lives in KpiTile's
+/** The six tiles (spec copy-table order). Colour lives in KpiTile's
  *  variant map keyed by `key`; counts are answers, not states — the hue
  *  highlights the family, never judges. */
 export function kpiTiles(counts: AttendanceDashboardCounts): KpiTileSpec[] {
@@ -43,6 +51,7 @@ export function kpiTiles(counts: AttendanceDashboardCounts): KpiTileSpec[] {
     ['tracked', 'Tracked'],
     ['checkedIn', 'Checked in'],
     ['notCheckedIn', 'Not checked in'],
+    ['shortDay', 'Short day'],
     ['late', 'Late'],
     ['onLeave', 'On leave'],
   ];

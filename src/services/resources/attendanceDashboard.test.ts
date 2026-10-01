@@ -29,6 +29,7 @@ function envelope(overrides: Record<string, unknown> = {}): Record<string, unkno
       tracked: 3,
       checkedIn: 2,
       notCheckedIn: 1,
+      shortDay: 0,
       late: 0,
       onLeave: 1,
     },
@@ -84,16 +85,20 @@ describe('fetchDashboard (route)', () => {
 });
 
 describe('fetchDashboard (happy path)', () => {
-  it('passes the five counts through as numbers', async () => {
+  it('passes the six counts through as numbers', async () => {
     get.mockResolvedValueOnce({ data: envelope() });
     const res = await fetchDashboard();
     expect(res.counts).toEqual({
       tracked: 3,
       checkedIn: 2,
       notCheckedIn: 1,
+      shortDay: 0,
       late: 0,
       onLeave: 1,
     });
+    // shortDay is a COUNT too — non-integer/other shapes fail closed.
+    get.mockResolvedValueOnce({ data: envelope({ counts: { tracked: 3, checkedIn: 1, notCheckedIn: 1, shortDay: 1, late: 0, onLeave: 1 } }) });
+    await expect(fetchDashboard()).resolves.toHaveProperty('counts.shortDay', 1);
     expect(res.date).toBe('2026-09-30');
     expect(res.flags).toEqual({ checkoutMissing: [], fakeLocationAttempt: [] });
     // Absent `offices` = an older deployed BE — "no stats", not a failure.
@@ -157,6 +162,9 @@ describe('normalizeDashboard — fail-closed envelope', () => {
     ['a count is a string', envelope({ counts: { tracked: '3', checkedIn: 0, notCheckedIn: 0, late: 0, onLeave: 0 } })],
     ['a count is negative', envelope({ counts: { tracked: -1, checkedIn: 0, notCheckedIn: 0, late: 0, onLeave: 0 } })],
     ['a count is fractional', envelope({ counts: { tracked: 1.5, checkedIn: 0, notCheckedIn: 0, late: 0, onLeave: 0 } })],
+    ['shortDay is missing', envelope({ counts: { tracked: 1, checkedIn: 0, notCheckedIn: 0, late: 0, onLeave: 0 } })],
+    ['shortDay is a string', envelope({ counts: { tracked: 1, checkedIn: 0, notCheckedIn: 0, shortDay: '1', late: 0, onLeave: 0 } })],
+    ['shortDay is negative', envelope({ counts: { tracked: 1, checkedIn: 0, notCheckedIn: 0, shortDay: -2, late: 0, onLeave: 0 } })],
     ['flags is missing', envelope({ flags: undefined })],
     ['flags is not an object', envelope({ flags: [] })],
     ['flags.checkoutMissing is not a list', envelope({ flags: { checkoutMissing: {}, fakeLocationAttempt: [] } })],
