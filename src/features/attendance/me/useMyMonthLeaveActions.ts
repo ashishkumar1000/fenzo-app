@@ -91,9 +91,11 @@ export function useMyMonthLeaveActions(input: {
   resolving: boolean;
   /** The host-owned write state the sheet renders. */
   actionState: LeaveSheetActionState;
-  /** The leaveCancel stage's confirm press. */
+  /** The cancel write — fired by the dialog's confirm (the one-more-time
+   *  press, 20-1); the stage's own confirm is the error-retry. */
   cancelLeave: () => void;
-  /** The convert stage's confirm press (retry re-enters here). */
+  /** The convert write — fired by the dialog's confirm (the one-more-time
+   *  press, 20-1); the stage's own confirm is the error-retry. */
   convertFullDay: () => void;
   /** The handled notice's OK — refetch truth; the sheet closes itself. */
   dismissHandled: () => void;

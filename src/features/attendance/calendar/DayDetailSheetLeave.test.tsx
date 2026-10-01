@@ -14,7 +14,10 @@
  *  - AC 11: while the walk is in flight the CTAs are ABSENT under a
  *    labelled "Loading request" shimmer — never disabled, never blank.
  *  - 20-1 (user ask): every CTA pops the reusable ConfirmDialog first;
- *    its confirm enters the wire-safe stage; "Keep" files NOTHING.
+ *    its confirm IS the one-more-time press — it fires the write and the
+ *    stage renders as the in-flight/retry posture (user decision
+ *    2026-10-01: two presses total, no second red confirm); "Keep" files
+ *    NOTHING.
  *  - the handled notice intercepts everything: OK = truth refetch +
  *    whole-sheet close.
  *
@@ -242,11 +245,13 @@ describe('AC 11 — the unresolved covering request', () => {
   });
 });
 
-describe('the confirm-then-stage gate (20-1 user ask)', () => {
-  it('pressing Cancel asks through the ConfirmDialog; the confirm enters the CancelSheet stage', async () => {
+describe('the confirm-then-fired gate (20-1 user ask, two presses)', () => {
+  it('pressing Cancel asks through the ConfirmDialog; the confirm FIRES the cancel and the CancelSheet stage renders as the in-flight posture', async () => {
+    const onCancelLeave = jest.fn();
     const root = renderSheet({
       day: day(),
       leaveRequest: request(),
+      onCancelLeave,
     });
     const ask = upDialog(root);
     expect(ask).toBeNull(); // nothing asks until the CTA is pressed
@@ -265,21 +270,25 @@ describe('the confirm-then-stage gate (20-1 user ask)', () => {
     });
     expect(upDialog(root)).toBeNull();
     expect(texts(root).includes('Cancellation request received')).toBe(false);
-    // The confirm enters the stage (the sheet's CancelSheet mounts).
+    expect(onCancelLeave).not.toHaveBeenCalled();
+    // The confirm IS the one-more-time press: the write fires AND the
+    // CancelSheet mounts (the in-flight posture).
     act(() => {
       cta.props.onPress();
     });
-    const ask2 = upDialog(root)!;
     act(() => {
-      ask2.props.onConfirm();
+      upDialog(root)!.props.onConfirm();
     });
+    expect(onCancelLeave).toHaveBeenCalledTimes(1);
     expect(root.findAllByType(CancelSheet)).toHaveLength(1);
   });
 
-  it('pressing Convert asks "Convert to full day?"; the confirm enters the convert stage', () => {
+  it('pressing Convert asks "Convert to full day?"; the confirm fires the convert and the convert stage renders', () => {
+    const onConvertFullDay = jest.fn();
     const root = renderSheet({
       day: day({ status: 'half_day_leave' }),
       leaveRequest: request({ part: 'first_half' }),
+      onConvertFullDay,
     });
     const cta = buttonByLabel(root, 'Convert to full day')!;
     act(() => {
@@ -294,13 +303,16 @@ describe('the confirm-then-stage gate (20-1 user ask)', () => {
       dialog.props.onCancel();
     });
     expect(upDialog(root)).toBeNull();
-    // Confirm → the convert stage renders.
+    expect(onConvertFullDay).not.toHaveBeenCalled();
+    // Confirm fires the convert; the convert stage renders as the
+    // in-flight posture.
     act(() => {
       cta.props.onPress();
     });
     act(() => {
       upDialog(root)!.props.onConfirm();
     });
+    expect(onConvertFullDay).toHaveBeenCalledTimes(1);
     expect(root.findAllByType(ConvertStage)).toHaveLength(1);
   });
 });

@@ -74,8 +74,15 @@ export function CancelSheet(input: {
   );
 
   if (previewState.kind === 'error') {
+    // 20-1 ruling: the write fires on the DIALOG's confirm now — when
+    // this stage mounts the write may already be racing this preview.
+    // If the write failed, its error is the one that matters (the user
+    // must see what happened to their tap): it leads. The Retry here
+    // still fetches the PREVIEW — once it lands, the enabled confirm
+    // below it is the write's real retry.
     return (
       <View style={styles.block}>
+        {errorMessage !== null ? <InlineError message={errorMessage} /> : null}
         <InlineError message={previewState.message} />
         <Button variant="secondary" size="lg" fullWidth onPress={retry}>
           Retry

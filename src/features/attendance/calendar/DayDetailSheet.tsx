@@ -129,9 +129,13 @@ export type DayDetailSheetProps = {
   leaveRequest?: LeaveRequestRow | null;
   /** 20-1 — the host-owned leave write state (cancel + convert). */
   leaveActionState?: LeaveSheetActionState;
-  /** 20-1 — the leaveCancel stage's confirm press (host-owned write). */
+  /** 20-1 — the leave-cancel write (host-owned, latched in the host):
+   *  fired by the dialog's confirm; the stage's own confirm is the
+   *  error-retry press. */
   onCancelLeave?: () => void;
-  /** 20-1 — the convert stage's confirm press (host-owned write). */
+  /** 20-1 — the convert-full-day write (host-owned, latched in the
+   *  host): fired by the dialog's confirm; the stage's own confirm is
+   *  the error-retry press. */
   onConvertFullDay?: () => void;
   /** 20-1 — the handled notice's OK (AC 9): truth refetch + whole-sheet
    *  close (the sheet calls its own `onClose` after this resolves). */
@@ -190,9 +194,10 @@ export function DayDetailSheet({
   leaveResolving = false,
 }: DayDetailSheetProps) {
   const [stage, setStage] = useState<DetailStage>('detail');
-  // 20-1 (user ask): the leave CTAs pop the reusable ConfirmDialog FIRST —
-  // the dialog's confirm is what enters the wire-safe stage (the stage's
-  // own confirm stays: modal → CancelSheet/ConvertStage).
+  // 20-1 (user ask): the leave CTAs pop the reusable ConfirmDialog FIRST,
+  // and the dialog's confirm IS the one-more-time press — it fires the
+  // write (see enterLeaveStage below); the stage it morphs to is the
+  // in-flight/retry posture.
   const [leaveConfirm, setLeaveConfirm] = useState<'cancel' | 'convert' | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -212,9 +217,15 @@ export function DayDetailSheet({
   // The stage never survives a close or a day switch — a reopen (or a
   // mid-open re-pick) lands on the detail stage with no carried form
   // state (the CorrectionSheet cross-day-leak rule; the LeaveDetailSheet
-  // visible-reset idiom).
+  // visible-reset idiom). The pending ask clears with it: the dialog's
+  // confirm FIRES the write now, so a latched ask left past a re-truth
+  // that moved `leaveRequestId` would pop unprompted over the next
+  // leave day and its confirm would fire THAT day's write.
   useEffect(() => {
-    if (visible) setStage('detail');
+    if (visible) {
+      setStage('detail');
+      setLeaveConfirm(null);
+    }
   }, [visible, workDate]);
 
   // The stage announce (18-4 a11y): the morph under the same heading is
@@ -327,11 +338,20 @@ export function DayDetailSheet({
     onLeaveWriteHandled?.();
     onClose();
   };
-  // The confirm dialog's confirm — enters the matching stage; its cancel/X
-  // stays on the detail CTAs.
+  // The confirm dialog's confirm IS the one-more-time press (2026-10-01
+  // user decision: two presses total, Confirm Regularization feel): it
+  // morphs to the stage and fires the write immediately — the stage then
+  // reads as the in-flight posture, its confirm staying only for the
+  // error-retry path. The write itself is host-latched (17-7), so a
+  // double press cannot split the cancel.
   const enterLeaveStage = (which: 'cancel' | 'convert') => {
     setLeaveConfirm(null);
     setStage(which === 'cancel' ? 'leaveCancel' : 'convert');
+    if (which === 'cancel') {
+      onCancelLeave?.();
+    } else {
+      onConvertFullDay?.();
+    }
   };
   // The sheet's subtitle slot follows the stage (the mock's sub-slot):
   // the correct stage keeps the day's times line; the cancel stage reads
