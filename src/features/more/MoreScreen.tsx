@@ -13,14 +13,14 @@
  * costs at most one request per window.
  */
 import { useCallback, useState } from 'react';
-import { Alert, ActivityIndicator, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Bell, Building2, FileText, HardHat, LogOut, Pencil, Phone, ShieldCheck, Users } from 'lucide-react-native';
-import { Avatar, Badge, Card, IconButton } from '../../components/ui';
+import { Avatar, Badge, Card, ConfirmDialog, IconButton } from '../../components/ui';
 import { colors, radius, spacing, typography } from '../../theme';
 import { runAllResets } from '../../services';
 import { clearAuthToken } from '../../services/authToken';
@@ -50,6 +50,9 @@ export default function MoreScreen({ navigation }: Props) {
   const { unreadCount } = useNotifications();
   const { count: customerCount, hasLoaded: customersHasLoaded } = useCustomers();
   const [editNameOpen, setEditNameOpen] = useState(false);
+  // Log out asks through the shared ConfirmDialog instead of a system Alert
+  // (the 20-1 modal ask) — same wording, in-app styling.
+  const [logOutOpen, setLogOutOpen] = useState(false);
 
   // Same throttled focus refresh the bells (Jobs/Home headers) and the
   // Customers tab run — at most one request per store per window.
@@ -85,23 +88,17 @@ export default function MoreScreen({ navigation }: Props) {
       ? 'Add your first customer'
       : `${customerCount} ${customerCount === 1 ? 'customer' : 'customers'}`;
 
-  const handleLogOut = () => {
-    Alert.alert('Log out', 'You will need to verify your number again to sign back in.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log out',
-        style: 'destructive',
-        onPress: () => {
-          // Same reset flow as a forced 401 logout (story 5.3): the registry
-          // owns the store list — a hand-rolled copy here would drift the
-          // first time a new store registers. The token must go too: a
-          // manual logout used to leave the JWT attached to later requests.
-          clearAuthToken();
-          runAllResets();
-          reset();
-        },
-      },
-    ]);
+  const handleLogOut = () => setLogOutOpen(true);
+
+  const confirmLogOut = () => {
+    setLogOutOpen(false);
+    // Same reset flow as a forced 401 logout (story 5.3): the registry
+    // owns the store list — a hand-rolled copy here would drift the
+    // first time a new store registers. The token must go too: a
+    // manual logout used to leave the JWT attached to later requests.
+    clearAuthToken();
+    runAllResets();
+    reset();
   };
 
   // Account name and company come from `GET /users/me` (shared with Home) —
@@ -220,6 +217,18 @@ export default function MoreScreen({ navigation }: Props) {
         visible={editNameOpen}
         currentName={profile.name}
         onClose={() => setEditNameOpen(false)}
+      />
+
+      <ConfirmDialog
+        visible={logOutOpen}
+        title="Log out"
+        message="You will need to verify your number again to sign back in."
+        confirmLabel="Log out"
+        confirmVariant="danger"
+        icon={<LogOut size={20} color={colors.danger} strokeWidth={2} />}
+        cancelLabel="Cancel"
+        onConfirm={confirmLogOut}
+        onCancel={() => setLogOutOpen(false)}
       />
     </SafeAreaView>
   );

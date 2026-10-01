@@ -52,6 +52,9 @@ export type { SegmentOption } from './SegmentedControl';
 export { Sheet } from './Sheet';
 export type { SheetProps } from './Sheet';
 
+export { ConfirmDialog } from './ConfirmDialog';
+export type { ConfirmDialogProps, ConfirmDialogRow } from './ConfirmDialog';
+
 export { Calendar } from './Calendar';
 export type { CalendarProps } from './Calendar';
 

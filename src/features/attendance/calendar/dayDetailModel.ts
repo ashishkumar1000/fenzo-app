@@ -10,6 +10,12 @@
  * (the D1 entry truth table), `buildOffsetInstant` + `tenantOffsetFromCarried`
  * (the D2 instant construction) and `dayTimesLine` (the correct stage's
  * subtitle slot) — same doctrine: string surgery, never a device date.
+ *
+ * Story 20-1 adds the LEAVE gates: `isLeaveDay` (the sheet hides "Apply
+ * leave" once a leave exists on the day), `canCancelLeaveDay` and
+ * `canConvertHalfDay` (the day sheet's Cancel/Convert CTAs — pending or
+ * approved, present or future, never the past; the wire keeps the
+ * final say with its 409s).
  */
 import {
   formatOffsetInstantTime,
@@ -111,6 +117,57 @@ export function canCorrectDay(
   if (day == null || today == null) return false;
   if (day.status === 'not_tracked') return false;
   return day.workDate <= today;
+}
+
+/**
+ * 20-1: does a leave exist on this day at all? True when ANY wire truth
+ * says the day carries an ACTIVE pending/approved leave: the id (the
+ * normal authority, populated exactly when the leave is active) OR'd with
+ * the status/marker truths as drift defence — if a leave truth ever
+ * arrived without the id, the sheet must still hide "Apply leave"
+ * (fail-closed; CTAs stay off since they need the id for the writes).
+ */
+export function isLeaveDay(day: DayStatusRow | null): boolean {
+  if (day == null) return false;
+  return (
+    day.leaveRequestId != null ||
+    day.status === 'leave' ||
+    day.status === 'half_day_leave' ||
+    day.markers.includes('leave_pending')
+  );
+}
+
+/**
+ * 20-1: the "Cancel request" CTA gate — pending or approved leave, on
+ * today or a strictly-future day (an approved past leave is settled
+ * fact; the wire's `workDate >= today` cancels still answer 409 if it
+ * has already been acted on). Never past dates.
+ */
+export function canCancelLeaveDay(
+  day: DayStatusRow | null,
+  today: string | null,
+): boolean {
+  if (day == null || today == null) return false;
+  if (day.leaveRequestId == null) return false;
+  return day.workDate >= today;
+}
+
+/**
+ * 20-1: the "Convert to full day" CTA gate — only an APPROVED half-day
+ * (`half_day_leave`; the wire cannot say WHICH half of a PENDING day, so
+ * pending never converts), and only a strictly-future day: converting
+ * the sheet's today carries the LEAVE_CHECKED_IN_CONFLICT risk on the
+ * re-file, so both cancel and convert drop out on today (the employee
+ * keeps the History cancel path for today's approved leaves — the
+ * 17-7 stage, which the wire still permits).
+ */
+export function canConvertHalfDay(
+  day: DayStatusRow | null,
+  today: string | null,
+): boolean {
+  if (day == null || today == null) return false;
+  if (day.status !== 'half_day_leave') return false;
+  return day.workDate > today;
 }
 
 /**

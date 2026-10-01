@@ -47,6 +47,8 @@ function wireRow(overrides: Record<string, unknown> = {}): Record<string, unknow
     checkinDistanceM: 42,
     checkoutDistanceM: null,
     markers: ['corrected'],
+    // 20-1 — the leave request id the day came from (null = not leave).
+    leaveRequestId: null,
     ...overrides,
   };
 }
@@ -83,6 +85,21 @@ describe('fetchDayStatuses (owner)', () => {
     const res = await fetchDayStatuses('e1', 'a', 'b');
 
     expect('latestCorrection' in res.days[0]).toBe(false);
+  });
+
+  it('passes a carried leaveRequestId through; a non-string one degrades to null', async () => {
+    get.mockResolvedValueOnce({
+      data: { employeeId: 'e1', from: 'a', to: 'b', today: 't', days: [wireRow({ leaveRequestId: 'lr1' })] },
+    });
+    const res = await fetchDayStatuses('e1', 'a', 'b');
+    expect(res.days[0].leaveRequestId).toBe('lr1');
+
+    get.mockResolvedValueOnce({
+      // Adversarial wire: the id arrives as a number, not a string.
+      data: { employeeId: 'e1', from: 'a', to: 'b', today: 't', days: [wireRow({ leaveRequestId: 42 })] },
+    });
+    const res2 = await fetchDayStatuses('e1', 'a', 'b');
+    expect(res2.days[0].leaveRequestId).toBeNull();
   });
 
   it('passes a carried latestCorrection through untouched', async () => {

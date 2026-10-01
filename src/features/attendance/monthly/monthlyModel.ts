@@ -56,6 +56,32 @@ export function formatHolidayShortDate(holidayDate: string): string {
   ].slice(0, 3)}`;
 }
 
+/** 'YYYY-MM' → the month's day count (UTC math on the month's 0th day —
+ *  zone-free like shiftYearMonth; 0 on malformed input, when the summary
+ *  card simply renders no length chip). */
+export function daysInMonth(yearMonth: string): number {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonth)) return 0;
+  return new Date(
+    Date.UTC(Number(yearMonth.slice(0, 4)), Number(yearMonth.slice(5, 7)), 0),
+  ).getUTCDate();
+}
+
+/** '2026-10-04' → "Sunday, 4 Oct 2026" — the holiday rows' FULL date (the
+ *  2026-10 My Month redesign). The weekday comes from a noon-anchored
+ *  Date (the formatTodaySubtitle idiom — the wire date, never the device
+ *  clock); the rest is string surgery. Malformed input renders the wire
+ *  value verbatim rather than "undefined Oct". */
+export function formatHolidayFullDate(holidayDate: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(holidayDate)) return holidayDate;
+  const y = Number(holidayDate.slice(0, 4));
+  const m = Number(holidayDate.slice(5, 7));
+  const d = Number(holidayDate.slice(8, 10));
+  const weekday = new Date(y, m - 1, d, 12, 0, 0, 0).toLocaleDateString('en-IN', {
+    weekday: 'long',
+  });
+  return `${weekday}, ${d} ${MONTH_NAMES[m - 1].slice(0, 3)} ${y}`;
+}
+
 /**
  * The fetch window for a displayed month: `monthRange(yearMonth)` with
  * `to = min(range.to, today)` — uniform, so a past month is a no-op clamp

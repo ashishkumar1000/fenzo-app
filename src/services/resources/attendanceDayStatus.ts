@@ -100,6 +100,10 @@ export interface DayStatusRow {
   checkinDistanceM: number | null;
   checkoutDistanceM: number | null;
   markers: DayMarker[];
+  /** 20-1: the acting id when the day carries an ACTIVE pending/approved
+   *  leave (the leave_requests.uuid the sheet's cancel/convert acts on);
+   *  null on every other day — rejected/cancelled/revoked included. */
+  leaveRequestId: string | null;
   latestCorrection?: LatestCorrectionView;
 }
 
@@ -200,6 +204,10 @@ function normalizeRow(raw: unknown): DayStatusRow {
   return {
     ...row,
     status: row.status,
+    // 20-1: a drifted wire that drops the id fails CLOSED to null — the
+    // sheet's leave CTAs read `!= null`, never a maybe-undefined.
+    leaveRequestId:
+      typeof row.leaveRequestId === 'string' ? row.leaveRequestId : null,
     markers: Array.isArray(row.markers)
       ? row.markers.filter(
           (marker): marker is DayMarker =>

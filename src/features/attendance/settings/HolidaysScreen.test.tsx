@@ -40,7 +40,8 @@ jest.mock('../../../services', () => ({
 
 import type ReactTestRenderer from 'react-test-renderer';
 import { act, create } from 'react-test-renderer';
-import { Alert, RefreshControl, Text } from 'react-native';
+import { RefreshControl, Text } from 'react-native';
+import { ConfirmDialog } from '../../../components/ui';
 import HolidaysScreen from './HolidaysScreen';
 import { holidaysService } from '../../../services';
 import { colors } from '../../../theme';
@@ -139,6 +140,14 @@ function textOrder(root: ReactTestRenderer.ReactTestInstance): string[] {
   return root
     .findAll((n) => n.type === Text && typeof n.props.children === 'string')
     .map((n) => n.props.children as string);
+}
+
+/** The ConfirmDialogs currently PRESENTED in the tree — a Modal keeps its
+ *  children composed while invisible, so presence reads props.visible. */
+function visibleConfirmDialogs(root: ReactTestRenderer.ReactTestInstance) {
+  return root
+    .findAllByType(ConfirmDialog)
+    .filter((d) => d.props.visible === true);
 }
 
 /** The row Pressable for a holiday (its a11y label starts with the name). */
@@ -375,9 +384,6 @@ describe('HolidaysScreen add affordances', () => {
   });
 
   it('deleting a holiday confirms first, then flashes the removed banner', async () => {
-    const alertSpy = jest
-      .spyOn(Alert, 'alert')
-      .mockImplementation(() => undefined);
     listMock.mockResolvedValue([DIWALI]);
     removeMock.mockResolvedValue(undefined);
 
@@ -387,31 +393,28 @@ describe('HolidaysScreen add affordances', () => {
       await flush();
     });
 
+    // The ask presents FIRST — nothing has been removed yet.
     act(() => {
       findButton(screen.root, 'Delete holiday').props.onPress();
     });
-    expect(alertSpy).toHaveBeenCalledTimes(1);
-    const [title, , buttons] = alertSpy.mock.calls[0];
-    expect(title).toBe('Delete holiday');
-    expect(buttons?.map((b) => b.text)).toEqual(['Cancel', 'Delete']);
+    const ask = visibleConfirmDialogs(screen.root)[0];
+    expect(ask.props.title).toBe('Delete holiday');
+    expect(ask.props.confirmLabel).toBe('Delete');
+    expect(ask.props.confirmVariant).toBe('danger');
+    expect(ask.props.cancelLabel).toBe('Cancel');
     expect(removeMock).not.toHaveBeenCalled();
 
-    const destructive = buttons?.find((b) => b.style === 'destructive');
     await act(async () => {
-      destructive?.onPress?.();
+      ask.props.onConfirm();
       await flush();
     });
 
     expect(removeMock).toHaveBeenCalledWith('h1');
     expect(hasText(screen.root, 'Edit holiday')).toBe(false);
     expect(hasText(screen.root, 'Holiday removed')).toBe(true);
-    alertSpy.mockRestore();
   });
 
   it('a FAILED delete keeps the sheet open with no removed banner (test gap)', async () => {
-    const alertSpy = jest
-      .spyOn(Alert, 'alert')
-      .mockImplementation(() => undefined);
     listMock.mockResolvedValue([DIWALI]);
     removeMock.mockRejectedValue({ status: 500 });
 
@@ -424,11 +427,9 @@ describe('HolidaysScreen add affordances', () => {
     act(() => {
       findButton(screen.root, 'Delete holiday').props.onPress();
     });
-    const destructive = alertSpy.mock.calls[0][2]?.find(
-      (b) => b.style === 'destructive',
-    );
+    const ask = visibleConfirmDialogs(screen.root)[0];
     await act(async () => {
-      destructive?.onPress?.();
+      ask.props.onConfirm();
       await flush();
     });
 
@@ -436,7 +437,6 @@ describe('HolidaysScreen add affordances', () => {
     // and nothing may claim the holiday was removed.
     expect(hasText(screen.root, 'Edit holiday')).toBe(true);
     expect(hasText(screen.root, 'Holiday removed')).toBe(false);
-    alertSpy.mockRestore();
   });
 });
 

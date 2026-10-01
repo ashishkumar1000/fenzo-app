@@ -1,25 +1,56 @@
 /**
- * AttendanceSummaryView.tsx — the FR-4 summary rows (Office, Timings,
- * Late cut-off, Weekly offs) shared by the active and upcoming state
- * screens (Story 15-10). Pure presentation: rows derive in
- * `attendanceMeModel.buildSummaryRows`, and this renders the tri-state
- * contract around them — a first-load shimmer (the summary-shaped
- * Skeleton); blocking error + Retry when there is nothing to show;
- * InlineError over live rows when a refetch
- * failed (the InlineError docblock's exact "stale" case).
+ * AttendanceSummaryView.tsx — the "Shift & location policy" card
+ * (Stories 15-10 / 19 redraw 2026-10): the same Office / Timings /
+ * Late cut-off / Weekly offs facts rendered as icon rows with right-side
+ * chips (rows + chips derive in `attendanceMeModel.buildPolicyRows`).
+ * Pure presentation around the tri-state contract — a first-load shimmer
+ * (the summary-shaped Skeleton); blocking error + Retry when there is
+ * nothing to show; InlineError over live rows when a refetch failed
+ * (the InlineError docblock's exact "stale" case).
  */
 import { StyleSheet, Text, View } from 'react-native';
-import { Button, Card, InlineError, Skeleton } from '../../../components/ui';
-import { colors, fontSize, radius, spacing } from '../../../theme';
-import { buildSummaryRows } from './attendanceMeModel';
+import {
+  Building2,
+  CalendarDays,
+  Clock,
+  TriangleAlert,
+  type LucideIcon,
+} from 'lucide-react-native';
+import {
+  Badge,
+  Button,
+  Card,
+  InlineError,
+  Skeleton,
+} from '../../../components/ui';
+import { colors, radius, spacing, typography } from '../../../theme';
+import { buildPolicyRows } from './attendanceMeModel';
+import type { PolicyRow } from './attendanceMeModel';
 import type { AttendanceSummaryState } from './useAttendanceSummary';
 
 type Props = {
   state: AttendanceSummaryState;
   onRetry: () => void;
+  /** 2026-10 — the LeaveApply policy sheet embeds this view under its own
+   *  sheet title, so the card's head row (title + "Active rule" badge)
+   *  would duplicate the heading. `embedded` drops the head row and keeps
+   *  the rows verbatim. Default false — the tab card keeps its head. */
+  embedded?: boolean;
 };
 
-export function AttendanceSummaryView({ state, onRetry }: Props) {
+/** One row's icon + tint family (the DESIGN.md row-tint vocabulary —
+ *  soft-bg tiles; amber belongs to the late grace, blue to the off day). */
+const ROW_ICONS: Record<
+  PolicyRow['key'],
+  { icon: LucideIcon; bg: string; fg: string }
+> = {
+  office: { icon: Building2, bg: colors.status.neutral.bg, fg: colors.status.neutral.solid },
+  timings: { icon: Clock, bg: colors.status.neutral.bg, fg: colors.status.neutral.solid },
+  cutOff: { icon: TriangleAlert, bg: colors.status.checkoutMissing.bg, fg: colors.status.checkoutMissing.solid },
+  weekly: { icon: CalendarDays, bg: colors.status.leave.bg, fg: colors.status.leave.solid },
+};
+
+export function AttendanceSummaryView({ state, onRetry, embedded = false }: Props) {
   if (state.isLoading) {
     // First load: a summary-shaped shimmer, labelled (the 19-5 idiom).
     return (
@@ -38,19 +69,49 @@ export function AttendanceSummaryView({ state, onRetry }: Props) {
       </View>
     );
   }
-  const rows = buildSummaryRows(state.summary);
+  const rows = buildPolicyRows(state.summary);
   return (
     <View style={styles.wrap}>
       {state.isStale && state.summary !== null && (
         <InlineError message="Couldn't refresh just now — these details may be out of date." />
       )}
       <Card style={styles.card}>
-        {rows.map(row => (
-          <View key={row.label} style={styles.row}>
-            <Text style={styles.rowLabel}>{row.label}</Text>
-            <Text style={styles.rowValue}>{row.value}</Text>
+        {embedded ? null : (
+          <View style={styles.head}>
+            <Text style={styles.headTitle} maxFontSizeMultiplier={1.4}>
+              Shift &amp; location policy
+            </Text>
+            <Badge status="progress" size="sm">
+              Active rule
+            </Badge>
           </View>
-        ))}
+        )}
+        {rows.map((row, i) => {
+          const tune = ROW_ICONS[row.key];
+          const RowIcon = tune.icon;
+          return (
+            <View
+              key={row.key}
+              style={[styles.row, i > 0 && styles.rowDivided]}>
+              <View style={[styles.rowIcon, { backgroundColor: tune.bg }]}>
+                <RowIcon size={18} color={tune.fg} strokeWidth={2} />
+              </View>
+              <View style={styles.rowText}>
+                <Text style={styles.rowLabel}>{row.label}</Text>
+                <Text style={styles.rowValue} maxFontSizeMultiplier={1.4}>
+                  {row.value}
+                </Text>
+              </View>
+              {row.chip !== null ? (
+                <Badge
+                  status={row.key === 'cutOff' ? 'checkoutMissing' : row.key === 'weekly' ? 'leave' : 'neutral'}
+                  size="sm">
+                  {row.chip}
+                </Badge>
+              ) : null}
+            </View>
+          );
+        })}
       </Card>
     </View>
   );
@@ -62,27 +123,48 @@ const styles = StyleSheet.create({
   },
   card: {
     padding: spacing.s4,
-    gap: spacing.s3,
+    gap: spacing.s2,
     borderRadius: radius.lg,
   },
+  head: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s2,
+    paddingBottom: spacing.s2,
+  },
+  headTitle: {
+    ...typography.eyebrow,
+    color: colors.textStrong,
+    flex: 1,
+  },
   row: {
-    gap: spacing.s1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s3,
+    paddingVertical: spacing.s2,
+  },
+  rowDivided: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+  },
+  rowIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowText: {
+    flex: 1,
+    gap: 1,
   },
   rowLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
+    ...typography.eyebrow,
   },
   rowValue: {
-    fontSize: fontSize.base,
-    fontWeight: '600',
-    color: colors.textStrong,
+    ...typography.bodyStrong,
   },
   errorWrap: {
     gap: spacing.s3,
-  },
-  errorText: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    textAlign: 'center',
   },
 });

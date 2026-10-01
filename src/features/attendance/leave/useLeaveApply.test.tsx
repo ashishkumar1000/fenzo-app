@@ -549,3 +549,37 @@ describe('the access-flip pop-back (D1)', () => {
     expect(ctx.navigation.goBack).not.toHaveBeenCalled();
   });
 });
+
+describe('the day-sheet prefill seed (20-1: the form opens on the tapped day)', () => {
+  it('prefillDate seeds From at mount — before any user interaction, the preview is already running', async () => {
+    previewLeave.mockResolvedValue(previewOk(1));
+    render({ params: { today: '2026-10-01', prefillDate: '2026-10-02' } });
+
+    expect(latest.from).toBe('2026-10-02');
+    expect(latest.to).toBeNull();
+    expect(previewLeave).toHaveBeenCalledWith({ startDate: '2026-10-02' });
+    await settle();
+    expect(latest.preview).toEqual({ status: 'ok', workingDays: 1, message: null });
+  });
+
+  it('no prefillDate: the plain tab entry still opens empty and fetches nothing', () => {
+    render({ params: { today: '2026-10-01' } });
+
+    expect(latest.from).toBeNull();
+    expect(previewLeave).not.toHaveBeenCalled();
+  });
+
+  it('the seed reads ONCE at mount: a later render carrying a different prefillDate leaves the form alone', async () => {
+    previewLeave.mockResolvedValue(previewOk(1));
+    const ctx = render({ params: { today: '2026-10-01', prefillDate: '2026-10-02' } });
+    expect(latest.from).toBe('2026-10-02');
+
+    // The mount-only seed (a useState initialiser, never an effect) must
+    // not re-apply on any re-render — an old prefilled param is history.
+    ctx.rerender({ params: { today: '2026-10-01', prefillDate: '2026-10-09' } });
+    expect(latest.from).toBe('2026-10-02');
+    // No form change → the preview effect never re-fires either.
+    expect(previewLeave).toHaveBeenCalledTimes(1);
+    await settle();
+  });
+});

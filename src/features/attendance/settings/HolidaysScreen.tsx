@@ -15,8 +15,8 @@
  * product's home timezone: a device set elsewhere must not put a holiday in a
  * section the BE disagrees with.
  *
- * Delete is destructive-confirm (`Alert.alert`), matching the destructive
- * pattern from OfficeFormScreen's archive.
+ * Delete is destructive-confirm (the shared ConfirmDialog, danger variant),
+ * matching the destructive pattern from OfficeFormScreen's archive.
  */
 import { useCallback, useMemo, useState } from 'react';
 import {

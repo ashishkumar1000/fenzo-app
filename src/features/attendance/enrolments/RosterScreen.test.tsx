@@ -39,7 +39,7 @@ jest.mock('../../../services', () => ({
 import type ReactTestRenderer from 'react-test-renderer';
 import { act, create } from 'react-test-renderer';
 import { ScrollView, Switch, Text } from 'react-native';
-import { Button, Skeleton } from '../../../components/ui';
+import { Button, ConfirmDialog, Skeleton } from '../../../components/ui';
 import { Calendar } from '../../../components/ui/Calendar';
 import RosterScreen from './RosterScreen';
 import { OfficePickerSheet } from './OfficePickerSheet';
@@ -181,6 +181,16 @@ function renderScreen(): Screen {
 
 async function flush(times = 5) {
   for (let i = 0; i < times; i++) await Promise.resolve();
+}
+
+/** The ConfirmDialog currently PRESENTED in the tree. A Modal keeps its
+ *  children composed while invisible, so presence reads props.visible —
+ *  never element existence. */
+function confirmDialogUp(root: ReactTestRenderer.ReactTestInstance) {
+  return (
+    root.findAllByType(ConfirmDialog).find((d) => d.props.visible === true) ??
+    null
+  );
 }
 
 async function renderLoaded(): Promise<Screen> {
@@ -500,7 +510,7 @@ describe('upcoming rows', () => {
     expect(enableMock).toHaveBeenCalledWith('e3', 'o2', isoShift(40));
   });
 
-  it('"Cancel the {date} start" DELETEs the future period', async () => {
+  it('"Cancel the {date} start" asks through the ConfirmDialog, then DELETEs the future period', async () => {
     const screen = await renderLoaded();
     const cancel = pressableWithLabel(
       screen.root,
@@ -511,7 +521,65 @@ describe('upcoming rows', () => {
       await flush();
     });
 
+    // The ask presents FIRST — nothing has deleted yet.
+    const ask = confirmDialogUp(screen.root);
+    expect(ask).not.toBeNull();
+    expect(ask!.props.title).toBe(`Cancel the ${formatLongDate(FUTURE)} start?`);
+    expect(disableMock).not.toHaveBeenCalled();
+
+    // Confirm (Cancel start) DELETEs the period; "Keep start" would not.
+    await act(async () => {
+      ask!.props.onConfirm();
+      await flush();
+    });
+    expect(disableMock).toHaveBeenCalledTimes(1);
     expect(disableMock).toHaveBeenCalledWith('e3');
+  });
+
+  it('"Keep start" on the ask sends NOTHING (cancel-safe by default)', async () => {
+    const screen = await renderLoaded();
+    const cancel = pressableWithLabel(
+      screen.root,
+      `Cancel the ${formatLongDate(FUTURE)} start for Arjun`,
+    );
+    await act(async () => {
+      cancel.props.onPress();
+      await flush();
+    });
+    const ask = confirmDialogUp(screen.root);
+    expect(ask!.props.cancelLabel).toBe('Keep start');
+    await act(async () => {
+      ask!.props.onCancel();
+      await flush();
+    });
+    expect(disableMock).not.toHaveBeenCalled();
+    expect(confirmDialogUp(screen.root)).toBeNull();
+  });
+
+  it('turning tracking OFF asks through the ConfirmDialog, then DELETEs (idempotent)', async () => {
+    const screen = await renderLoaded();
+    // Ramesh covers today — the row toggle is the OFF path
+    // (a never row's OFF does nothing: it is not tracked to turn off).
+    const ramesh = pressableWithLabel(
+      screen.root,
+      'Track attendance for Ramesh',
+    );
+    await act(async () => {
+      ramesh.props.onPress();
+      await flush();
+    });
+
+    const ask = confirmDialogUp(screen.root);
+    expect(ask).not.toBeNull();
+    expect(ask!.props.title).toBe('Turn off tracking for Ramesh?');
+    expect(ask!.props.cancelLabel).toBe('Keep tracking');
+    expect(disableMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      ask!.props.onConfirm();
+      await flush();
+    });
+    expect(disableMock).toHaveBeenCalledWith('e2');
   });
 });
 

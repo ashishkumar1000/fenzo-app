@@ -14,9 +14,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Users } from 'lucide-react-native';
+import { Users, X, XCircle } from 'lucide-react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button, EmptyState, InlineError, InlineNotice, Skeleton } from '../../../components/ui';
+import { Button, ConfirmDialog, EmptyState, InlineError, InlineNotice, Skeleton } from '../../../components/ui';
 import { colors, radius, spacing, typography } from '../../../theme';
 import { formatLongDate, istTodayDate } from '../../../utils';
 import type { RootStackParamList } from '../../../navigation/types';
@@ -57,6 +57,17 @@ export default function RosterScreen({ navigation, route }: Props) {
   // carry the same pick; entries are discarded the moment the row's server
   // truth stops being never-enrolled.
   const [startPicks, setStartPicks] = useState<Record<string, string>>({});
+
+  // 20-1 — the hard DELETE ask (the review finding: this screen confirms a
+  // reassign and an office archive, but a switch-off deleted instantly).
+  // 'disable' = the active row's switch-off; 'cancel-start' = the upcoming
+  // row's cancel button. The DELETE fires only after the dialog confirms.
+  const [deleteAsk, setDeleteAsk] = useState<{
+    employeeId: string;
+    kind: 'disable' | 'cancel-start';
+  } | null>(null);
+  const deleteRow =
+    roster.find((r) => r.employeeId === deleteAsk?.employeeId) ?? null;
 
   useEffect(() => {
     setStartPicks((prev) => {
@@ -147,6 +158,27 @@ export default function RosterScreen({ navigation, route }: Props) {
   const firstLoadFailed = enrolments.error && !enrolments.hasLoaded;
   const reassignRow = roster.find((r) => r.employeeId === reassignId) ?? null;
 
+  // 20-1 — the DELETE-ask dialog copy. `upcomingStart` gives the cancelled
+  // start's date (guaranteed present by the ask-open guard); formatLongDate
+  // matches the row's own "Starts …" wording.
+  const cancelledStart = deleteRow ? upcomingStart(deleteRow, today) : null;
+  const deleteTitle =
+    deleteAsk?.kind === 'cancel-start' && cancelledStart != null
+      ? `Cancel the ${formatLongDate(cancelledStart)} start?`
+      : deleteRow != null
+        ? `Turn off tracking for ${deleteRow.employeeName}?`
+        : '';
+  const deleteMessage = (() => {
+    if (deleteRow == null || deleteAsk == null) return '';
+    if (deleteAsk.kind === 'cancel-start') {
+      // Unreachable without a start (the ask-open guard) — empty copy
+      // rather than a fabricated date.
+      if (cancelledStart == null) return '';
+      return `${deleteRow.employeeName} was going to start being tracked from ${formatLongDate(cancelledStart)}. Cancelling this removes the start. You can add it again later.`;
+    }
+    return `${deleteRow.employeeName} will not be able to check in for attendance. Any planned change for them is also removed. You can turn it back on later.`;
+  })();
+
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       <ScreenHeader title="Team enrolment" onBack={goBackSafely} />
@@ -214,8 +246,21 @@ export default function RosterScreen({ navigation, route }: Props) {
                   });
                 }}
                 onToggleOn={() => onToggleOn(item.employeeId, item.officeId)}
-                onDisable={() => void enrolments.disable(item.employeeId)}
-                onCancelStart={() => void enrolments.disable(item.employeeId)}
+                onDisable={() =>
+                  setDeleteAsk({ employeeId: item.employeeId, kind: 'disable' })
+                }
+                onCancelStart={() => {
+                  const row = roster.find((r) => r.employeeId === item.employeeId);
+                  // The ask's copy names the cancelled start — ask only
+                  // when the row carries one; a start-less row has no
+                  // start to cancel, so no ask opens (never fabricate a
+                  // date the wire did not supply).
+                  if (row == null || upcomingStart(row, today) == null) return;
+                  setDeleteAsk({
+                    employeeId: item.employeeId,
+                    kind: 'cancel-start',
+                  });
+                }}
                 onChangeOffice={() => {
                   setReassignId(item.employeeId);
                   setSheetDate(reassignSheetDefaults(item, today).effectiveFrom);
@@ -294,6 +339,29 @@ export default function RosterScreen({ navigation, route }: Props) {
               }
             });
         }}
+      />
+
+      <ConfirmDialog
+        visible={deleteAsk != null && deleteRow != null}
+        title={deleteTitle}
+        message={deleteMessage}
+        confirmLabel={deleteAsk?.kind === 'cancel-start' ? 'Cancel start' : 'Turn off tracking'}
+        confirmVariant="danger"
+        icon={
+          deleteAsk?.kind === 'cancel-start' ? (
+            <X size={20} color={colors.danger} strokeWidth={2.2} />
+          ) : (
+            <XCircle size={20} color={colors.danger} strokeWidth={2} />
+          )
+        }
+        cancelLabel={deleteAsk?.kind === 'cancel-start' ? 'Keep start' : 'Keep tracking'}
+        submitting={deleteRow ? enrolments.isRowPending(deleteRow.employeeId) : false}
+        onConfirm={() => {
+          const ask = deleteAsk;
+          setDeleteAsk(null);
+          if (ask) void enrolments.disable(ask.employeeId);
+        }}
+        onCancel={() => setDeleteAsk(null)}
       />
     </SafeAreaView>
   );

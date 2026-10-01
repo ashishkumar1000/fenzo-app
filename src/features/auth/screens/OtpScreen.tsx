@@ -16,9 +16,15 @@ type Props = {
   code: string;
   onChangeCode: (next: string) => void;
   onVerify: () => void;
-  onResend: () => void;
+  /** Fires once per press; the countdown restarts on `done` — called when
+   *  the resend POST settles (success or failure), so a slow request never
+   *  shows a fresh 45s window it couldn't honour. */
+  onResend: (done?: () => void) => void;
   onChangeNumber: () => void;
   verifying?: boolean;
+  /** The resend POST is in flight — the link reads "Resending…" and the
+   *  countdown neither runs nor restarts (the 20-1 loading sweep). */
+  resending?: boolean;
   error?: string;
   /**
    * DEV ONLY — the real OTP, when the backend includes it (no SMS delivery
@@ -46,6 +52,7 @@ export function OtpScreen({
   onResend,
   onChangeNumber,
   verifying = false,
+  resending = false,
   error,
   devOtp,
 }: Props) {
@@ -75,12 +82,13 @@ export function OtpScreen({
   }, [startTimer]);
 
   const handleResend = () => {
-    if (seconds > 0) return;
-    onResend();
-    startTimer();
+    if (seconds > 0 || resending) return;
+    // The 45s window restarts only when the POST settles — until then the
+    // link stays on "Resending…", so a slow network can't eat the window.
+    onResend(() => startTimer());
   };
 
-  const canResend = seconds === 0;
+  const canResend = seconds === 0 && !resending;
   const complete = code.length === OTP_LENGTH;
 
   return (
@@ -112,7 +120,11 @@ export function OtpScreen({
       <View style={styles.metaRow}>
         <Pressable onPress={handleResend} disabled={!canResend} hitSlop={8}>
           <Text style={[styles.resend, canResend ? styles.resendActive : null]}>
-            {canResend ? 'Resend OTP' : `Resend OTP in ${mmss(seconds)}`}
+            {resending
+              ? 'Resending…'
+              : canResend
+                ? 'Resend OTP'
+                : `Resend OTP in ${mmss(seconds)}`}
           </Text>
         </Pressable>
 

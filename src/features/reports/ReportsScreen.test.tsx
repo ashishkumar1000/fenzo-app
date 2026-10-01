@@ -318,6 +318,44 @@ describe('retry banner and spinner', () => {
 });
 
 describe('failed load', () => {
+  it('THE DISCRIMINATING CASE (20-1 review): a failed reload over an EMPTY list with hasLoaded TRUE still shows the full-screen error', () => {
+    // The 20-1 gate fix: `!hasLoaded` cannot discriminate — the store sets
+    // hasLoaded true even on failure, so this fixture (loaded, empty, but
+    // the last load errored) would have wrongly rendered the empty state
+    // under the old conjunct. The fix reads reports.length === 0.
+    store.reports = [];
+    store.error = 'Network request failed';
+    store.hasLoaded = true;
+    store.isLoading = false;
+    const root = renderScreen();
+
+    const text = root
+      .findAllByType(Text)
+      .map(t => flatten(t.props.children))
+      .join('\n');
+    expect(text).toContain('Network request failed');
+    expect(root.findAllByType(ReportRow)).toHaveLength(0);
+    const retry = root
+      .findAllByType(Button)
+      .find(b => flatten(b.props.children) === 'Retry');
+    expect(retry).toBeDefined();
+  });
+
+  it('the INVERSE case stays honest: loaded + empty + NO error is the empty state, not the error view', () => {
+    store.reports = [];
+    store.error = null;
+    store.hasLoaded = true;
+    store.isLoading = false;
+    const root = renderScreen();
+
+    expect(root.findAllByType(ReportRow)).toHaveLength(0);
+    const text = root
+      .findAllByType(Text)
+      .map(t => flatten(t.props.children))
+      .join('\n');
+    expect(text).not.toContain('Network request failed');
+  });
+
   it('replaces the list with a full-screen error and Retry when the load failed with no data', () => {
     store.reports = [];
     store.error = 'Network request failed';

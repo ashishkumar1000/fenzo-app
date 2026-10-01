@@ -52,9 +52,10 @@ jest.mock('../../services/authToken', () => ({
 
 import type ReactTestRenderer from 'react-test-renderer';
 import React from 'react';
-import { Alert, Text } from 'react-native';
+import { Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import { useFocusEffect } from '@react-navigation/native';
+import { ConfirmDialog } from '../../components/ui';
 import { loadCustomers, useCustomers } from '../customers';
 import { loadUnreadCount, useNotifications } from '../notifications';
 import { runAllResets } from '../../services';
@@ -62,6 +63,13 @@ import { clearAuthToken } from '../../services/authToken';
 import MoreScreen from './MoreScreen';
 import { MoreRow } from './components/MoreRow';
 import { MoreTile } from './components/MoreTile';
+
+/** The ConfirmDialogs currently PRESENTED in the tree — a Modal keeps its
+ *  children composed while invisible, so presence reads props.visible,
+ *  never element existence. */
+function dialogsUp(root: ReactTestRenderer.ReactTestRenderer['root']) {
+  return root.findAllByType(ConfirmDialog).filter(d => d.props.visible === true);
+}
 
 const useNotificationsMock = useNotifications as jest.Mock;
 const useCustomersMock = useCustomers as jest.Mock;
@@ -174,30 +182,38 @@ describe('MoreScreen wiring', () => {
     expect(mockNavigate).toHaveBeenCalledWith('AttendanceHome');
   });
 
-  it('logs out only through the confirm dialog, running the forced-logout flow', () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  it('logs out only through the ConfirmDialog, running the forced-logout flow after the confirm', () => {
     const root = renderScreen();
     const logoutRow = root.findAllByType(MoreRow).find(t => t.props.title === 'Log out');
 
-    // Pressing the row shows the confirm dialog — nothing resets yet.
+    // Pressing the row opens the shared ConfirmDialog — nothing resets yet.
     act(() => {
       logoutRow?.props.onPress();
     });
-    expect(alertSpy).toHaveBeenCalledWith(
-      'Log out',
-      expect.any(String),
-      expect.any(Array),
-    );
+    const dialog = dialogsUp(root)[0];
+    expect(dialog.props.title).toBe('Log out');
     expect(clearAuthToken).not.toHaveBeenCalled();
     expect(runAllResets).not.toHaveBeenCalled();
 
-    // Confirming the dialog runs the same forced-logout flow as a 401.
-    const confirm = alertSpy.mock.calls[0][2]!.find(b => b.text === 'Log out')!;
+    // CANCEL runs nothing (a confirmation default — Log out never fires
+    // through the secondary).
     act(() => {
-      confirm.onPress?.();
+      dialog.props.onCancel();
+    });
+    expect(clearAuthToken).not.toHaveBeenCalled();
+    expect(runAllResets).not.toHaveBeenCalled();
+    expect(dialogsUp(root)).toHaveLength(0);
+
+    // Re-open, then CONFIRM: the flow runs after the dialog closes.
+    act(() => {
+      logoutRow?.props.onPress();
+    });
+    const confirm = dialogsUp(root)[0];
+    act(() => {
+      confirm.props.onConfirm();
     });
     expect(clearAuthToken).toHaveBeenCalled();
     expect(runAllResets).toHaveBeenCalled();
-    alertSpy.mockRestore();
+    expect(dialogsUp(root)).toHaveLength(0);
   });
 });

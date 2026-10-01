@@ -31,10 +31,12 @@
  * The wire's `today` echo drives the month bounds + the fetch clamp (the
  * model's monthlyWindow) — the FE never derives it from the device clock.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   AppState,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -85,6 +87,34 @@ export default function AttendanceMonthlyScreen({ navigation }: Props) {
     onPickOffice,
   } = useMonthlyData();
 
+  // 20-1 AC 15 (review 2026-10-01, user call): the monthly review carries
+  // pull-to-refresh like every other attendance surface — `load` (not a
+  // parameter load: no skeleton flash, rows stay up, the AC 14 posture).
+  // Same-tick double pull is inert through the ref latch.
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const refreshingRef = useRef(false);
+  const onRefresh = useCallback(async () => {
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
+    setIsRefreshing(true);
+    AccessibilityInfo.announceForAccessibility('Refreshing attendance');
+    try {
+      await load();
+    } finally {
+      refreshingRef.current = false;
+      setIsRefreshing(false);
+    }
+  }, [load]);
+
+  const refreshControl = (
+    <RefreshControl
+      refreshing={isRefreshing}
+      onRefresh={onRefresh}
+      colors={[colors.primary]}
+      tintColor={colors.primary}
+    />
+  );
+
   // The ONE fetch per appearance: the first focus IS the initial load.
   useFocusEffect(
     useCallback(() => {
@@ -128,7 +158,8 @@ export default function AttendanceMonthlyScreen({ navigation }: Props) {
 
       <ScrollView
         contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        refreshControl={refreshControl}>
         {/* The office filter — static chrome, renders in every posture.
             officesCount null: NO Sites pill (Q2 — the pill costs a standing
             second fetch and adds nothing to a month-end review). */}

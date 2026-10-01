@@ -27,7 +27,7 @@
  */
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, fontSize, radius, spacing, weight } from '../../../theme';
+import { colors, fontFamily, fontSize, radius, spacing, weight } from '../../../theme';
 import type { DayStatusRow } from '../../../services/resources/attendanceDayStatus';
 import {
   DAY_STATUS_VISUALS,
@@ -130,18 +130,30 @@ export function MonthCalendar({
   // UTC-anchored date math on explicit Y/M/D — deterministic on every
   // device zone (no local-midnight DST edges).
   const { year, month } = parsed;
-  // Sunday-first offset: JS getUTCDay is already 0=Sunday.
+  // Sunday-first offset: JS getUTCDay is already 0=Sunday. The days cut
+  // into EXPLICIT 7-wide week rows (the 2026-10 device-found fix): a
+  // flexWrap grid once rendered 6-per-row on a real device (percentage
+  // widths + pixel rounding pushed the 7th cell to wrap), misaligning
+  // every column and leaving a stray band — a fixed-7 row can never
+  // miswrap on any width.
   const leadingBlanks = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
   const dayCount = new Date(Date.UTC(year, month, 0)).getUTCDate();
 
-  const cells: (string | null)[] = [
-    ...Array.from({ length: leadingBlanks }, () => null),
-    ...Array.from({ length: dayCount }, (_, i) => {
-      const dd = String(i + 1).padStart(2, '0');
-      const mm = String(month).padStart(2, '0');
-      return `${year}-${mm}-${dd}`;
-    }),
-  ];
+  const weeks: (string | null)[][] = [];
+  let week: (string | null)[] = Array.from({ length: leadingBlanks }, () => null);
+  for (let day = 1; day <= dayCount; day++) {
+    const dd = String(day).padStart(2, '0');
+    const mm = String(month).padStart(2, '0');
+    week.push(`${year}-${mm}-${dd}`);
+    if (week.length === 7) {
+      weeks.push(week);
+      week = [];
+    }
+  }
+  if (week.length > 0) {
+    while (week.length < 7) week.push(null);
+    weeks.push(week);
+  }
 
   return (
     <View accessibilityRole="grid" accessibilityLabel={`Calendar, ${MONTH_NAMES[month - 1]} ${year}`}>
@@ -159,20 +171,24 @@ export function MonthCalendar({
         ))}
       </View>
       <View style={styles.grid}>
-        {cells.map((workDate, index) =>
-          workDate == null ? (
-            <View key={`blank-${index}`} style={styles.cell} />
-          ) : (
-            <DayCell
-              key={workDate}
-              workDate={workDate}
-              dayNumber={Number(workDate.slice(8, 10))}
-              row={days.get(workDate)}
-              isToday={workDate === today}
-              onPress={onPickDate}
-            />
-          ),
-        )}
+        {weeks.map((cells, weekIndex) => (
+          <View key={`week-${weekIndex}`} style={styles.weekRow}>
+            {cells.map((workDate, dayIndex) =>
+              workDate == null ? (
+                <View key={`blank-${dayIndex}`} style={styles.cell} />
+              ) : (
+                <DayCell
+                  key={workDate}
+                  workDate={workDate}
+                  dayNumber={Number(workDate.slice(8, 10))}
+                  row={days.get(workDate)}
+                  isToday={workDate === today}
+                  onPress={onPickDate}
+                />
+              ),
+            )}
+          </View>
+        ))}
       </View>
     </View>
   );
@@ -193,11 +209,15 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    gap: spacing.s1 / 2,
   },
+  weekRow: {
+    flexDirection: 'row',
+  },
+  // flex:1 (never a percentage width) so the 7 cells divide the row
+  // exactly; aspectRatio keeps the day square.
   cell: {
-    width: `${100 / 7}%`,
+    flex: 1,
     aspectRatio: 1,
     borderRadius: radius.sm,
     alignItems: 'center',
@@ -209,8 +229,11 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.primary,
   },
+  // 20-1 (user ask): the day number reads as the DS's bold FACE — the
+  // weight alone left the unnamed system face thin at this tiny size.
   dayNumber: {
     fontSize: fontSize['2xs'],
     fontWeight: weight.bold,
+    fontFamily: fontFamily.bold,
   },
 });

@@ -86,7 +86,15 @@ export function useLeaveApply(input: {
   const { navigation, route } = input;
   const today = route.params?.today ?? null;
 
-  const [step, setStep] = useState<LeaveFormStep>(initialLeaveForm);
+  // The day sheet's "Apply leave" prefill (2026-10): the tapped work date
+  // seeds From ONCE at mount — the normal single-date pick through the same
+  // model transition (pickFrom), so every form invariant (range clearing,
+  // part reset) holds by construction. It never re-runs: a fresh push is a
+  // fresh mount; an old prefilled param must not re-apply on any re-render.
+  const prefill = route.params?.prefillDate ?? null;
+  const [step, setStep] = useState<LeaveFormStep>(() => {
+    return prefill ? pickFrom(initialLeaveForm().state, prefill) : initialLeaveForm();
+  });
   const state = step.state;
   const [reason, setReason] = useState('');
   const [preview, setPreview] = useState<LeavePreviewState>(IDLE_PREVIEW);

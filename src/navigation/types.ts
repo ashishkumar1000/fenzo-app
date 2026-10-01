@@ -276,12 +276,17 @@ export type DatePickerParams = {
  * server-provided date from the Attendance tab's loaded summary (`active`)
  * or null (`upcoming` — the wire has no today outside active). `pickedDate`
  * /`context` are the DatePicker's return channel (`popTo` merge); consumed
- * read-once-then-cleared so a stale pick can never re-fire.
+ * read-once-then-cleared so a stale pick can never re-fire. `prefillDate`
+ * (2026-10 — the day sheet's "Apply leave" action) seeds From ONCE on
+ * mount — the day sheet pushes the form with the tapped work date pre-set:
+ * not part of the picker channel and never cleared (a fresh action mounts
+ * a fresh form).
  */
 export type LeaveApplyParams = {
   today: string | null;
   pickedDate?: string | null;
   context?: 'from' | 'to' | null;
+  prefillDate?: string | null;
 };
 
 /**
@@ -341,11 +346,33 @@ export type TechnicianRootStackParamList = {
    */
   LeaveApply: LeaveApplyParams;
   /**
+   * The 2026-10 tab redesign — the technician's own "My month"
+   * (calendar + summary + upcoming holidays + the day-status legend),
+   * pushed from the Attendance tab's My month banner. The posture pieces
+   * (`historyOnly`, `attendanceEndedOn`, the `todaySignal` bridge
+   * fingerprint) travel once per push — the host remounts and
+   * re-bootstraps every entry, so params are a snapshot, never a live
+   * link back into the tab.
+   */
+  AttendanceMyMonth: AttendanceMyMonthParams;
+  /**
    * Story 17-5 — the full-screen date picker, now DUAL-registered (the
    * owner stack had it since 15-9; the technician stack gains it for the
    * leave form's From/To rows). Same shared shape: `DatePickerParams`.
    */
   DatePicker: DatePickerParams;
+};
+
+/**
+ * The 2026-10 tab redesign — AttendanceMyMonthScreen's push params.
+ * `attendanceEndedOn` is the wire's history_only-only end date (null
+ * elsewhere); `todaySignal` is the active check-in bridge fingerprint
+ * (null when the summary is unloaded — history_only never bridges).
+ */
+export type AttendanceMyMonthParams = {
+  attendanceEndedOn?: string | null;
+  historyOnly?: boolean;
+  todaySignal?: string | null;
 };
 
 declare global {

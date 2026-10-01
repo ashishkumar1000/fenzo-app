@@ -11,14 +11,14 @@
  *  - shouldShowIntro: the FR-4 gate — active/upcoming AND never onboarded;
  *    a history_only employee's tracking has ended so they are NEVER asked
  *    for location permission (spec finding #5).
- *  - buildSummaryRows: rows without server data are left out, but the
+ *  - buildPolicyRows: rows without server data are left out, but the
  *    Weekly offs row is ALWAYS present ([] = works all week is a real
  *    answer, not missing data).
  */
 import { formatLongDate } from '../../../utils';
 import type { AttendanceAccess, AttendanceSummary } from '../../../services';
 import {
-  buildSummaryRows,
+  buildPolicyRows,
   formatCutOffCopy,
   formatHhmm12,
   formatStartsOnCopy,
@@ -198,40 +198,48 @@ describe('shouldShowIntro — the FR-4 gate (finding #5)', () => {
   });
 });
 
-describe('buildSummaryRows', () => {
+describe('buildPolicyRows (the summary card\'s policy rows with chips)', () => {
   it('a null summary has no rows', () => {
-    expect(buildSummaryRows(null)).toEqual([]);
+    expect(buildPolicyRows(null)).toEqual([]);
   });
 
-  it('the full summary renders four rows in order', () => {
-    expect(buildSummaryRows(summary())).toEqual([
-      { label: 'Office', value: 'HQ' },
-      { label: 'Timings', value: '9:30 AM – 6:00 PM' },
-      { label: 'Late cut-off', value: 'Late after 9:45 AM' },
-      { label: 'Weekly offs', value: 'Sat, Sun' },
+  it('the full summary renders four rows in order, each chip derived (2026-10 redesign)', () => {
+    expect(buildPolicyRows(summary())).toEqual([
+      { key: 'office', label: 'Office', value: 'HQ', chip: 'Assigned branch' },
+      { key: 'timings', label: 'Timings', value: '9:30 AM – 6:00 PM', chip: '8h 30m shift' },
+      { key: 'cutOff', label: 'Late cut-off', value: 'Late after 9:45 AM', chip: '15m grace' },
+      { key: 'weekly', label: 'Weekly offs', value: 'Sat, Sun', chip: '2 days off' },
     ]);
   });
 
   it('an office-only summary still carries the Weekly offs row ("No weekly offs" is a real answer)', () => {
     expect(
-      buildSummaryRows(summary({ startTime: null, endTime: null, lateCutOffMinutes: null, weeklyOffDays: [] })),
+      buildPolicyRows(summary({ startTime: null, endTime: null, lateCutOffMinutes: null, weeklyOffDays: [] })),
     ).toEqual([
-      { label: 'Office', value: 'HQ' },
-      { label: 'Weekly offs', value: 'No weekly offs' },
+      { key: 'office', label: 'Office', value: 'HQ', chip: 'Assigned branch' },
+      { key: 'weekly', label: 'Weekly offs', value: 'No weekly offs', chip: null },
     ]);
   });
 
   it('a missing rule start drops the Timings AND Late cut-off rows, not just the value', () => {
     expect(
-      buildSummaryRows(summary({ startTime: null, endTime: '18:00', lateCutOffMinutes: 15 })),
+      buildPolicyRows(summary({ startTime: null, endTime: '18:00', lateCutOffMinutes: 15 })),
     ).toEqual([
-      { label: 'Office', value: 'HQ' },
-      { label: 'Weekly offs', value: 'Sat, Sun' },
+      { key: 'office', label: 'Office', value: 'HQ', chip: 'Assigned branch' },
+      { key: 'weekly', label: 'Weekly offs', value: 'Sat, Sun', chip: '2 days off' },
     ]);
   });
 
   it('a missing office name drops the Office row', () => {
-    const rows = buildSummaryRows(summary({ officeName: null }));
+    const rows = buildPolicyRows(summary({ officeName: null }));
     expect(rows.map((r) => r.label)).toEqual(['Timings', 'Late cut-off', 'Weekly offs']);
+  });
+
+  it('a non-positive grace window keeps the Late cut-off row, but without the chip', () => {
+    const rows = buildPolicyRows(summary({ lateCutOffMinutes: 0 }));
+    expect(rows[2].label).toBe('Late cut-off');
+    expect(rows[2].chip).toBeNull();
+    // The value row stays honest: the START itself is the cut-off.
+    expect(rows[2].value).toBe('Late after 9:30 AM');
   });
 });

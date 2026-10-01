@@ -140,31 +140,29 @@ export function messageForApiError(err: {
 
 /** The checked-in line above the Check out button
  *  ("Checked in 10:22 AM · Late by 22 min"). */
-export function formatCheckedInLine(
-  record: { lateMinutes: number | null; isLate: boolean },
-  timeText: string | null,
-): string | null {
-  if (!timeText) return null;
-  const lateSuffix =
-    record.isLate && record.lateMinutes !== null && record.lateMinutes > 0
-      ? ` · Late by ${record.lateMinutes} min`
-      : '';
-  return `Checked in ${timeText}${lateSuffix}`;
-}
-
-/** The done card's data (times + worked hours) from the merged record. */
-export interface DoneCardModel {
+/** The punch card's data (2026-10 tab redesign) — the two tile times, the
+ *  total-logged pill and the late/early pills, from the merged record.
+ *  Unlike the old done-card model this is built for EVERY record state
+ *  (checked-in-only included: the checkout tile reads "—", no worked
+ *  pill yet), so the mid-session card and the button coexist. */
+export interface TodayTilesModel {
+  /** Tile times, "4:06 AM" — null renders the "—" placeholder. */
   checkinText: string | null;
   checkoutText: string | null;
+  /** The green pill's value; null renders no pill (minutes unknown). */
   workedText: string | null;
+  /** The amber pill's value ("Late by 22 min" / "Early by 713 min"). */
   lateText: string | null;
   earlyText: string | null;
+  /** The early pill's caption — how long before the shift end
+   *  ("11 h 53 m before shift"); null = no caption. */
+  earlyBeforeShiftText: string | null;
 }
 
-export function buildDoneCard(
+export function buildTodayTiles(
   record: AttendanceTodayRecord,
   formatTime: (iso: string) => string | null,
-): DoneCardModel {
+): TodayTilesModel {
   const lateText =
     record.isLate && record.lateMinutes !== null && record.lateMinutes > 0
       ? `Late by ${record.lateMinutes} min`
@@ -173,12 +171,17 @@ export function buildDoneCard(
     record.earlyCheckout && record.earlyCheckoutMinutes !== null
       ? `Early by ${record.earlyCheckoutMinutes} min`
       : null;
+  const beforeShift =
+    record.earlyCheckout && record.earlyCheckoutMinutes !== null
+      ? formatWorkedMinutes(record.earlyCheckoutMinutes)
+      : null;
   return {
     checkinText: formatTime(record.checkinAt),
     checkoutText: record.checkoutAt ? formatTime(record.checkoutAt) : null,
     workedText: formatWorkedMinutes(record.workedMinutes),
     lateText,
     earlyText,
+    earlyBeforeShiftText: beforeShift !== null ? `${beforeShift} before shift` : null,
   };
 }
 

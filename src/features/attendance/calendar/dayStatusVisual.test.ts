@@ -72,6 +72,10 @@ function row(overrides: Partial<DayStatusRow> = {}): DayStatusRow {
     checkoutDistanceM: null,
     markers: [],
     ...overrides,
+    // 20-1 — leaveRequestId normalizes AFTER the spread (Partial leaks
+    // undefined through it); only the leave-day rows carry a UUID.
+    leaveRequestId: overrides.leaveRequestId ?? null,
+
   };
 }
 

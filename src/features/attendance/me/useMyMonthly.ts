@@ -48,6 +48,12 @@ export function useMyMonthly(input: {
   loading: boolean;
   error: string | null;
   retry: () => void;
+  /** 20-1: the silent refresh as an EXPLICIT handle for the screen's
+   *  pull-to-refresh — the user-initiated revalidation bypasses the
+   *  focus path's ACCESS_REFRESH_MIN_GAP_MS (that gate is focus-only).
+   *  Returns the fetch's promise so the refresh spinner can hold until
+   *  it settles; errors surface through the ordinary `error` state. */
+  refresh: () => Promise<void>;
 } {
   const { yearMonth, today } = input;
   const [data, setData] = useState<MeMonthlyData | null>(null);
@@ -116,10 +122,12 @@ export function useMyMonthly(input: {
    */
   const refresh = useCallback(() => {
     const fetchToday = todayRef.current;
-    if (fetchToday === null) return;
+    if (fetchToday === null) return Promise.resolve();
     const seq = ++seqRef.current;
     const { from, to } = monthlyWindow(yearMonthRef.current, fetchToday);
-    fetchMyMonthly(from, to)
+    // 20-1: the promise is returned for the pull-to-refresh spinner; the
+    // focus/AppState callers ignore it as before.
+    return fetchMyMonthly(from, to)
       .then(res => {
         if (!mounted.current || seq !== seqRef.current) return;
         setData(res);
@@ -157,5 +165,5 @@ export function useMyMonthly(input: {
     return () => sub?.remove();
   }, [refresh]);
 
-  return { data, loading, error, retry };
+  return { data, loading, error, retry, refresh };
 }

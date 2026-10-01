@@ -57,6 +57,7 @@ import { useAttendanceSummary } from '../me/useAttendanceSummary';
 import type { AttendanceSummaryState } from '../me/useAttendanceSummary';
 import type { AttendanceAccessStateSnapshot } from '../me/attendanceAccessStore';
 import type { AttendanceSummary } from '../../../services';
+import { BannerCard } from '../me/BannerCard';
 import LeaveApplyScreen from './LeaveApplyScreen';
 import AttendanceTabScreen from '../me/AttendanceTabScreen';
 
@@ -500,13 +501,22 @@ function renderTab(
   return { root: renderer.root, navigation };
 }
 
-describe('the tab entry row (spec D1)', () => {
-  it('renders in active and pushes LeaveApply with the summary today', () => {
+describe('the tab entry (spec D1, 2026-10 banner shape)', () => {
+  it('active: the entry is the SUCCESS banner and it pushes LeaveApply with the summary today', () => {
     const { root, navigation } = renderTab(ready('active'), TAB_SUMMARY);
-    const row = findButtons(root, 'Apply for leave');
-    expect(row).toHaveLength(1);
+    const banner = root
+      .findAllByType(BannerCard)
+      .filter((b) => b.props.title === 'Apply for leave');
+    expect(banner).toHaveLength(1);
+    // The 2026-10 subtraction: the Leave section's row would be a second
+    // door to the same form — 'Apply for leave' text appears exactly once.
+    expect(
+      textsInOrder(root).filter((t) => t === 'Apply for leave'),
+    ).toHaveLength(1);
+
     act(() => {
-      row[0].props.onPress();
+      // BannerCard exposes the press as onOpen (a11y label `${title}. ${subtitle}`).
+      banner[0].props.onOpen();
     });
     expect(navigation.navigate).toHaveBeenCalledWith('LeaveApply', {
       today: '2026-10-01',
@@ -536,11 +546,19 @@ describe('the tab entry row (spec D1)', () => {
     }
   });
 
-  it('the Leave section head renders above the entry row', () => {
+  it('active: the banner sits ABOVE the Leave section, which keeps NO second Apply row', () => {
     const { root } = renderTab(ready('active'), TAB_SUMMARY);
     const texts = textsInOrder(root);
-    expect(firstIndexOf(texts, 'Leave')).toBeLessThan(
-      firstIndexOf(texts, 'Apply for leave'),
+    // The 2026-10 ordering: the whole-tab flow is Today card → apply
+    // banner → summary → My month → the Leave history section.
+    expect(firstIndexOf(texts, 'Apply for leave')).toBeLessThan(
+      firstIndexOf(texts, 'My month'),
     );
+    expect(firstIndexOf(texts, 'My month')).toBeLessThan(
+      firstIndexOf(texts, 'Leave'),
+    );
+    // And the section itself ships no Apply row in active (read its
+    // pressable rows directly — only the banner carries the label).
+    expect(findButtons(root, 'Apply for leave')).toHaveLength(0);
   });
 });

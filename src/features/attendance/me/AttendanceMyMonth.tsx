@@ -4,10 +4,10 @@
  * itself is access-state-agnostic: the parent owns the access state and
  * passes `historyOnly` + the wire's `attendanceEndedOn`).
  *
- * Anatomy: SectionHead "My month", then (gap s3 — the Summary wrap's
- * rhythm) the me-scoped RealMonthPane at FULL height verbatim → the
- * summary block → the holidays block. Internal order is the UX ruling:
- * calendar → so-far line → chips → meta → holidays. While the summary is
+ * Anatomy (2026-10 redesign): SectionHead "My month", then the calendar
+ * Card (the me-scoped RealMonthPane at full height verbatim inside the
+ * Card) → the stat-tile summary Card → the upcoming-holidays Card.
+ * Internal order is the UX ruling: calendar → so-far numbers → holidays; While the summary is
  * in flight the block carries its OWN small shimmer (the pane's shimmer
  * covers the grid, never these rows); the grouped a11y element waits for
  * the numbers.
@@ -47,20 +47,47 @@
  * derives the signal from the loaded today facts; a genuine CHANGE (never
  * the first observation) fires the pane's non-clearing refresh — one GET,
  * no spinner, the glyphs swap in place.
+ *
+ * 20-1: the section owns the day sheet's LEAVE writes — `useMyMonthLeaveActions`
+ * resolves the covering request fresh (cursor-walked, AC 11) and runs the
+ * 17-7-grade cancel/convert lifecycle; success re-drives the pane's
+ * non-clearing refresh (never a clearing fetch), and the refreshed row's
+ * `leaveRequestId` change naturally re-drives resolution (a cancel clears
+ * to null; a convert re-resolves the NEW pending request).
+ *
+ * 20-1 pull-to-refresh: the section reports a `refresh()` up through a ref
+ * (`AttendanceMyMonthHandle`, the forwardRef imperative handle) — the
+ * embedding screen's RefreshControl fires the pane's non-clearing refresh
+ * AND the summary's silent refresh together and holds its spinner until
+ * both settle.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  type ForwardedRef,
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Eyebrow, InlineError, SectionHead, Skeleton } from '../../../components/ui';
+import { useFocusEffect } from '@react-navigation/native';
+import { Card, InlineError, SectionHead, Skeleton } from '../../../components/ui';
 import { colors, radius, spacing, typography } from '../../../theme';
 import { DayDetailSheet } from '../calendar/DayDetailSheet';
 import { RealMonthPane } from '../calendar/RealMonthPane';
 import type { RealMonthReport } from '../calendar/RealMonthPane';
-import {
-  formatHolidayShortDate,
-  shiftYearMonth,
-} from '../monthly/monthlyModel';
+import { shiftYearMonth } from '../monthly/monthlyModel';
 import { useMyMonthly } from './useMyMonthly';
+import { useMyMonthLeaveActions } from './useMyMonthLeaveActions';
 import { MyMonthSummary } from './MyMonthSummary';
+import { MyMonthHolidays } from './MyMonthHolidays';
+
+/** The imperative handle the embedding screen's RefreshControl calls. */
+export type AttendanceMyMonthHandle = {
+  /** The combined non-clearing refresh (pane glyphs + summary chips). */
+  refresh: () => Promise<void>;
+};
 
 /** The device month 'YYYY-MM' — the declared navigation SEED only (the
  *  device clock is never a fetch boundary; the echo corrects it). */
@@ -83,10 +110,36 @@ function correctionTarget(
   return endedMonth < todayMonth ? endedMonth : todayMonth;
 }
 
-export function AttendanceMyMonth({
+export const AttendanceMyMonth = forwardRef<
+  AttendanceMyMonthHandle,
+  {
+    /** The wire's history_only-only end date (null = the dateless fallback
+     *  lives in the parent's note; here it only bounds the bootstrap). */
+    attendanceEndedOn: string | null;
+    /** The parent's posture — the section rides the SAME branch mount, so a
+     *  flip remounts and re-runs the bootstrap. */
+    historyOnly: boolean;
+    /** The parent's today-facts fingerprint (date + check-in/out instants).
+     *  A genuine change fires the pane's non-clearing refresh — the check-in
+     *  bridge. Null (summary unloaded — history_only) is inert. */
+    todaySignal?: string | null;
+    /** The section-head toggle (2026-10): the full-screen My Month host
+     *  renders its own header, so it suppresses the inline SectionHead's
+     *  duplicate "My month" label. Default true — the tab keeps it. */
+    showHead?: boolean;
+    /** The 2026-10 day-sheet CTA: the host's navigation to the leave form
+     *  with the tapped date prefilled. The SECOND arg is this section's ONE
+     *  clock (the pane's wire echo) — the form's route must carry the same
+     *  today the calendar rings, never a device-derived date. The host owns
+     *  the eligibility posture (history_only leaves it undefined). */
+    onApplyLeave?: (workDate: string, canonicalToday: string | null) => void;
+  }
+>(function AttendanceMyMonth({
   attendanceEndedOn,
   historyOnly,
   todaySignal,
+  showHead = true,
+  onApplyLeave,
 }: {
   /** The wire's history_only-only end date (null = the dateless fallback
    *  lives in the parent's note; here it only bounds the bootstrap). */
@@ -98,7 +151,19 @@ export function AttendanceMyMonth({
    *  A genuine change fires the pane's non-clearing refresh — the check-in
    *  bridge. Null (summary unloaded — history_only) is inert. */
   todaySignal?: string | null;
-}) {
+  /** The section-head toggle (2026-10): the full-screen My Month host
+   *  renders its own header, so it suppresses the inline SectionHead's
+   *  duplicate "My month" label. Default true — the tab keeps it. */
+  showHead?: boolean;
+  /** The 2026-10 day-sheet CTA: the host's navigation to the leave form
+   *  with the tapped date prefilled. The SECOND arg is this section's ONE
+   *  clock (the pane's wire echo) — the form's route must carry the same
+   *  today the calendar rings, never a device-derived date. The host owns
+   *  the eligibility posture (history_only leaves it undefined). */
+  onApplyLeave?: (workDate: string, canonicalToday: string | null) => void;
+  },
+  ref: ForwardedRef<AttendanceMyMonthHandle>,
+) {
   const [yearMonth, setYearMonth] = useState(deviceYearMonth);
   const [pickedDay, setPickedDay] = useState<string | null>(null);
   const [report, setReport] = useState<RealMonthReport | null>(null);
@@ -114,6 +179,11 @@ export function AttendanceMyMonth({
   const correctionMonthRef = useRef<string | null>(null);
 
   const myMonth = useMyMonthly({ yearMonth, today: canonicalToday });
+
+  // The summary refresh handle, read through a ref so the imperative
+  // refresh handle below never has to re-bind on every render.
+  const summaryRefreshRef = useRef<() => Promise<void>>(async () => {});
+  summaryRefreshRef.current = myMonth.refresh;
 
   // R9 (device-found 2026-10-01, walkthrough): the wire date arrives on a
   // LATER me/access than the pane's echo — the profile seed carries the
@@ -202,15 +272,70 @@ export function AttendanceMyMonth({
   // onData; the handle is read through a ref so the effect stays keyed on
   // the signal alone).
   const lastSignalRef = useRef<string | null>(null);
-  const paneRefreshRef = useRef<(() => void) | null>(null);
+  // The pane's refresh RETURNS a promise (pull-to-refresh hosts await
+  // it) — the ref is typed accordingly, not papered over with
+  // Promise.resolve wrappers.
+  const paneRefreshRef = useRef<(() => Promise<void>) | null>(null);
   paneRefreshRef.current = report?.refresh ?? null;
+  const runPaneRefresh = useCallback(() => {
+    // The handle settles internally (never rejects in flight), but the
+    // explicit catch keeps a future drift from floating a rejection.
+    void (paneRefreshRef.current?.() ?? Promise.resolve()).catch(
+      () => undefined,
+    );
+  }, []);
   useEffect(() => {
     const prev = lastSignalRef.current;
     lastSignalRef.current = todaySignal ?? null;
     if (todaySignal != null && prev != null && prev !== todaySignal) {
-      paneRefreshRef.current?.();
+      runPaneRefresh();
     }
-  }, [todaySignal]);
+  }, [runPaneRefresh, todaySignal]);
+
+  // The leave-return refresh (2026-10): an Apply-leave submission pops back
+  // to this screen — the day map must not keep the pre-submission
+  // glyphs (a pending leave should read the moment you land). The pane's
+  // non-clearing `refresh` (one cheap GET — the check-in-bridge handle)
+  // re-runs on the NEXT focus, not the first (the first-focus GET is the
+  // pane's own initial load; refreshing it would just double the fetch).
+  const everFocusedRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!everFocusedRef.current) {
+        everFocusedRef.current = true;
+        return;
+      }
+      runPaneRefresh();
+    }, []),
+  );
+
+  // The day sheet's leave-write host (20-1): resolves the covering request
+  // when a leave day opens and owns cancel + convert with the 17-7 latch.
+  // Success re-drives the pane's non-clearing refresh here in ONE place —
+  // the leaf hook never touches the report.
+  const leave = useMyMonthLeaveActions({
+    leaveId:
+      pickedDay !== null ? (report?.days.get(pickedDay)?.leaveRequestId ?? null) : null,
+    workDate: pickedDay,
+    onWriteSuccess: runPaneRefresh,
+    onWriteFailure: runPaneRefresh,
+  });
+
+  // 20-1: the combined pull-to-refresh handle — the embedding screen's
+  // RefreshControl fires BOTH truths (the pane's day glyphs + the summary
+  // chips) and holds its spinner until they settle.
+  useImperativeHandle(
+    ref,
+    () => ({
+      refresh: async () => {
+        await Promise.all([
+          paneRefreshRef.current?.() ?? Promise.resolve(),
+          summaryRefreshRef.current?.() ?? Promise.resolve(),
+        ]);
+      },
+    }),
+    [],
+  );
 
   const isCurrentMonth =
     canonicalToday !== null && yearMonth === canonicalToday.slice(0, 7);
@@ -219,15 +344,19 @@ export function AttendanceMyMonth({
 
   return (
     <View style={styles.section}>
-      <SectionHead title="My month" />
+      {showHead ? <SectionHead title="My month" /> : null}
       <View style={styles.body}>
-        <RealMonthPane
-          yearMonth={yearMonth}
-          onShiftMonth={onShiftMonth}
-          onPickDay={onPickDay}
-          onData={onData}
-          nextDisabled={nextDisabled}
-        />
+        {/* 2026-10 — the pane (nav + grid + its own error posture) lives
+            inside the calendar Card. */}
+        <Card padding="md">
+          <RealMonthPane
+            yearMonth={yearMonth}
+            onShiftMonth={onShiftMonth}
+            onPickDay={onPickDay}
+            onData={onData}
+            nextDisabled={nextDisabled}
+          />
+        </Card>
 
         {myMonth.error !== null && summary === null ? (
           <View style={styles.errorWrap}>
@@ -256,28 +385,24 @@ export function AttendanceMyMonth({
         ) : null}
 
         {summary !== null ? (
-          <MyMonthSummary summary={summary} isCurrentMonth={isCurrentMonth} />
+          <MyMonthSummary
+            summary={summary}
+            isCurrentMonth={isCurrentMonth}
+            yearMonth={yearMonth}
+          />
         ) : myMonth.loading ? (
           // First paint: the summary block's OWN small shimmer (the pane's
           // shimmer covers the grid, never these rows). A failed refresh
           // keeps the error postures above; loading renders no numbers.
-          <View accessibilityLabel="Loading attendance">
-            <Skeleton rows={2} height={40} />
-          </View>
+          <Card padding="md">
+            <View accessibilityLabel="Loading attendance">
+              <Skeleton rows={2} height={40} />
+            </View>
+          </Card>
         ) : null}
 
         {!historyOnly && holidays.length > 0 ? (
-          <View style={styles.holidays}>
-            <Eyebrow>Upcoming holidays</Eyebrow>
-            {holidays.map(holiday => (
-              <Text
-                key={holiday.holidayDate}
-                accessibilityLabel={`${holiday.holidayName}, ${formatHolidayShortDate(holiday.holidayDate)}`}
-                style={styles.holidayRow}>
-                {`${holiday.holidayName} · ${formatHolidayShortDate(holiday.holidayDate)}`}
-              </Text>
-            ))}
-          </View>
+          <MyMonthHolidays holidays={holidays} />
         ) : null}
       </View>
 
@@ -288,11 +413,25 @@ export function AttendanceMyMonth({
         scope={{ kind: 'me' }}
         today={canonicalToday}
         readOnly
+        onApplyLeave={
+          onApplyLeave != null
+            ? (workDate: string) => onApplyLeave(workDate, canonicalToday)
+            : undefined
+        }
+        /* 20-1 — the leave actions ride the resolved covering request:
+            while it resolves (or on a capped miss) the CTAs are simply
+            absent, then the gated Cancel/Convert entries render. */
+        leaveRequest={leave.leaveRequest}
+        leaveResolving={leave.resolving}
+        leaveActionState={leave.actionState}
+        onCancelLeave={leave.cancelLeave}
+        onConvertFullDay={leave.convertFullDay}
+        onLeaveWriteHandled={leave.dismissHandled}
         onClose={() => setPickedDay(null)}
       />
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   section: {
@@ -303,13 +442,6 @@ const styles = StyleSheet.create({
   },
   errorWrap: {
     gap: spacing.s2,
-  },
-  holidays: {
-    gap: spacing.s2,
-  },
-  holidayRow: {
-    ...typography.body,
-    color: colors.textBody,
   },
   retryBtn: {
     alignSelf: 'flex-start',

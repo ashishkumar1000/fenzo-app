@@ -213,8 +213,9 @@ export function ownerLeaveReducer(
 // --- home for the leave write/preview failure classification).
 
 /** The FE-owned transport line (§4 copy table) — the action is named so a
- *  rejected-while-offline owner isn't told about "Approving" (review P2). */
-export type LeaveWriteAction = 'approve' | 'reject' | 'revoke' | 'cancel';
+ *  rejected-while-offline owner isn't told about "Approving" (review P2).
+ *  20-1 adds 'apply' (the convert's re-file leg — a fresh full-day apply). */
+export type LeaveWriteAction = 'approve' | 'reject' | 'revoke' | 'cancel' | 'apply';
 
 export function leaveWriteOfflineMessage(action: LeaveWriteAction): string {
   switch (action) {
@@ -224,6 +225,8 @@ export function leaveWriteOfflineMessage(action: LeaveWriteAction): string {
       return "You're offline. Revoking needs a working connection.";
     case 'cancel':
       return "You're offline. Cancelling needs a working connection.";
+    case 'apply':
+      return "You're offline. Sending the request needs a working connection.";
     default:
       return "You're offline. Approving needs a working connection.";
   }
@@ -260,6 +263,38 @@ export function classifyLeaveWriteFailure(
     return { kind: 'offline', message: leaveWriteOfflineMessage(action) };
   }
   return { kind: 'failed', message: err.message || LEAVE_WRITE_GENERIC_MESSAGE };
+}
+
+// --- Story 20-1 — the day-sheet leave write state + the convert posture ---
+
+/**
+ * The DayDetailSheet leave stages' host-reported write state (the
+ * LeaveDetailActionState vocabulary, narrowed to the two writes the day
+ * sheet owns). The sheet renders it; the host owns the lifecycle.
+ */
+export type LeaveSheetActionState =
+  | { kind: 'idle' }
+  | { kind: 'submitting'; action: 'cancel' | 'convert' }
+  | { kind: 'error'; message: string }
+  /** Write-time 409 already-handled — the notice + OK closing the sheet. */
+  | { kind: 'handled' };
+
+/**
+ * AC 10 — the convert PARTIAL failure copy: the apply leg failed after
+ * the cancel leg succeeded, so the employee must not be left guessing
+ * that the half-day request is gone. The server's message rides
+ * verbatim; the plain line appends after it.
+ */
+export function convertPartialFailureMessage(serverMessage: string): string {
+  // The server's line is sentence copy — give it its full stop when it
+  // arrived without one, so the appended plain line never reads "off Your".
+  // An empty server message contributes no prefix at all (never a bare space).
+  const trimmed = serverMessage.trim();
+  const prefix =
+    trimmed.length === 0
+      ? ''
+      : `${trimmed}${/[.!?…]$/.test(trimmed) ? '' : '.'} `;
+  return `${prefix}Your half-day request is already cancelled.`;
 }
 
 /**

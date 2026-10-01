@@ -10,6 +10,7 @@ import type { LeaveRequestRow } from '../../../services/resources/attendanceLeav
 import {
   classifyLeavePreviewFailure,
   classifyLeaveWriteFailure,
+  convertPartialFailureMessage,
   initialOwnerLeaveState,
   ownerLeaveReducer,
 } from './ownerLeaveModel';
@@ -284,5 +285,33 @@ describe('classifyLeavePreviewFailure (17-7 D5)', () => {
     expect(
       classifyLeavePreviewFailure({ status: 502, code: 'SERVER_ERROR', message: '' }, 'cancel'),
     ).toEqual({ message: "Couldn't load the preview. Check your connection." });
+  });
+});
+
+describe('convertPartialFailureMessage (Story 20-1, AC 10)', () => {
+  it('appends the already-cancelled plain line after a terminated server message', () => {
+    expect(
+      convertPartialFailureMessage('You can file a new request from tomorrow.'),
+    ).toBe(
+      'You can file a new request from tomorrow. Your half-day request is already cancelled.',
+    );
+  });
+
+  it('a server message without a full stop gets its stop — the two sentences never fuse ("off Your")', () => {
+    expect(convertPartialFailureMessage('Those dates are already off')).toBe(
+      'Those dates are already off. Your half-day request is already cancelled.',
+    );
+  });
+
+  it('a question/already-punctuated message is not double-stopped', () => {
+    expect(convertPartialFailureMessage('Try again later?')).toBe(
+      'Try again later? Your half-day request is already cancelled.',
+    );
+  });
+
+  it('an empty server message still leaves the employee knowing the truth', () => {
+    expect(convertPartialFailureMessage('')).toBe(
+      'Your half-day request is already cancelled.',
+    );
   });
 });

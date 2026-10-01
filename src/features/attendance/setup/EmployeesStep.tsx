@@ -8,7 +8,8 @@
  * does not visually commit — its value is always the server's row state —
  * until a pick PUTs and the returned post-write state lands. Cancelling
  * the picker writes nothing and the switch springs back off. Toggling OFF
- * DELETEs (idempotent). Failures surface as the row's own banner and the
+ * asks through the shared ConfirmDialog first (20-1), then DELETEs
+ * (idempotent). Failures surface as the row's own banner and the
  * row keeps its pre-write server state (per-row retry = toggle again).
  *
  * Future start dates, reassignment and bulk-enable are 15-9's roster UI.
@@ -23,11 +24,13 @@ import { Users } from 'lucide-react-native';
 import {
   Button,
   Card,
+  ConfirmDialog,
   EmptyState,
   InlineError,
   Skeleton,
   Switch,
 } from '../../../components/ui';
+import { XCircle } from 'lucide-react-native';
 import { colors, spacing, typography } from '../../../theme';
 import type { ApiError, EnrolmentOverview } from '../../../services';
 import type { Office } from '../../../types/office';
@@ -65,6 +68,9 @@ export function EmployeesStep({
 }: Props) {
   // The employee the inline picker is open for (null = closed).
   const [pickingId, setPickingId] = useState<string | null>(null);
+  // 20-1 — the switch-off DELETE ask (same posture as the roster screen:
+  // the DELETE fires only after the shared ConfirmDialog confirms).
+  const [disableAskId, setDisableAskId] = useState<string | null>(null);
 
   if (isLoading && !hasLoaded) {
     // First load: a roster-shaped shimmer, labelled (the 19-5 idiom); the
@@ -89,6 +95,8 @@ export function EmployeesStep({
 
   const pickerEmployee =
     roster.find((row) => row.employeeId === pickingId) ?? null;
+  const disableRow =
+    roster.find((row) => row.employeeId === disableAskId) ?? null;
 
   const onToggle = (row: EnrolmentOverview, nextValue: boolean) => {
     if (isRowPending(row.employeeId)) return;
@@ -99,7 +107,7 @@ export function EmployeesStep({
       row.attendanceStartDate !== null && !enrolmentCoversToday(row, today);
     if (nextValue && upcoming) return;
     if (!nextValue) {
-      void onDisable(row.employeeId);
+      setDisableAskId(row.employeeId);
       return;
     }
     if (row.officeId) {
@@ -192,6 +200,22 @@ export function EmployeesStep({
         emptyMessage="No offices yet. Add one from the Offices step first."
         onClose={() => setPickingId(null)}
         onPick={onPickOffice}
+      />
+
+      <ConfirmDialog
+        visible={disableRow != null}
+        title={`Turn off tracking for ${disableRow?.employeeName ?? ''}?`}
+        message={`${disableRow?.employeeName ?? ''} will not be able to check in for attendance. Any planned change for them is also removed. You can turn it back on later.`}
+        confirmLabel="Turn off tracking"
+        confirmVariant="danger"
+        icon={<XCircle size={20} color={colors.danger} strokeWidth={2} />}
+        cancelLabel="Keep tracking"
+        onConfirm={() => {
+          const id = disableAskId;
+          setDisableAskId(null);
+          if (id) void onDisable(id);
+        }}
+        onCancel={() => setDisableAskId(null)}
       />
     </View>
   );

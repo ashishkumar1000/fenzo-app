@@ -48,9 +48,9 @@ jest.mock('../../profile/useMyProfile', () => ({ useMyProfile: jest.fn() }));
 
 import type ReactTestRenderer from 'react-test-renderer';
 import { act, create } from 'react-test-renderer';
-import { Alert, RefreshControl, Text } from 'react-native';
+import { RefreshControl, Text } from 'react-native';
 import WeeklyOffScreen from './WeeklyOffScreen';
-import { DatePickerField } from '../../../components/ui';
+import { ConfirmDialog, DatePickerField } from '../../../components/ui';
 import {
   WEEKLY_OFF_DAY_LETTERS,
   WEEKLY_OFF_DAY_ORDER,
@@ -892,7 +892,6 @@ describe('WeeklyOffScreen per-employee overrides', () => {
   });
 
   it('removing an override flashes the "Employee weekly off removed" banner', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     const removeOverrideMock =
       weeklyOffsService.removeOverride as unknown as jest.Mock;
     removeOverrideMock.mockResolvedValue({});
@@ -905,17 +904,20 @@ describe('WeeklyOffScreen per-employee overrides', () => {
     act(() => {
       findButtons(screen.root, 'Remove weekly off')[0].props.onPress();
     });
-    const destructive = alertSpy.mock.calls[0][2]?.find(
-      (b) => b.style === 'destructive',
-    );
+    const ask = screen.root
+      .findAllByType(ConfirmDialog)
+      .filter((d) => d.props.visible === true)
+      .at(-1);
+    expect(ask).toBeDefined();
+    expect(removeOverrideMock).not.toHaveBeenCalled();
+
     await act(async () => {
-      destructive?.onPress?.();
+      ask?.props.onConfirm();
       await flush();
     });
 
     // onSaved('delete') — the banner names removal, not "saved".
     expect(hasText(screen.root, 'Employee weekly off removed')).toBe(true);
     expect(hasText(screen.root, 'Employee weekly off saved')).toBe(false);
-    alertSpy.mockRestore();
   });
 });

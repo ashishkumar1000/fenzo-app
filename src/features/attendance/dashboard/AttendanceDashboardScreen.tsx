@@ -23,8 +23,16 @@
  * The wire's `date` echo is consumed by the fail-closed normalizer only —
  * the screen IS today, so the echo renders nowhere.
  */
-import { useCallback, useEffect, useState } from 'react';
-import { AppState, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  AccessibilityInfo,
+  AppState,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import { Users } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -114,6 +122,35 @@ export default function AttendanceDashboardScreen({ navigation }: Props) {
   // Sheets: one flag list (its kind + rows swap per strip tap) and the
   // office filter (which renders the envelope's stats and only fetches
   // offices itself when the envelope carries none).
+
+  // 20-1 AC 15 (review 2026-10-01, user call): the dashboard carries
+  // pull-to-refresh like every other attendance surface — `load` (NOT
+  // the header's `refresh`: the pull is a spinner-only revalidation, no
+  // card-shimmer flash; rows stay up, the AC 14 posture). Same-tick
+  // double pull is inert through the ref latch.
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const refreshingRef = useRef(false);
+  const onRefresh = useCallback(async () => {
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
+    setIsRefreshing(true);
+    AccessibilityInfo.announceForAccessibility('Refreshing attendance');
+    try {
+      await load();
+    } finally {
+      refreshingRef.current = false;
+      setIsRefreshing(false);
+    }
+  }, [load]);
+
+  const refreshControl = (
+    <RefreshControl
+      refreshing={isRefreshing}
+      onRefresh={onRefresh}
+      colors={[colors.primary]}
+      tintColor={colors.primary}
+    />
+  );
   const [flagSheetKind, setFlagSheetKind] = useState<
     'checkoutMissing' | 'fakeLocationAttempt' | null
   >(null);
@@ -138,7 +175,8 @@ export default function AttendanceDashboardScreen({ navigation }: Props) {
 
       <ScrollView
         contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        refreshControl={refreshControl}>
         {/* The office filter — static chrome, renders in every posture. */}
         <WorkspaceSelector
           label={pickedOffice ? pickedOffice.name : 'All offices'}

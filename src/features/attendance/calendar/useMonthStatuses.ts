@@ -48,9 +48,12 @@ export interface MonthStatuses {
    * The stale-while-revalidate refetch (18-4 D5): re-fetches the CURRENT
    * month/scope WITHOUT clearing rows or flipping the month loading flag —
    * the post-correction in-place refresh. Errors surface through the same
-   * ordinary `error` state (the rows stay put).
+   * ordinary `error` state (the rows stay put). 20-1: the promise is
+   * RETURNED and the type says so — a pull-to-refresh host awaits it for
+   * the spinner duration; the internally-settling `.catch` keeps the
+   * returned promise from ever rejecting outward.
    */
-  refresh: () => void;
+  refresh: () => Promise<void>;
 }
 
 const FALLBACK_ERROR = "Couldn't load the month. Check your connection and try again.";
@@ -148,7 +151,11 @@ export function useMonthStatuses(input: {
       employeeId != null
         ? fetchDayStatuses(employeeId, from, to)
         : fetchMyDayStatuses(from, to);
-    request
+    // 20-1: the promise is RETURNED so a pull-to-refresh host can hold the
+    // RefreshControl spinner until it settles; every existing caller (the
+    // check-in bridge, the leave-return focus refresh) ignores it — the
+    // void-typed surface is unchanged.
+    return request
       .then(res => {
         if (!mounted.current || seq !== seqRef.current) return;
         const map = new Map<string, DayStatusRow>();

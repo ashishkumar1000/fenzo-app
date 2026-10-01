@@ -18,8 +18,9 @@
  */
 import type ReactTestRenderer from 'react-test-renderer';
 import { act, create } from 'react-test-renderer';
-import { Alert, Text } from 'react-native';
+import { Text } from 'react-native';
 import RNCDateTimePicker from 'react-native-ui-datepicker';
+import { ConfirmDialog } from '../../../components/ui';
 import HolidayFormSheet from './HolidayFormSheet';
 import type { ApiError, Holiday } from '../../../services';
 
@@ -604,7 +605,6 @@ describe('HolidayFormSheet 409 on a taken date (post-open arrival)', () => {
   });
 
   it('a double-confirm on Delete issues exactly one DELETE (delete latch)', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     let resolveRemove!: (v: undefined) => void;
     const remove = jest.fn(
       () =>
@@ -614,15 +614,23 @@ describe('HolidayFormSheet 409 on a taken date (post-open arrival)', () => {
     );
     const sheet = renderSheet({ holiday: HOLIDAY, remove });
 
+    // The ask presents FIRST.
     act(() => {
       findButton(sheet.root, 'Delete holiday').props.onPress();
     });
-    const destructive = alertSpy.mock.calls[0][2]?.find(
-      (b) => b.style === 'destructive',
-    );
+    const ask = sheet.root
+      .findAllByType(ConfirmDialog)
+      .filter((d) => d.props.visible === true)
+      .at(-1);
+    expect(ask).toBeDefined();
+
+    // Confirming twice (the race window) latches to one DELETE — the
+    // dialog closes after the first settle, so the second press never lands.
     await act(async () => {
-      destructive?.onPress?.();
-      destructive?.onPress?.(); // the race window
+      ask?.props.onConfirm();
+      await flush();
+      ask?.props.onConfirm();
+      await flush();
     });
     expect(remove).toHaveBeenCalledTimes(1);
 
@@ -630,6 +638,5 @@ describe('HolidayFormSheet 409 on a taken date (post-open arrival)', () => {
       resolveRemove(undefined);
       await flush();
     });
-    alertSpy.mockRestore();
   });
 });

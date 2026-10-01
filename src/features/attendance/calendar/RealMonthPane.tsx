@@ -24,6 +24,10 @@
  * all-neutral grid is the calendar's own empty state), and a
  * refresh-error-with-rows keeps the grid (`refresh()` never clears).
  *
+ * 20-1 (user ask): a bound-off `›` READS disabled — the DS's dimmed
+ * posture (Button's `styles.disabled`: opacity 0.5) plus the muted
+ * chevron, so the dead end is visible before the dead tap.
+ *
  * The foreground refetch (D1): the correction gate is data-driven and
  * refetch-fresh ONLY — a backgrounded host refetches on return so a day
  * aging into correctability appears without a remount (the useCheckInOut
@@ -52,7 +56,7 @@ export interface RealMonthReport {
   days: ReadonlyMap<string, DayStatusRow>;
   today: string | null;
   loading: boolean;
-  refresh: () => void;
+  refresh: () => Promise<void>;
 }
 
 export function RealMonthPane({
@@ -99,7 +103,7 @@ export function RealMonthPane({
   // environments' jest preset return no subscription, hence the ?).
   useEffect(() => {
     const sub = AppState.addEventListener('change', appState => {
-      if (appState === 'active') month.refresh();
+      if (appState === 'active') void month.refresh();
     });
     return () => sub?.remove();
   }, [month.refresh]);
@@ -127,8 +131,14 @@ export function RealMonthPane({
           accessibilityState={{ disabled: nextDisabled }}
           disabled={nextDisabled}
           onPress={() => onShiftMonth(1)}
-          style={styles.navButton}>
-          <ChevronRight size={20} color={colors.textBody} strokeWidth={2} />
+          style={[styles.navButton, nextDisabled && styles.navDisabled]}>
+          {/* Travel-bound arrow reads disabled — the DS's dimmed posture
+              (Button's disabled = opacity 0.5), not a full-colour chevron. */}
+          <ChevronRight
+            size={20}
+            color={nextDisabled ? colors.textDisabled : colors.textBody}
+            strokeWidth={2}
+          />
         </Pressable>
       </View>
       {month.loading ? (
@@ -174,9 +184,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderDefault,
   },
+  navDisabled: {
+    opacity: 0.5,
+  },
   monthLabel: {
-    fontSize: fontSize.base,
-    fontWeight: weight.semibold,
+    fontSize: fontSize.lg,
+    fontWeight: weight.bold,
     color: colors.textStrong,
   },
   skeleton: {

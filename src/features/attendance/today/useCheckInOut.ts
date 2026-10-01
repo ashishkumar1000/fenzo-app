@@ -2,8 +2,10 @@
  * useCheckInOut.ts — the Today screen's orchestration (Story 16-4, spec
  * D5/D9/D10/D12; 17-8 adds the full-day-leave branch and the awaited
  * wire-driven 409 fallback, D2–D4). Owns: the permission probe (+
- * foreground re-probe), the latched pre-flight dialogs (weekly off /
- * holiday; full-day leave), the tap-time offline re-checks (at tap AND
+ * foreground re-probe), the latched pre-flight confirmations (weekly off /
+ * holiday; full-day leave — since 20-1 rendered by AttendanceTodayView as
+ * the shared ConfirmDialog, awaited here via the confirmAsk/state pair
+ * instead of native Alert promises), the tap-time offline re-checks (at tap AND
  * at confirm), capture → submit with one fresh idempotency key per tap,
  * the 409 leave fallback inside the SAME press continuation (latch held
  * across dialog + retry), outcome → message/state mapping, the
@@ -39,7 +41,6 @@ import {
   offlineMessage,
   type TodayOutcomeMessage,
 } from './attendanceTodayModel';
-import { confirmHolidayDialog, confirmLeaveDialog } from './checkInDialogs';
 
 /** The submit outcome the press continuation branches on: 'leaveConflict'
  *  is a 409 ATTENDANCE_LEAVE_CONFIRMATION_REQUIRED intercepted BEFORE the
@@ -75,6 +76,9 @@ export function useCheckInOut(input: {
   const [online, setOnline] = useState(true);
   const [resolving, setResolving] = useState(false);
   const [dialogPending, setDialogPending] = useState(false);
+  /** Which pre-flight confirmation the AttendanceTodayView's ConfirmDialog
+   *  is presenting (20-1 port off the native Alerts) — null = none up. */
+  const [confirmAsk, setConfirmAsk] = useState<'holiday' | 'leave' | null>(null);
   const [message, setMessage] = useState<TodayOutcomeMessage | null>(null);
   const [rateLimitedUntil, setRateLimitedUntil] = useState<number | null>(null);
   const [record, setRecord] = useState<AttendanceTodayRecord | null>(null);
@@ -86,6 +90,12 @@ export function useCheckInOut(input: {
   );
 
   const latch = useRef(false);
+  /** The resolver for the confirmation the dialog is showing (20-1): set
+   *  by askConfirm, resolved exactly once by settleConfirm — the boolean
+   *  lands inside the same press continuation that awaited it, so the
+   *  press latch keeps spanning dialog + submit exactly as the native
+   *  Alert promises did. */
+  const confirmResolverRef = useRef<((confirmed: boolean) => void) | null>(null);
   const recordRef = useRef<AttendanceTodayRecord | null>(null);
   const todayRef = useRef(today);
   todayRef.current = today;
@@ -300,6 +310,29 @@ export function useCheckInOut(input: {
     return false;
   }, []);
 
+  /** The awaited confirmation (20-1): records which dialog the view must
+   *  present and returns the verdict promise the press continuation
+   *  awaits — the shape the old checkInDialogs promise wrappers gave the
+   *  call sites, now resolved by the rendered ConfirmDialog. */
+  const askConfirm = useCallback((kind: 'holiday' | 'leave'): Promise<boolean> => {
+    return new Promise(resolve => {
+      confirmResolverRef.current = resolve;
+      setConfirmAsk(kind);
+    });
+  }, []);
+
+  /** The dialog's verdict (both buttons and every dismissal route here):
+   *  one-shot — the resolver is consumed, the dialog state clears, THEN
+   *  the awaiting continuation resumes (button ordering in the view can
+   *  never double-settle: by the time the confirm handler runs, the
+   *  resolver is already null). */
+  const settleConfirm = useCallback((confirmed: boolean) => {
+    const resolve = confirmResolverRef.current;
+    confirmResolverRef.current = null;
+    setConfirmAsk(null);
+    resolve?.(confirmed);
+  }, []);
+
   /** A check-in submit + the awaited wire-driven 409 fallback (17-8 D4).
    *  The fallback fires ONLY on the intercepted 409, and shows the leave
    *  dialog UNCONDITIONALLY — bypassing the pure facts fn (the tap-time
@@ -310,7 +343,7 @@ export function useCheckInOut(input: {
    *  stays a no-op (no double dialog, no double submit). */
   const checkInWithFallback = useCallback(async () => {
     if ((await submit('check_in')) !== 'leaveConflict') return;
-    const confirmed = await confirmLeaveDialog();
+    const confirmed = await askConfirm('leave');
     if (!confirmed) return; // fallback-cancel: the dialog was the communication — nothing renders
     if (!(await onlineAtConfirm())) return;
     // Retry = full FRESH capture (the burned fix is stale by
@@ -338,7 +371,7 @@ export function useCheckInOut(input: {
             return;
           }
           if (kind === 'check_in' && needsHolidayConfirm(todayRef.current)) {
-            const confirmed = await confirmHolidayDialog();
+            const confirmed = await askConfirm('holiday');
             if (!confirmed) return; // no request at all (AC)
             if (await onlineAtConfirm()) await checkInWithFallback();
             return;
@@ -353,7 +386,7 @@ export function useCheckInOut(input: {
             // (D3) — never the holiday dialog, never a plain working-day
             // check-in. Half-day facts never reach this branch
             // (needsLeaveConfirm is full_day-only: strictly nothing).
-            const confirmed = await confirmLeaveDialog();
+            const confirmed = await askConfirm('leave');
             if (!confirmed) return; // no request at all (AC)
             if (await onlineAtConfirm()) await submit('check_in', true);
             return;
@@ -383,6 +416,7 @@ export function useCheckInOut(input: {
     online,
     resolving,
     dialogPending,
+    confirmAsk,
     message,
     rateLimitedUntil,
     now,
@@ -390,6 +424,7 @@ export function useCheckInOut(input: {
     lastFix,
     press,
     seedRecord,
+    settleConfirm,
     openRemediation,
     dismissMessage,
   };

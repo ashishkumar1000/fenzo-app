@@ -84,6 +84,13 @@ export default function HomeScreen({ navigation }: Props) {
     navigation.navigate('Notifications');
   }, [navigation]);
 
+  // 20-1 leave-review strip: opens the owner's Leave screen, pre-set to
+  // the Pending tab. MUST live with the other callbacks — hooks can never
+  // run after this screen's loading/error early returns.
+  const handlePressLeaveStrip = useCallback(() => {
+    navigation.navigate('OwnerLeave', { tab: 'pending' });
+  }, [navigation]);
+
   const quickActions = (
     <QuickActions
       onNewJob={handleNewJob}
@@ -164,6 +171,15 @@ export default function HomeScreen({ navigation }: Props) {
   const ownerFirstName = firstName(profile.name);
   const businessName = profile.tenant.companyName;
   const { jobCounts, technicianCount } = profile;
+
+  // 20-1 (AC 12): the leave-review strip's count rides the same attendance
+  // mirror the Attendance tile gates on — no second request. Only an
+  // ENROLLED attendance tenant shows it, and count > 0 gates the render
+  // (the 15-6 fail-HIDDEN idiom; an older backend answers 0 → absent).
+  const pendingLeaveRequests =
+    profile.attendance?.attendanceEnabled === true
+      ? (profile.attendance.pendingLeaveRequests ?? 0)
+      : 0;
 
   // The Attendance entry (2026-09-30): shown only while the tenant's
   // attendance module is enabled. The flag rides the profile's `attendance`
@@ -256,6 +272,8 @@ export default function HomeScreen({ navigation }: Props) {
           overdueCount={jobCounts.overdue}
           technicianCount={technicianCount}
           technicians={profile.technicians ?? []}
+          pendingLeaveRequests={pendingLeaveRequests}
+          onPressLeaveStrip={handlePressLeaveStrip}
           onPressJob={handlePressJob}
           onPressStrip={() => handleTilePress('overdue')}
           onPressCreate={handleNewJob}

@@ -5,6 +5,7 @@
  */
 export { default as AttendanceTabScreen } from './AttendanceTabScreen';
 export { default as AttendanceIntroScreen } from './AttendanceIntroScreen';
+export { default as AttendanceMyMonthScreen } from './AttendanceMyMonthScreen';
 export {
   useAttendanceAccessLifecycle,
   useAttendanceAccess,

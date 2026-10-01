@@ -14,10 +14,10 @@
  * profile store.
  */
 import { useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LogOut, Pencil, Phone } from 'lucide-react-native';
-import { Avatar, Card, IconButton } from '../../components/ui';
+import { Avatar, Card, ConfirmDialog, IconButton } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import { runAllResets } from '../../services';
 import { clearAuthToken } from '../../services/authToken';
@@ -28,23 +28,20 @@ export default function ProfileScreen() {
   const { reset } = useAuth();
   const { profile, isLoading } = useMyProfile();
   const [editNameOpen, setEditNameOpen] = useState(false);
+  // Log out asks through the shared ConfirmDialog instead of a system Alert
+  // (the 20-1 modal ask) — same wording, in-app styling.
+  const [logOutOpen, setLogOutOpen] = useState(false);
 
-  const handleLogOut = () => {
-    Alert.alert('Log out', 'You will need to verify your number again to sign back in.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log out',
-        style: 'destructive',
-        onPress: () => {
-          // Same reset flow as a forced 401 logout (story 5.3): the registry
-          // owns the store list (technician jobs included), and the token
-          // must go too — a manual logout used to leave the JWT attached.
-          clearAuthToken();
-          runAllResets();
-          reset();
-        },
-      },
-    ]);
+  const handleLogOut = () => setLogOutOpen(true);
+
+  const confirmLogOut = () => {
+    setLogOutOpen(false);
+    // Same reset flow as a forced 401 logout (story 5.3): the registry
+    // owns the store list (technician jobs included), and the token
+    // must go too — a manual logout used to leave the JWT attached.
+    clearAuthToken();
+    runAllResets();
+    reset();
   };
 
   if (isLoading || !profile) {
@@ -78,6 +75,18 @@ export default function ProfileScreen() {
         visible={editNameOpen}
         currentName={profile.name}
         onClose={() => setEditNameOpen(false)}
+      />
+
+      <ConfirmDialog
+        visible={logOutOpen}
+        title="Log out"
+        message="You will need to verify your number again to sign back in."
+        confirmLabel="Log out"
+        confirmVariant="danger"
+        icon={<LogOut size={20} color={colors.danger} strokeWidth={2} />}
+        cancelLabel="Cancel"
+        onConfirm={confirmLogOut}
+        onCancel={() => setLogOutOpen(false)}
       />
 
       <View style={styles.content}>

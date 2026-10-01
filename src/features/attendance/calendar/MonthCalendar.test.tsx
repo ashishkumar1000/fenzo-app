@@ -44,6 +44,7 @@ function row(workDate: string, status: DayStatusRow['status']): DayStatusRow {
     checkoutSource: null,
     checkinDistanceM: null,
     checkoutDistanceM: null,
+    leaveRequestId: null, // 20-1 — no leave day
     markers: [],
   };
 }

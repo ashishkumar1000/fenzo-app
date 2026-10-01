@@ -16,14 +16,20 @@ import { LeaveHistorySection } from '../leave/LeaveHistorySection';
 export function AttendanceLeaveSection({
   applyable,
   onApply,
+  showApplyRow = true,
 }: {
   applyable: boolean;
   onApply: () => void;
+  /** The apply entry row's toggle (2026-10): the active posture's entry
+   *  is now the tab's solid "Apply for leave" banner above — the row
+   *  would be a second door to the same form. Upcoming/keep-default
+   *  postures keep the row. Mount-time like `applyable` (posture branch). */
+  showApplyRow?: boolean;
 }) {
   return (
     <View style={styles.section}>
       <SectionHead title="Leave" />
-      {applyable ? (
+      {applyable && showApplyRow ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Apply for leave"

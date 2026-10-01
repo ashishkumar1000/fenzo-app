@@ -33,7 +33,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text } from 'react-native';
-import { DatePickerField, InlineNotice, Sheet } from '../../../components/ui';
+import { ConfirmDialog, DatePickerField, InlineNotice, Sheet } from '../../../components/ui';
 import { colors, spacing, typography } from '../../../theme';
 import type {
   ApiError,
@@ -202,15 +202,17 @@ export default function WeeklyOffOverrideSheet({
   };
 
   // The destructive Remove flow (confirm + DELETE + latches) lives in its
-  // own hook — see `useOverrideRemove.ts`.
-  const onRemove = useOverrideRemove({
-    override,
-    effectiveFrom,
-    removeOverride,
-    isSaving,
-    onSaved,
-    onClose,
-  });
+  // own hook — see `useOverrideRemove.ts`. The confirm is the shared
+  // ConfirmDialog (the 20-1 modal ask), rendered just below.
+  const { onRemove, confirmRemove, cancelRemove, removeOpen, removeMessage } =
+    useOverrideRemove({
+      override,
+      effectiveFrom,
+      removeOverride,
+      isSaving,
+      onSaved,
+      onClose,
+    });
 
   return (
     <Sheet
@@ -285,6 +287,18 @@ export default function WeeklyOffOverrideSheet({
           }
         />
       </ScrollView>
+
+      <ConfirmDialog
+        visible={removeOpen}
+        title="Remove weekly off"
+        message={removeMessage}
+        confirmLabel="Remove"
+        confirmVariant="danger"
+        cancelLabel="Cancel"
+        submitting={isSaving}
+        onConfirm={() => void confirmRemove()}
+        onCancel={cancelRemove}
+      />
     </Sheet>
   );
 }

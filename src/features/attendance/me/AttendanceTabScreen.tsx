@@ -7,20 +7,24 @@
  *                  state; this body is the defensive in-between frame).
  *   none         → nothing (the tab cannot normally be focused in this
  *                  state — FR-3: no attendance UI anywhere).
- *   active       → summary screen + the 19-6 "My month" self view (the
- *                  check-in control arrived with Epic 16; the header
- *                  always reads "Attendance", never bare "Today", per
- *                  the UX naming-collision rule).
- *   upcoming     → "Attendance starts on {date}" + summary + the early
- *                  onboarding CTA; no check-in control (absent, not
- *                  disabled) and NO My month (an all-zero render would
- *                  read "counted, worked nothing" — absent, not disabled).
- *   history_only → the dated ended note (19-6) + My month + the Leave
- *                  history (the 15-10 promise that records surfaces are
- *                  Epics 18/19 — fulfilled; the Apply row is absent).
+ *   active       → punch card + apply banner + summary card + My month
+ *                  banner + Leave history (redesigned 2026-10: My month
+ *                  is a NAV banner that pushes the full-screen
+ *                  AttendanceMyMonth — the month grid no longer renders
+ *                  inline; the header always reads "Attendance", never
+ *                  bare "Today", per the UX naming-collision rule).
+ *   upcoming     → "Attendance starts on {date}" + summary + Leave (the
+ *                  apply row stays the entry here); no check-in control
+ *                  (absent, not disabled) and NO My month (an all-zero
+ *                  render would read "counted, worked nothing" — absent,
+ *                  not disabled).
+ *   history_only → the dated ended note (19-6) + the My month banner
+ *                  (2026-10: pushes the full screen; the section no
+ *                  longer renders inline) + the Leave history (Apply row
+ *                  absent — the Apply banner is absent here too).
  *
  * Section mounting stays INSIDE each posture branch — an active↔
- * history_only flip REMOUNTS My month (fresh bootstrap), deliberately.
+ * history_only flip REMOUNTS them (fresh bootstrap), deliberately.
  *
  * Focus refetches access (min-gap shared with the store) so a state flip
  * (upcoming → active, tracked → disabled) lands without a restart. If a
@@ -28,15 +32,30 @@
  * to `Today` in the same update — unmounting the focused tab screen must
  * never strand the user on a blank content area (spec finding #9).
  */
-import { useCallback, useEffect, useRef } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  AccessibilityInfo,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, type CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { CalendarDays, CalendarPlus } from 'lucide-react-native';
 import { Button, Skeleton } from '../../../components/ui';
-import { colors, fontSize, spacing } from '../../../theme';
+import { colors, fontSize, spacing, typography } from '../../../theme';
 import { formatLongDate } from '../../../utils';
+import { BannerCard } from './BannerCard';
+import {
+  formatTodaySubtitle,
+  formatStartsOnCopy,
+  monthChipName,
+  shouldShowIntro,
+} from './attendanceMeModel';
 import {
   refreshAttendanceAccessNow,
   refreshAttendanceAccessOnFocus,
@@ -44,13 +63,8 @@ import {
 } from './attendanceAccessStore';
 import { useAttendanceSummary } from './useAttendanceSummary';
 import { AttendanceSummaryView } from './AttendanceSummaryView';
-import { AttendanceMyMonth } from './AttendanceMyMonth';
 import { AttendanceLeaveSection } from './AttendanceLeaveSection';
 import { AttendanceTodayView } from '../today/AttendanceTodayView';
-import {
-  formatStartsOnCopy,
-  shouldShowIntro,
-} from './attendanceMeModel';
 import type { TechnicianTabParamList } from '../../../navigation/types';
 import type { TechnicianRootStackParamList } from '../../../navigation/types';
 
@@ -119,14 +133,24 @@ export default function AttendanceTabScreen({ navigation }: Props) {
     navigation.navigate('LeaveApply', { today: summaryToday });
   }, [navigation, summaryToday]);
 
-  // 19-6 — the My month check-in BRIDGE's fingerprint: today's date plus
-  // the record's instants. A check-in/out mutates the record (the summary
-  // refetch lands), and this string changing is the section's cue to
+  // 19-6 — the check-in BRIDGE's fingerprint: today's date plus the
+  // record's instants. A check-in/out mutates the record (the summary
+  // refetch lands), and this string changing is the month view's cue to
   // refresh the pane's day map — without it, today's cell reads "Not
-  // tracked" seconds after the card above says "Checked in".
+  // tracked" seconds after the card above says "Checked in". It now
+  // travels INTO the pushed My month screen as a route param (2026-10).
   const todaySignal = summaryState.summary?.today
     ? `${summaryState.summary.today.date}|${summaryState.summary.todayRecord?.checkinAt ?? ''}|${summaryState.summary.todayRecord?.checkoutAt ?? ''}`
     : null;
+
+  /** The My month banner's push — the posture pieces snapshot per push. */
+  const openMyMonth = useCallback(() => {
+    navigation.navigate('AttendanceMyMonth', {
+      attendanceEndedOn: access?.attendanceEndedOn ?? null,
+      historyOnly: accessState === 'history_only',
+      todaySignal: accessState === 'active' ? todaySignal : null,
+    });
+  }, [navigation, access, accessState, todaySignal]);
 
   // A refresh that returns `none` while this tab is focused strands the
   // content area when the tab bar removes the screen — leave for Today
@@ -142,7 +166,34 @@ export default function AttendanceTabScreen({ navigation }: Props) {
     }
   }, [accessState, navigation]);
 
+  // 20-1 pull-to-refresh (AC 15): the tab's two truths — the access gate
+  // and the summary card — revalidate together on a pull (the same pair
+  // the focus refetch drives), spinner held until the summary settles.
+  // A pull while one is in flight is ignored: the latch is a REF, not the
+  // spinner state — a same-tick double pull would pass a state guard twice
+  // before React re-renders (the same race the write latches guard).
+  const [tabRefreshing, setTabRefreshing] = useState(false);
+  const tabRefreshingRef = useRef(false);
+  const onTabRefresh = useCallback(() => {
+    if (tabRefreshingRef.current) return;
+    tabRefreshingRef.current = true;
+    setTabRefreshing(true);
+    AccessibilityInfo.announceForAccessibility('Refreshing attendance');
+    refreshAttendanceAccessNow();
+    refreshSummaryNow()
+      .catch(() => undefined)
+      .finally(() => {
+        tabRefreshingRef.current = false;
+        setTabRefreshing(false);
+      });
+  }, [refreshSummaryNow]);
+
   const onRetrySummary = refreshSummary;
+  // The header's today line ("Today, Thursday · 12 Oct") and the My month
+  // banner's month chip ("October") derive from the WIRE's today, never
+  // the device clock.
+  const headerTodayLine = formatTodaySubtitle(summaryToday);
+  const monthChip = monthChipName(summaryToday);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -150,6 +201,11 @@ export default function AttendanceTabScreen({ navigation }: Props) {
         <Text style={styles.headerTitle} accessibilityRole="header">
           Attendance
         </Text>
+        {headerTodayLine !== null ? (
+          <Text style={styles.headerSubtitle} maxFontSizeMultiplier={1.4}>
+            {headerTodayLine}
+          </Text>
+        ) : null}
       </View>
       {status === 'unknown' || accessState === null ? (
         // The access-unknown shimmer, labelled (the 19-5 idiom).
@@ -161,7 +217,15 @@ export default function AttendanceTabScreen({ navigation }: Props) {
       ) : (
         <ScrollView
           contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={tabRefreshing}
+              onRefresh={onTabRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }>
           {accessState === 'history_only' ? (
             <>
               {/* 19-6 D6 — the dated ended note (the {date} is the wire's
@@ -178,14 +242,18 @@ export default function AttendanceTabScreen({ navigation }: Props) {
                   recorded.
                 </Text>
               </View>
-              {/* 19-6 D1 — history_only keeps a live My month (past truth:
-                  the bootstrap opens on the ended month) and the Leave
-                  history BELOW it; the Apply row is absent (subtraction in
-                  service of "your record is closed"). */}
-              <AttendanceMyMonth
-                attendanceEndedOn={access?.attendanceEndedOn ?? null}
-                historyOnly
-                todaySignal={todaySignal}
+              {/* 2026-10 — history_only keeps a live My month (past truth:
+                  the bootstrap opens on the ended month) via the banner →
+                  the full screen; the Leave history stays BELOW and the
+                  Apply entries are absent (subtraction in service of
+                  "your record is closed"). */}
+              <BannerCard
+                tone="primary"
+                icon={CalendarDays}
+                title="My month"
+                chipLabel={null}
+                subtitle="Attendance history, calendar & summary"
+                onOpen={openMyMonth}
               />
               <AttendanceLeaveSection applyable={false} onApply={openLeave} />
             </>
@@ -202,30 +270,53 @@ export default function AttendanceTabScreen({ navigation }: Props) {
                   </Text>
                 </View>
               )}
-              {/* The Today check-in section (16-4): active only — upcoming
+              {/* The Today punch section (16-4): active only — upcoming
                   renders no check-in control (absent, not disabled). */}
               {accessState === 'active' && (
-                <AttendanceTodayView
-                  summary={{ state: summaryState, refresh: refreshSummary }}
-                  refreshSummaryNow={refreshSummaryNow}
-                  refreshAccessNow={refreshAttendanceAccessNow}
-                />
+                <>
+                  <AttendanceTodayView
+                    summary={{ state: summaryState, refresh: refreshSummary }}
+                    refreshSummaryNow={refreshSummaryNow}
+                    refreshAccessNow={refreshAttendanceAccessNow}
+                  />
+                  {/* 2026-10 — the apply entry became the solid banner
+                      (the Leave section's row would be a second door to
+                      the same form). */}
+                  <BannerCard
+                    tone="success"
+                    icon={CalendarPlus}
+                    title="Apply for leave"
+                    chipLabel="Time off"
+                    subtitle="Request planned time off or sick leave"
+                    onOpen={openLeave}
+                  />
+                </>
               )}
               <AttendanceSummaryView state={summaryState} onRetry={onRetrySummary} />
-              {/* 19-6 D1 — My month between Summary and Leave (active only;
-                  upcoming hides it entirely — the tab reads NOW → YOUR
-                  SETUP → YOUR MONTH → YOUR REQUESTS). */}
+              {/* 2026-10 — My month is the banner → the FULL SCREEN
+                  (calendar + summary + upcoming holidays + legend live
+                  there now); active only, upcoming hides it entirely
+                  (an all-zero render would lie). */}
               {accessState === 'active' && (
-                <AttendanceMyMonth
-                  attendanceEndedOn={access?.attendanceEndedOn ?? null}
-                  historyOnly={false}
-                  todaySignal={todaySignal}
+                <BannerCard
+                  tone="primary"
+                  icon={CalendarDays}
+                  title="My month"
+                  chipLabel={monthChip}
+                  subtitle="Attendance history, calendar & summary"
+                  onOpen={openMyMonth}
                 />
               )}
               {/* 17-5 — the Leave section: rendered in active AND upcoming
-                  (upcoming can apply; the date floor is server-side);
+                  (upcoming can apply; the date floor is server-side). The
+                  active Apply row is suppressed — the banner above is the
+                  entry now — while upcoming keeps it (no banner there).
                   history_only/none never reach this branch (D1). */}
-              <AttendanceLeaveSection applyable onApply={openLeave} />
+              <AttendanceLeaveSection
+                applyable
+                onApply={openLeave}
+                showApplyRow={accessState !== 'active'}
+              />
               {accessState === 'upcoming' && shouldShowIntro(access) && (
                 <Button variant="secondary" size="md" onPress={openIntro}>
                   Finish the intro now
@@ -255,6 +346,11 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xl,
     fontWeight: '700',
     color: colors.textStrong,
+  },
+  headerSubtitle: {
+    ...typography.bodySm,
+    color: colors.textMuted,
+    marginTop: spacing.s1,
   },
   content: {
     padding: spacing.s4,

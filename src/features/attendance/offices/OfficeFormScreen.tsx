@@ -17,12 +17,12 @@
  * shortcut lands in 15-9).
  */
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Archive, Building2, Check } from 'lucide-react-native';
-import { Badge, Button, InlineError, Input } from '../../../components/ui';
-import { colors, spacing } from '../../../theme';
+import { Badge, Button, ConfirmDialog, InlineError, Input } from '../../../components/ui';
+import { colors, spacing, typography } from '../../../theme';
 import { officesService } from '../../../services';
 import type { ApiError } from '../../../services';
 import type { OfficeDetail } from '../../../types/office';
@@ -60,6 +60,9 @@ export default function OfficeFormScreen({ navigation, route }: Props) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
   const [archiveError, setArchiveError] = useState<string | null>(null);
+  // Archive asks through the shared ConfirmDialog instead of a system Alert
+  // (the 20-1 modal ask) — same wording, in-app styling.
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
 
   const onChange = useCallback((patch: Partial<OfficeFormState>) => {
     setForm((prev) => ({ ...prev, ...patch }));
@@ -146,45 +149,36 @@ export default function OfficeFormScreen({ navigation, route }: Props) {
 
   const handleArchive = useCallback(() => {
     if (!officeId) return;
-    // Standard destructive confirm pattern (same shape as Log out). The
-    // dialog names the SAVED office (detail), not the unsaved form value —
-    // renaming without saving must not show the new name while archiving
-    // the old one.
-    Alert.alert(
-      'Archive office',
-      `"${detail?.name ?? form.name.trim()}" will stop tracking attendance. This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Archive',
-          style: 'destructive',
-          onPress: () => {
-            setArchiving(true);
-            setArchiveError(null);
-            officesService
-              .archive(officeId)
-              .then(() => navigation.goBack())
-              .catch((err: ApiError) => {
-                if (err.code === 'ATTENDANCE_OFFICE_ARCHIVE_BLOCKED') {
-                  const blockers =
-                    (err.details as { blockers?: unknown[] } | undefined)?.blockers ?? [];
-                  // A missing/empty blockers array still means "blocked" —
-                  // never render the nonsense "0 employees are still assigned".
-                  setArchiveError(
-                    blockers.length === 0
-                      ? 'Employees are still assigned here — reassign them first'
-                      : `${blockers.length} employee${blockers.length === 1 ? ' is' : 's are'} still assigned here — reassign them first`,
-                  );
-                } else {
-                  setArchiveError(err.message);
-                }
-              })
-              .finally(() => setArchiving(false));
-          },
-        },
-      ],
-    );
-  }, [officeId, detail, form.name, navigation]);
+    setArchiveConfirmOpen(true);
+  }, [officeId]);
+
+  const confirmArchive = useCallback(() => {
+    setArchiveConfirmOpen(false);
+    setArchiving(true);
+    setArchiveError(null);
+    // The dialog names the SAVED office (detail), not the unsaved form
+    // value — renaming without saving must not show the new name while
+    // archiving the old one.
+    officesService
+      .archive(officeId as string)
+      .then(() => navigation.goBack())
+      .catch((err: ApiError) => {
+        if (err.code === 'ATTENDANCE_OFFICE_ARCHIVE_BLOCKED') {
+          const blockers =
+            (err.details as { blockers?: unknown[] } | undefined)?.blockers ?? [];
+          // A missing/empty blockers array still means "blocked" —
+          // never render the nonsense "0 employees are still assigned".
+          setArchiveError(
+            blockers.length === 0
+              ? 'Employees are still assigned here — reassign them first'
+              : `${blockers.length} employee${blockers.length === 1 ? ' is' : 's are'} still assigned here — reassign them first`,
+          );
+        } else {
+          setArchiveError(err.message);
+        }
+      })
+      .finally(() => setArchiving(false));
+  }, [officeId, navigation]);
 
   if (notFound) {
     return (
@@ -282,6 +276,24 @@ export default function OfficeFormScreen({ navigation, route }: Props) {
           </View>
         ) : null}
       </ScrollView>
+
+      <ConfirmDialog
+        visible={archiveConfirmOpen}
+        title="Archive office"
+        message={
+          <Text>
+            <Text style={styles.messageStrong}>{detail?.name ?? form.name.trim()}</Text>{' '}
+            will stop tracking attendance. This cannot be undone.
+          </Text>
+        }
+        confirmLabel="Archive office"
+        confirmVariant="danger"
+        icon={<Archive size={20} color={colors.danger} strokeWidth={2} />}
+        cancelLabel="Cancel"
+        submitting={archiving}
+        onConfirm={confirmArchive}
+        onCancel={() => setArchiveConfirmOpen(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -302,5 +314,10 @@ const styles = StyleSheet.create({
   },
   dangerBlock: {
     gap: spacing.s2,
+  },
+  messageStrong: {
+    ...typography.heading,
+    fontSize: 15,
+    color: colors.textStrong,
   },
 });

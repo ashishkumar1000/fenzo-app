@@ -76,6 +76,7 @@ export default function AuthFlow({ onComplete }: Props) {
   const [devOtp, setDevOtp] = useState('');
 
   const [sending, setSending] = useState(false);
+  const [resending, setResending] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [otpError, setOtpError] = useState('');
@@ -109,14 +110,23 @@ export default function AuthFlow({ onComplete }: Props) {
     }
   }, [requestOtp]);
 
-  const resendOtp = useCallback(async () => {
+  // The resend POST runs on its own (it can't close the screen) and its
+  // only feedback is the link's state — so its `done` callback fires when
+  // the request settles, NOT on tap: the countdown lied before this
+  // (showing a fresh 45s window while the POST was still airborne), and
+  // "Resending…" covers the round trip itself.
+  const resendOtp = useCallback(async (done?: () => void) => {
     setCode('');
     setOtpError('');
+    setResending(true);
     try {
       await requestOtp();
     } catch (err) {
       // Surface on the OTP screen — the person is already past step 1.
       setOtpError(sendOtpErrorMessage(err as ApiError));
+    } finally {
+      setResending(false);
+      done?.();
     }
   }, [requestOtp]);
 
@@ -252,6 +262,7 @@ export default function AuthFlow({ onComplete }: Props) {
         onResend={resendOtp}
         onChangeNumber={() => setStep('phone')}
         verifying={verifying}
+        resending={resending}
         error={otpError}
         devOtp={devOtp}
       />

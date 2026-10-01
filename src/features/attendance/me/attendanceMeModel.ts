@@ -78,27 +78,152 @@ export function shouldShowIntro(access: AttendanceAccess | null): boolean {
   return access.onboardedAt === null;
 }
 
-/** One summary row's display triple (label + value) — null rows are omitted. */
-export interface SummaryRow {
-  label: string;
-  value: string;
+// --- Policy-card rows (the 2026-10 tab redesign) ---
+// The redesigned "Shift & location policy" card renders the same four
+// facts as icon rows, each with an optional right-side chip. The chips
+// derive from fields the summary ALREADY carries (never new wire data):
+//   Timings      → the shift duration ("7h shift")
+//   Late cut-off → the grace window ("15m grace")
+//   Weekly offs  → the off-day label ("Friday off")
+
+/** ISO weekday 1 (Mon) .. 7 (Sun) → the full weekday name (chip copy). */
+const WEEKDAY_FULL = [
+  'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
+];
+
+/** "09:00" → minutes since midnight; null on malformed/not-HH:mm. */
+function hhmmMinutes(hhmm: string | null | undefined): number | null {
+  if (typeof hhmm !== 'string' || !/^\d{2}:\d{2}$/.test(hhmm)) return null;
+  const [h, m] = hhmm.split(':').map(Number);
+  if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+  return h * 60 + m;
 }
 
-/** The FR-4 summary rows; rows without server data are left out entirely. */
-export function buildSummaryRows(summary: AttendanceSummary | null): SummaryRow[] {
+/** "09:00"+"17:00" → "8h shift"; a half hour renders "8h 30m shift".
+ *  Null when either end is missing/malformed or reversed — a chip that
+ *  says "-1h shift" would be worse than no chip. */
+export function shiftDurationChip(
+  startTime: string | null,
+  endTime: string | null,
+): string | null {
+  const from = hhmmMinutes(startTime);
+  const to = hhmmMinutes(endTime);
+  if (from === null || to === null || to <= from) return null;
+  const whole = Math.trunc(to - from);
+  const h = Math.floor(whole / 60);
+  const m = whole % 60;
+  return `${h}h${m > 0 ? ` ${m}m` : ''} shift`;
+}
+
+/** 15 → "15m grace"; null when absent/non-positive (a 0m grace window is
+ *  not a grace the employee can see — the value row alone is honest). */
+export function graceChip(lateCutOffMinutes: number | null): string | null {
+  if (
+    lateCutOffMinutes === null ||
+    lateCutOffMinutes === undefined ||
+    !Number.isFinite(lateCutOffMinutes) ||
+    lateCutOffMinutes <= 0
+  ) {
+    return null;
+  }
+  return `${Math.trunc(lateCutOffMinutes)}m grace`;
+}
+
+/** [5] → "Friday off"; [5,6] → "2 days off"; [] → null (the value row
+ *  already reads "No weekly offs" — a chip would repeat it). */
+export function weeklyOffChip(days: number[]): string | null {
+  if (!Array.isArray(days)) return null;
+  const valid = days.filter(d => Number.isInteger(d) && d >= 1 && d <= 7);
+  if (valid.length === 1) return `${WEEKDAY_FULL[valid[0] - 1]} off`;
+  if (valid.length > 1) return `${valid.length} days off`;
+  return null;
+}
+
+/** The policy card's rows: the attendance-policy fields (office, timings,
+ *  cutoff, weekly offs) each with its derived chip text (null = no chip).
+ *  Null rows are omitted; weekly offs always render. */
+export interface PolicyRow {
+  key: 'office' | 'timings' | 'cutOff' | 'weekly';
+  label: string;
+  value: string;
+  chip: string | null;
+}
+
+export function buildPolicyRows(summary: AttendanceSummary | null): PolicyRow[] {
   if (!summary) return [];
-  const rows: SummaryRow[] = [];
+  const rows: PolicyRow[] = [];
   if (summary.officeName) {
-    rows.push({ label: 'Office', value: summary.officeName });
+    rows.push({
+      key: 'office',
+      label: 'Office',
+      value: summary.officeName,
+      chip: 'Assigned branch',
+    });
   }
   const timings = formatTimingRange(summary.startTime, summary.endTime);
   if (timings) {
-    rows.push({ label: 'Timings', value: timings });
+    rows.push({
+      key: 'timings',
+      label: 'Timings',
+      value: timings,
+      chip: shiftDurationChip(summary.startTime, summary.endTime),
+    });
   }
   const cutOff = formatCutOffCopy(summary.startTime, summary.lateCutOffMinutes);
   if (cutOff) {
-    rows.push({ label: 'Late cut-off', value: cutOff });
+    rows.push({
+      key: 'cutOff',
+      label: 'Late cut-off',
+      value: cutOff,
+      chip: graceChip(summary.lateCutOffMinutes),
+    });
   }
-  rows.push({ label: 'Weekly offs', value: formatWeeklyOffs(summary.weeklyOffDays) });
+  rows.push({
+    key: 'weekly',
+    label: 'Weekly offs',
+    value: formatWeeklyOffs(summary.weeklyOffDays),
+    chip: weeklyOffChip(summary.weeklyOffDays),
+  });
   return rows;
+}
+
+// --- The tab header's today line ---
+// "Today, Thursday · 12 Oct" from the WIRE's today date (never the device
+// clock). Same construction as formatLongDate (noon keeps the weekday
+// stable); output pinned to en-IN so a test can assert the literal.
+
+const MONTH_SHORT = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+const MONTH_LONG = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/** "2026-10-12" → "October" (the My month banner's month chip; the WIRE
+ *  date, not the device clock — null whenever the summary's today is
+ *  absent, e.g. the upcoming/history_only postures). */
+export function monthChipName(yyyyMmDd: string | null): string | null {
+  if (typeof yyyyMmDd !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(yyyyMmDd)) {
+    return null;
+  }
+  return MONTH_LONG[Number(yyyyMmDd.slice(5, 7)) - 1] ?? null;
+}
+
+/** "2026-10-12" → "Today, Thursday · 12 Oct" (null on malformed input). */
+export function formatTodaySubtitle(yyyyMmDd: string | null): string | null {
+  if (typeof yyyyMmDd !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(yyyyMmDd)) {
+    return null;
+  }
+  const [y, m, d] = yyyyMmDd.split('-').map(Number);
+  const dt = new Date(y, m - 1, d, 12, 0, 0, 0);
+  const weekday = dt.toLocaleDateString('en-IN', { weekday: 'long' });
+  const day = Number(yyyyMmDd.slice(8, 10));
+  const month = MONTH_SHORT[m - 1];
+  if (!weekday || month === undefined || !Number.isInteger(day) || day < 1 || day > 31) {
+    return null;
+  }
+  return `Today, ${weekday} · ${day} ${month}`;
 }

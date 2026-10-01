@@ -146,6 +146,18 @@ export interface ProfileAttendanceMirror {
   attendanceAccess: AttendanceAccessState;
   attendanceStartDate: string | null;
   onboardedAt: string | null;
+  /**
+   * 20-1 (AC 12): the owner's open (pending) leave requests with no
+   * decision yet — the Home "Leave requests to review" strip's count.
+   * The backend (fenzit-be 20-1) stamps it on the same mirror read
+   * (`NO_ATTENDANCE_ACCESS` fallback answers 0); the strip gates on
+   * count > 0 + attendanceEnabled, so an absent mirror fails HIDDEN
+   * exactly like the mirror itself. OPTIONAL (review 2026-10-01): the
+   * raw wire passes through unnormalized and the consumer fail-hides
+   * with `?? 0` — the type must carry that same contract, not pretend a
+   * field the contract cannot guarantee.
+   */
+  pendingLeaveRequests?: number;
 }
 
 export interface MyProfile {

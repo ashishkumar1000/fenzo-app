@@ -9,15 +9,15 @@
  *  - An EMPTY day set is a saveable works-all-week override (not blocked);
  *    the all-7-days rule still blocks (FR-18).
  *  - Save/Remove latch against double-taps; Remove disables while saving.
- *  - "Remove weekly off" goes through the destructive `Alert.alert` confirm,
+ *  - "Remove weekly off" goes through the shared ConfirmDialog ask,
  *    passes the sheet's effective date to the DELETE, and only the
- *    destructive button runs it.
+ *    confirm runs it.
  */
 import type ReactTestRenderer from 'react-test-renderer';
 import { act, create } from 'react-test-renderer';
-import { Alert, Text } from 'react-native';
+import { Text } from 'react-native';
 import WeeklyOffOverrideSheet from './WeeklyOffOverrideSheet';
-import { DatePickerField } from '../../../components/ui';
+import { ConfirmDialog, DatePickerField } from '../../../components/ui';
 import {
   WEEKLY_OFF_DAY_LETTERS,
   WEEKLY_OFF_DAY_ORDER,
@@ -128,6 +128,14 @@ function findButton(
 
 function hasText(root: ReactTestRenderer.ReactTestInstance, text: string) {
   return root.findAll((n) => n.type === Text && n.props.children === text).length > 0;
+}
+
+/** The ConfirmDialogs currently PRESENTED in the tree — a Modal keeps its
+ *  children composed while invisible, so presence reads props.visible. */
+function visibleConfirmDialogs(root: ReactTestRenderer.ReactTestInstance) {
+  return root
+    .findAllByType(ConfirmDialog)
+    .filter((d) => d.props.visible === true);
 }
 
 async function flush(times = 4) {
@@ -325,7 +333,6 @@ describe('WeeklyOffOverrideSheet — the scheduled next edit (15-6 review P12)',
   });
 
   it('Remove passes the sheet’s chosen date to the DELETE', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     const removeOverride = jest.fn().mockResolvedValue(undefined);
     const { root } = renderSheet({ override, removeOverride });
 
@@ -335,14 +342,12 @@ describe('WeeklyOffOverrideSheet — the scheduled next edit (15-6 review P12)',
     act(() => {
       findButton(root, 'Remove weekly off').props.onPress();
     });
+    const ask = visibleConfirmDialogs(root).at(-1);
     // The confirm copy names the date the removal takes effect from.
-    expect(String(alertSpy.mock.calls[0][1])).toContain('2026-10-20');
+    expect(String(ask?.props.message)).toContain('2026-10-20');
 
-    const destructive = alertSpy.mock.calls[0][2]?.find(
-      (b) => b.style === 'destructive',
-    );
     await act(async () => {
-      destructive?.onPress?.();
+      ask?.props.onConfirm();
       await flush();
     });
     expect(removeOverride).toHaveBeenCalledWith('e1', '2026-10-20');
@@ -432,12 +437,7 @@ describe('WeeklyOffOverrideSheet — add mode', () => {
 });
 
 describe('WeeklyOffOverrideSheet — the Remove weekly off confirm flow', () => {
-  afterEach(() => {
-    jest.restoreAllMocks();
-  });
-
   it('asks for confirmation before deleting; the cancel path deletes nothing', () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     const removeOverride = jest.fn();
     const { root } = renderSheet({
       override: overrideFor(PRIYA, [5]),
@@ -448,24 +448,24 @@ describe('WeeklyOffOverrideSheet — the Remove weekly off confirm flow', () => 
       findButton(root, 'Remove weekly off').props.onPress();
     });
 
-    expect(alertSpy).toHaveBeenCalledTimes(1);
-    const [title, body, buttons] = alertSpy.mock.calls[0];
-    expect(title).toBe('Remove weekly off');
-    expect(String(body)).toMatch(/Priya/);
-    expect(buttons?.map((b) => b.text)).toEqual(['Cancel', 'Remove']);
-    expect(buttons?.[0].style).toBe('cancel');
-    expect(buttons?.[1].style).toBe('destructive');
-    // Nothing is deleted until the destructive button is pressed.
+    expect(visibleConfirmDialogs(root)).toHaveLength(1);
+    const ask = visibleConfirmDialogs(root)[0];
+    expect(ask.props.title).toBe('Remove weekly off');
+    expect(String(ask.props.message)).toMatch(/Priya/);
+    expect(ask.props.confirmLabel).toBe('Remove');
+    expect(ask.props.confirmVariant).toBe('danger');
+    expect(ask.props.cancelLabel).toBe('Cancel');
+    // Nothing is deleted until the confirm is pressed.
     expect(removeOverride).not.toHaveBeenCalled();
 
     act(() => {
-      buttons?.[0].onPress?.();
+      ask.props.onCancel();
     });
+    expect(visibleConfirmDialogs(root)).toHaveLength(0);
     expect(removeOverride).not.toHaveBeenCalled();
   });
 
-  it('the destructive button DELETEs the override and closes the sheet', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  it('the confirm DELETEs the override and closes the sheet', async () => {
     const removeOverride = jest.fn().mockResolvedValue(undefined);
     const onClose = jest.fn();
     const { root } = renderSheet({
@@ -477,12 +477,10 @@ describe('WeeklyOffOverrideSheet — the Remove weekly off confirm flow', () => 
     act(() => {
       findButton(root, 'Remove weekly off').props.onPress();
     });
-    const destructive = alertSpy.mock.calls[0][2]?.find(
-      (b) => b.style === 'destructive',
-    );
+    const ask = visibleConfirmDialogs(root)[0];
 
     await act(async () => {
-      destructive?.onPress?.();
+      ask.props.onConfirm();
       await flush();
     });
 
@@ -493,7 +491,6 @@ describe('WeeklyOffOverrideSheet — the Remove weekly off confirm flow', () => 
   });
 
   it('a failed DELETE keeps the sheet open', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     const removeOverride = jest.fn().mockRejectedValue({ status: 500 });
     const onClose = jest.fn();
     const { root } = renderSheet({
@@ -505,11 +502,10 @@ describe('WeeklyOffOverrideSheet — the Remove weekly off confirm flow', () => 
     act(() => {
       findButton(root, 'Remove weekly off').props.onPress();
     });
-    const destructive = alertSpy.mock.calls[0][2]?.find(
-      (b) => b.style === 'destructive',
-    );
+    const ask = visibleConfirmDialogs(root)[0];
+
     await act(async () => {
-      destructive?.onPress?.();
+      ask.props.onConfirm();
       await flush();
     });
 

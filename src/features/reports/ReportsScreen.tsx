@@ -64,7 +64,6 @@ export default function ReportsScreen({ navigation }: Props) {
     reports,
     isLoading,
     error,
-    hasLoaded,
     isSubmitting,
     submitError,
     retryingId,
@@ -104,6 +103,21 @@ export default function ReportsScreen({ navigation }: Props) {
       setShowSyncPausedBanner(true);
     }
   }, [syncPaused]);
+
+  // Same local refresh spinner the sibling screens run — the store only
+  // flips `isLoading` for an EMPTY list, so without this state the pull
+  // spinner would snap shut the instant the gesture ended while the GET
+  // was still in flight.
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing, refresh]);
 
   // Same throttled focus refresh as the other tab-driven screens.
   useFocusEffect(
@@ -175,8 +189,13 @@ export default function ReportsScreen({ navigation }: Props) {
   }, []);
 
   // A failed load with nothing to show replaces the empty state entirely —
-  // "no reports yet" would be a lie when the request just failed.
-  const failedWithNoData = Boolean(error) && !isLoading && !hasLoaded;
+  // "no reports yet" would be a lie when the request just failed. The
+  // `reports.length === 0` conjunct (not `!hasLoaded`): the store sets
+  // hasLoaded true even on failure, so gating on it made the error view
+  // unreachable for any load after the first, and a Retry press — with
+  // isLoading true but no rows and no skeleton gate — silently showed
+  // "No reports yet" until the request settled.
+  const failedWithNoData = Boolean(error) && !isLoading && reports.length === 0;
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
@@ -195,7 +214,7 @@ export default function ReportsScreen({ navigation }: Props) {
         ) : null}
       </View>
 
-      {isLoading && !hasLoaded ? (
+      {isLoading && reports.length === 0 ? (
         <ScrollView
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}>
@@ -237,7 +256,10 @@ export default function ReportsScreen({ navigation }: Props) {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={
-            <RefreshControl refreshing={false} onRefresh={() => void refresh()} />
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={() => void onRefresh()}
+            />
           }>
           <ReportRequestForm
             startDate={startDate}

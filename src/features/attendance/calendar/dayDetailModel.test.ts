@@ -10,8 +10,11 @@
 import type { DayStatusRow } from '../../../services/resources/attendanceDayStatus';
 import {
   buildOffsetInstant,
+  canCancelLeaveDay,
+  canConvertHalfDay,
   canCorrectDay,
   dayTimesLine,
+  isLeaveDay,
   tenantOffsetFromCarried,
 } from './dayDetailModel';
 
@@ -40,6 +43,10 @@ function row(overrides: Partial<DayStatusRow> = {}): DayStatusRow {
     checkoutDistanceM: null,
     markers: [],
     ...overrides,
+    // 20-1 — leaveRequestId normalizes AFTER the spread (Partial leaks
+    // undefined through it); only the leave-day rows carry a UUID.
+    leaveRequestId: overrides.leaveRequestId ?? null,
+
   };
 }
 
@@ -127,5 +134,35 @@ describe('dayTimesLine — the correct stage\'s subtitle slot', () => {
     expect(dayTimesLine(row())).toBeNull();
     expect(dayTimesLine(null)).toBeNull();
     expect(dayTimesLine(row({ checkinAt: 'garbage' }))).toBeNull();
+  });
+});
+
+// --- 20-1 review addition: isLeaveDay is FAIL-CLOSED across ALL the wire's
+// --- leave truths, not just the id -------------------------------------------
+
+describe('isLeaveDay — the fail-closed leave truth table (20-1 review)', () => {
+  it('the id alone marks the day (the normal authority)', () => {
+    expect(isLeaveDay(row({ leaveRequestId: 'lr1' }))).toBe(true);
+  });
+
+  it('a leave STATUS without the id still marks the day — Apply must hide on wire drift', () => {
+    expect(isLeaveDay(row({ status: 'leave' }))).toBe(true);
+    expect(isLeaveDay(row({ status: 'half_day_leave' }))).toBe(true);
+  });
+
+  it('a leave_pending MARKER without the id still marks the day', () => {
+    expect(isLeaveDay(row({ markers: ['leave_pending'] }))).toBe(true);
+  });
+
+  it('a plain day marks nothing — never a leave by accident', () => {
+    expect(isLeaveDay(row())).toBe(false);
+    expect(isLeaveDay(row({ status: 'absent' }))).toBe(false);
+    expect(isLeaveDay(null)).toBe(false);
+  });
+
+  it('the CTA gates still demand the id (drift hides Apply, never mis-files a write)', () => {
+    const drifted = row({ status: 'leave' });
+    expect(canCancelLeaveDay(drifted, '2026-09-14')).toBe(false);
+    expect(canConvertHalfDay(drifted, '2026-09-14')).toBe(false);
   });
 });

@@ -12,6 +12,7 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 import { ActivityIndicator, Alert, RefreshControl, ScrollView, type AlertButton } from 'react-native';
+import { ConfirmDialog } from '../src/components/ui';
 
 const mockGoBack = jest.fn();
 const mockNavigate = jest.fn();
@@ -211,6 +212,16 @@ function confirmDialogs(): jest.SpyInstance {
       buttons?.find(b => b.style === 'destructive')?.onPress?.();
     },
   );
+}
+
+/** The ConfirmDialogs currently PRESENTED (a Modal keeps children composed
+ *  while invisible — presence reads props.visible, never existence). */
+function upDialogs(root: ReactTestRenderer.ReactTestInstance) {
+  return (
+    root.findAllByType(ConfirmDialog) as unknown as Array<{
+      props: { visible: boolean; title: string; message: unknown; onConfirm: () => void; onCancel: () => void };
+    }>
+  ).filter(d => d.props.visible === true);
 }
 
 afterEach(() => {
@@ -458,11 +469,13 @@ it('renders no actions for a non-scheduled job', async () => {
   expect(renderedText(renderer)).not.toContain('Cancel job');
 });
 
-it('cancel confirms via the dialog and PATCHes exactly { status: "cancelled" }', async () => {
+it('cancel confirms via the ConfirmDialog and PATCHes exactly { status: "cancelled" }', async () => {
   const scheduled = makeDetail({ status: 'scheduled', currentStep: null });
   const cancelled = toApiJob({ ...scheduled, status: 'cancelled' });
   getById.mockResolvedValue(scheduled);
   update.mockResolvedValueOnce(cancelled);
+  // The failure alert must never fire on success (the Alert spies error
+  // alerts only — the confirm now lives in the shared ConfirmDialog).
   const dialogs = confirmDialogs();
   const renderer = await mountScreen();
 
@@ -474,13 +487,18 @@ it('cancel confirms via the dialog and PATCHes exactly { status: "cancelled" }',
     cancelButton!.props.onPress();
   });
 
-  // The confirm dialog fired, and its destructive button sent the cancel —
-  // exactly the status field, never mixed with edit fields (a 422 mix).
-  expect(dialogs).toHaveBeenCalledWith(
-    'Cancel job',
-    'The technician will no longer see this job.',
-    expect.anything(),
-  );
+  // The ConfirmDialog presents its question; nothing has PATCHed yet.
+  const [dialog] = upDialogs(renderer.root);
+  expect(dialog.props.title).toBe('Cancel job');
+  expect(dialog.props.message).toBe('The technician will no longer see this job.');
+  expect(update).not.toHaveBeenCalled();
+  expect(getById).toHaveBeenCalledTimes(1);
+
+  // Confirming the dialog sends the cancel — exactly the status field,
+  // never mixed with edit fields (a 422 mix).
+  await ReactTestRenderer.act(async () => {
+    dialog.props.onConfirm();
+  });
   expect(update).toHaveBeenCalledTimes(1);
   expect(update).toHaveBeenCalledWith('j-1', { status: 'cancelled' });
   // The mutation is applied everywhere: roster counts and a silent refetch.
@@ -488,6 +506,7 @@ it('cancel confirms via the dialog and PATCHes exactly { status: "cancelled" }',
   // focus-refresh throttle.
   expect(loadMyProfileMock).toHaveBeenCalledWith({ force: true });
   expect(getById).toHaveBeenCalledTimes(2);
+  expect(dialogs).not.toHaveBeenCalled();
 });
 
 it('a failed cancel surfaces an alert instead of vanishing', async () => {
@@ -495,7 +514,6 @@ it('a failed cancel surfaces an alert instead of vanishing', async () => {
   update.mockRejectedValueOnce(
     Object.assign(new Error('Offline'), { status: 0, code: 'NETWORK_ERROR', message: 'Offline' }),
   );
-  // Auto-confirm so the destructive button fires the (failing) request.
   const dialogs = confirmDialogs();
   const renderer = await mountScreen();
 
@@ -504,13 +522,18 @@ it('a failed cancel surfaces an alert instead of vanishing', async () => {
     .find(b => b.props.children === 'Cancel job');
   await ReactTestRenderer.act(async () => {
     cancelButton!.props.onPress();
+  });
+  const [dialog] = upDialogs(renderer.root);
+  await ReactTestRenderer.act(async () => {
+    dialog.props.onConfirm();
     // The press is fire-and-forget — flush the rejected-promise chain too.
     await new Promise<void>(resolve => setTimeout(resolve, 0));
   });
 
   // The failure alert carries title + message only (no retry buttons) — the
   // confirm dialog is already dismissed at this point.
-  expect(dialogs).toHaveBeenLastCalledWith("Couldn't cancel the job", 'Offline');
+  expect(dialogs).toHaveBeenCalledWith("Couldn't cancel the job", 'Offline');
+  expect(upDialogs(renderer.root)).toHaveLength(0);
 });
 
 it('a 409 on cancel refetches the detail without an alert', async () => {
@@ -526,11 +549,15 @@ it('a 409 on cancel refetches the detail without an alert', async () => {
     .find(b => b.props.children === 'Cancel job');
   await ReactTestRenderer.act(async () => {
     cancelButton!.props.onPress();
+  });
+  const [dialog] = upDialogs(renderer.root);
+  await ReactTestRenderer.act(async () => {
+    dialog.props.onConfirm();
     await new Promise<void>(resolve => setTimeout(resolve, 0));
   });
 
   // The job started mid-flow — the refreshed detail explains it; no error UI.
   expect(getById).toHaveBeenCalledTimes(2);
-  // The only alert was the confirm dialog — no failure alert on a 409.
-  expect(dialogs).toHaveBeenCalledTimes(1);
+  // No failure alert — the error alert never fires on a 409 refetch.
+  expect(dialogs).not.toHaveBeenCalled();
 });

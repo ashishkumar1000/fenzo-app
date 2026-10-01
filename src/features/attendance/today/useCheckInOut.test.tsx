@@ -1,17 +1,23 @@
 /**
- * Hook tests for useCheckInOut (Story 16-4, spec D5/D9/D10/D12) — the
- * flows the unit-pure model cannot prove: the pre-flight dialog round-trip
- * (dismiss sends NOTHING), the double-tap latch, the 409 state-recovery
- * split (ALREADY_* recovers, DUPLICATE_RESOURCE does not), the Retry-After
- * countdown, the offline re-check, the check-out merge, and the
- * seedRecord freshness contract. Alert is a spy whose button callbacks the
- * tests invoke; NetInfo goes through the root mock's __setNetInfoState
- * seam (plain functions — resetAllMocks-safe). Unmounts are act-wrapped:
- * the mount-time permission probe resolves a promise that lands after the
+ * Hook tests for useCheckInOut (Story 16-4, spec D5/D9/D10/D12; 17-8
+ * leave branch + wire-driven 409 fallback; 20-1 ports the pre-flight
+ * confirmations onto the shared ConfirmDialog) — the flows the unit-pure
+ * model cannot prove: the pre-flight round-trip (cancel sends NOTHING),
+ * the double-tap latch, the 409 state-recovery split (ALREADY_* recovers,
+ * DUPLICATE_RESOURCE does not), the Retry-After countdown, the offline
+ * re-check, the check-out merge, and the seedRecord freshness contract.
+ *
+ * The Probe wires the hook's confirmAsk/settleConfirm pair to the SAME
+ * ConfirmDialog rendering AttendanceTodayView runs — copy straight from
+ * checkInDialogs — so a test presses the dialog exactly as the screen
+ * does (settleConfirm is the verdict both dialog buttons route to).
+ * NetInfo goes through the root mock's __setNetInfoState seam (plain
+ * functions — resetAllMocks-safe). Unmounts are act-wrapped: the
+ * mount-time permission probe resolves a promise that lands after the
  * last await.
  */
-import { Alert } from 'react-native';
 import type ReactTestRenderer from 'react-test-renderer';
+import React from 'react';
 import { act, create } from 'react-test-renderer';
 import {
   // The root __mocks__ module auto-applies for this package under jest and
@@ -31,6 +37,8 @@ import {
   resolveAttendanceLocationState,
 } from '../../../services/location/attendanceLocationPermission';
 import type { AttendanceTodayFacts } from '../../../services/resources/attendanceMe';
+import { ConfirmDialog } from '../../../components/ui';
+import { HOLIDAY_DIALOG, LEAVE_DIALOG } from './checkInDialogs';
 import { useCheckInOut } from './useCheckInOut';
 
 jest.mock('../../../services/location/attendanceLocation', () => ({
@@ -86,7 +94,7 @@ const pendingFullDayLeaveFacts: AttendanceTodayFacts = {
 };
 // An off-day inside a leave span: the D1 read does NOT filter on
 // working-day — leaveState non-null with isWorkingDay false. The HOLIDAY
-// dialog owns this shape (the predicates are mutually exclusive).
+// confirmation owns this shape (the predicates are mutually exclusive).
 const offDayInsideLeaveFacts: AttendanceTodayFacts = {
   ...weeklyOffFacts,
   leaveState: 'approved',
@@ -121,7 +129,26 @@ let accessDenied: jest.Mock;
 
 function Probe({ today }: { today: typeof workingDayFacts | null | undefined }) {
   probe = useCheckInOut({ today, onSettled: settled, onAccessDenied: accessDenied });
-  return null;
+  // The view's exact dialog wiring (20-1): one ConfirmDialog driven by the
+  // hook's confirmAsk, verdicts via settleConfirm.
+  const confirmDialog =
+    probe.confirmAsk === 'leave'
+      ? LEAVE_DIALOG
+      : probe.confirmAsk === 'holiday'
+        ? HOLIDAY_DIALOG
+        : null;
+  if (confirmDialog == null) return null;
+  return (
+    <ConfirmDialog
+      visible
+      title={confirmDialog.title}
+      message={confirmDialog.message}
+      confirmLabel={confirmDialog.confirmLabel}
+      cancelLabel={confirmDialog.cancelLabel}
+      onConfirm={() => probe.settleConfirm(true)}
+      onCancel={() => probe.settleConfirm(false)}
+    />
+  );
 }
 
 function renderProbe(today: typeof workingDayFacts | null | undefined = workingDayFacts) {
@@ -131,6 +158,7 @@ function renderProbe(today: typeof workingDayFacts | null | undefined = workingD
   act(() => {
     renderer = create(<Probe today={today} />);
   });
+  mountedRenderers.push(renderer);
   return renderer;
 }
 
@@ -141,16 +169,32 @@ function unmount(renderer: ReactTestRenderer.ReactTestRenderer) {
   });
 }
 
-/** The Alert spy's captured buttons array for the last call. */
-function dialogButtons(): Array<{ text: string; onPress?: () => void }> {
-  const call = (Alert.alert as jest.Mock).mock.calls.at(-1);
-  return (call?.[2] ?? []) as Array<{ text: string; onPress?: () => void }>;
+const mountedRenderers: ReactTestRenderer.ReactTestRenderer[] = [];
+afterEach(() => {
+  for (const renderer of mountedRenderers.splice(0)) {
+    act(() => {
+      renderer.unmount();
+    });
+  }
+});
+
+/** The rendered ConfirmDialog — throws when no confirmation is up. */
+function renderedDialog(root: ReactTestRenderer.ReactTestRenderer['root']) {
+  const instances = root.findAllByType(ConfirmDialog);
+  if (instances.length === 0) throw new Error('no confirmation dialog is up');
+  return instances[instances.length - 1];
 }
 
-async function settleDialog(buttonText: string) {
-  const button = dialogButtons().find(b => b.text === buttonText);
+/** Verdict press — same one-shot semantic the real buttons give:
+ *  settleConfirm resolves the awaiting continuation exactly once. */
+async function settleDialog(
+  root: ReactTestRenderer.ReactTestRenderer['root'],
+  verdict: 'confirm' | 'cancel',
+) {
+  const dialog = renderedDialog(root);
   await act(async () => {
-    button?.onPress?.();
+    if (verdict === 'confirm') dialog.props.onConfirm();
+    else dialog.props.onCancel();
     await Promise.resolve();
   });
 }
@@ -172,45 +216,42 @@ beforeEach(() => {
   });
 });
 
-describe('the pre-flight dialog (weekly off / holiday)', () => {
-  it('fires BEFORE any GPS work on a weekly-off day, and CANCEL sends NOTHING (AC: no request at all)', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+describe('the pre-flight confirmation (weekly off / holiday)', () => {
+  it('presents the ConfirmDialog BEFORE any GPS work on a weekly-off day, and CANCEL sends NOTHING (AC: no request at all)', async () => {
     const renderer = renderProbe(weeklyOffFacts);
 
     await act(async () => {
       probe.press('check_in');
       await Promise.resolve();
     });
-    expect(Alert.alert).toHaveBeenCalledWith(
-      "It's a holiday. Check in anyway?",
-      undefined,
-      expect.any(Array),
-    );
+    const dialog = renderedDialog(renderer.root);
+    expect(dialog.props.title).toBe(HOLIDAY_DIALOG.title);
+    expect(dialog.props.confirmLabel).toBe('Check in');
+    expect(dialog.props.cancelLabel).toBe('Cancel');
     expect(capture).not.toHaveBeenCalled(); // GPS only AFTER the confirm
 
-    await settleDialog('Cancel');
+    await settleDialog(renderer.root, 'cancel');
 
     expect(capture).not.toHaveBeenCalled();
     expect(checkIn).not.toHaveBeenCalled();
-    // The latch released — a new tap re-opens the dialog.
+    // The dialog is down and the latch released — a new tap re-presents it.
+    expect(renderer.root.findAllByType(ConfirmDialog)).toHaveLength(0);
     await act(async () => {
       probe.press('check_in');
       await Promise.resolve();
     });
-    expect(Alert.alert).toHaveBeenCalledTimes(2);
-    alertSpy.mockRestore();
+    renderedDialog(renderer.root); // throws if not re-presented
     unmount(renderer);
   });
 
   it('CONFIRM proceeds to capture + submit with one fresh UUID v4 idempotency key', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const renderer = renderProbe(weeklyOffFacts);
 
     await act(async () => {
       probe.press('check_in');
       await Promise.resolve();
     });
-    await settleDialog('Check in');
+    await settleDialog(renderer.root, 'confirm');
 
     expect(capture).toHaveBeenCalledTimes(1);
     expect(checkIn).toHaveBeenCalledTimes(1);
@@ -222,32 +263,28 @@ describe('the pre-flight dialog (weekly off / holiday)', () => {
       checkoutAt: null,
     });
     expect(settled).toHaveBeenCalled();
-    alertSpy.mockRestore();
     unmount(renderer);
   });
 
-  it('a second tap while the dialog is up is a NO-OP (one dialog, one request — two keys would burn a real attempt)', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  it('a second tap while the confirmation is up is a NO-OP (one dialog, one request — two keys would burn a real attempt)', async () => {
     const renderer = renderProbe(weeklyOffFacts);
 
     await act(async () => {
       probe.press('check_in');
       await Promise.resolve();
     });
+    expect(probe.dialogPending).toBe(true); // the latch is UP
     await act(async () => {
-      probe.press('check_in'); // double-tap during the dialog
+      probe.press('check_in'); // double-tap during the confirmation
       await Promise.resolve();
     });
 
-    expect(Alert.alert).toHaveBeenCalledTimes(1);
-    await settleDialog('Check in');
+    await settleDialog(renderer.root, 'confirm');
     expect(checkIn).toHaveBeenCalledTimes(1);
-    alertSpy.mockRestore();
     unmount(renderer);
   });
 
-  it('a NORMAL working day skips the dialog entirely (no Alert, straight to capture)', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  it('a NORMAL working day skips the confirmation entirely (straight to capture)', async () => {
     const renderer = renderProbe(workingDayFacts);
 
     await act(async () => {
@@ -255,14 +292,12 @@ describe('the pre-flight dialog (weekly off / holiday)', () => {
       await act(async () => {});
     });
 
-    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(renderer.root.findAllByType(ConfirmDialog)).toHaveLength(0);
     expect(checkIn).toHaveBeenCalledTimes(1);
-    alertSpy.mockRestore();
     unmount(renderer);
   });
 
   it('legacy backend (today undefined) never asks — the server still records the truth', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const renderer = renderProbe(undefined);
 
     await act(async () => {
@@ -270,21 +305,19 @@ describe('the pre-flight dialog (weekly off / holiday)', () => {
       await act(async () => {});
     });
 
-    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(renderer.root.findAllByType(ConfirmDialog)).toHaveLength(0);
     expect(checkIn).toHaveBeenCalledTimes(1);
-    alertSpy.mockRestore();
     unmount(renderer);
   });
 });
 
-describe('the full-day-leave pre-flight dialog (17-8 D2/D3/D6)', () => {
+describe('the full-day-leave pre-flight (17-8 D2/D3/D6, ported 20-1)', () => {
   const LEAVE_TITLE =
     "You're on leave today. Checking in will cancel today's leave. Continue?";
   const LEAVE_BODY =
     "Your owner will be notified. Only today's leave is cancelled — your other leave days are not affected.";
 
-  it('fires BEFORE any GPS work on an approved full-day-leave working day; copy + button order are EXACT', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  it('presents BEFORE any GPS work on an approved full-day-leave working day; copy + button vocabulary are EXACT', async () => {
     const renderer = renderProbe(approvedFullDayLeaveFacts);
 
     await act(async () => {
@@ -292,54 +325,54 @@ describe('the full-day-leave pre-flight dialog (17-8 D2/D3/D6)', () => {
       await Promise.resolve();
     });
     // Title = the PRD-verbatim ask string; body = the one plain-English
-    // line; "Don't check in" (style cancel) FIRST, "Check in" second — no
-    // destructive, no isPreferred (D6).
-    expect(Alert.alert).toHaveBeenCalledWith(LEAVE_TITLE, LEAVE_BODY, [
-      { text: "Don't check in", style: 'cancel', onPress: expect.any(Function) },
-      { text: 'Check in', onPress: expect.any(Function) },
-    ]);
+    // line; "Don't check in" stays the safe secondary, "Check in" the
+    // primary — never a destructive/danger confirm (D6).
+    const dialog = renderedDialog(renderer.root);
+    expect(dialog.props.title).toBe(LEAVE_TITLE);
+    expect(dialog.props.message).toBe(LEAVE_BODY);
+    expect(dialog.props.confirmLabel).toBe('Check in');
+    expect(dialog.props.cancelLabel).toBe("Don't check in");
     expect(capture).not.toHaveBeenCalled(); // GPS only AFTER the confirm
 
-    await settleDialog("Don't check in");
+    await settleDialog(renderer.root, 'cancel');
     expect(capture).not.toHaveBeenCalled();
     expect(checkIn).not.toHaveBeenCalled();
-    // The latch released — a new tap re-opens the dialog (every fresh tap
-    // re-runs the gate; a decision is never remembered).
+    // The latch released — a new tap re-presents (every fresh tap re-runs
+    // the gate; a decision is never remembered).
     await act(async () => {
       probe.press('check_in');
       await Promise.resolve();
     });
-    expect(Alert.alert).toHaveBeenCalledTimes(2);
-    alertSpy.mockRestore();
+    renderedDialog(renderer.root);
     unmount(renderer);
   });
 
   it('PENDING full-day leave asks too (the copy never says "approved")', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const renderer = renderProbe(pendingFullDayLeaveFacts);
 
     await act(async () => {
       probe.press('check_in');
       await Promise.resolve();
     });
-    expect(Alert.alert).toHaveBeenCalledWith(LEAVE_TITLE, LEAVE_BODY, expect.any(Array));
+    const dialog = renderedDialog(renderer.root);
+    expect(dialog.props.title).toBe(LEAVE_TITLE);
+    expect(dialog.props.message).toBe(LEAVE_BODY);
+    expect(String(dialog.props.message).toLowerCase()).not.toContain('approved');
 
-    await settleDialog('Check in');
+    await settleDialog(renderer.root, 'confirm');
     expect(checkIn).toHaveBeenCalledTimes(1);
     expect(checkIn.mock.calls[0][2]).toBe(true); // confirmLeaveCancel rides
-    alertSpy.mockRestore();
     unmount(renderer);
   });
 
   it('CONFIRM proceeds: capture + submit carrying confirmLeaveCancel: true, normal success', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const renderer = renderProbe(approvedFullDayLeaveFacts);
 
     await act(async () => {
       probe.press('check_in');
       await Promise.resolve();
     });
-    await settleDialog('Check in');
+    await settleDialog(renderer.root, 'confirm');
 
     expect(capture).toHaveBeenCalledTimes(1);
     const [fix, key, flag] = checkIn.mock.calls[0];
@@ -352,14 +385,12 @@ describe('the full-day-leave pre-flight dialog (17-8 D2/D3/D6)', () => {
     });
     expect(settled).toHaveBeenCalled();
     expect(probe.message).toBeNull();
-    alertSpy.mockRestore();
     unmount(renderer);
   });
 
   it.each(['first_half', 'second_half'] as const)(
-    'a %s leave day is strictly NOTHING — no dialog, no subtext, straight to capture, no flag',
+    'a %s leave day is strictly NOTHING — no confirmation, straight to capture, no flag',
     async part => {
-      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
       const renderer = renderProbe({ ...workingDayFacts, leaveState: 'approved', leavePart: part });
 
       await act(async () => {
@@ -367,25 +398,23 @@ describe('the full-day-leave pre-flight dialog (17-8 D2/D3/D6)', () => {
         await act(async () => {});
       });
 
-      expect(Alert.alert).not.toHaveBeenCalled();
+      expect(renderer.root.findAllByType(ConfirmDialog)).toHaveLength(0);
       expect(capture).toHaveBeenCalledTimes(1);
       expect(checkIn).toHaveBeenCalledTimes(1);
       expect(checkIn.mock.calls[0][2]).toBeUndefined(); // the flag never rides
-      alertSpy.mockRestore();
       unmount(renderer);
     },
   );
 
-  it('a fresh tap re-runs the gate at TAP time: facts that changed to no-leave never replay the dialog', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  it('a fresh tap re-runs the gate at TAP time: facts that changed to no-leave never replay the confirmation', async () => {
     const renderer = renderProbe(approvedFullDayLeaveFacts);
 
     await act(async () => {
       probe.press('check_in');
       await Promise.resolve();
     });
-    await settleDialog("Don't check in");
-    expect(Alert.alert).toHaveBeenCalledTimes(1);
+    await settleDialog(renderer.root, 'cancel');
+    expect(renderer.root.findAllByType(ConfirmDialog)).toHaveLength(0);
 
     // Leave revoked mid-session; the next refresh has landed.
     await act(async () => {
@@ -396,15 +425,12 @@ describe('the full-day-leave pre-flight dialog (17-8 D2/D3/D6)', () => {
       await act(async () => {});
     });
 
-    expect(Alert.alert).toHaveBeenCalledTimes(1); // never replayed
     expect(checkIn).toHaveBeenCalledTimes(1);
     expect(checkIn.mock.calls[0][2]).toBeUndefined();
-    alertSpy.mockRestore();
     unmount(renderer);
   });
 
   it('check-OUT is never gated even on a full-day-leave day (FR-9 is check-in only)', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const renderer = renderProbe(approvedFullDayLeaveFacts);
 
     await act(async () => {
@@ -412,15 +438,13 @@ describe('the full-day-leave pre-flight dialog (17-8 D2/D3/D6)', () => {
       await act(async () => {});
     });
 
-    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(renderer.root.findAllByType(ConfirmDialog)).toHaveLength(0);
     expect(checkOut).toHaveBeenCalledTimes(1);
     expect(checkIn).not.toHaveBeenCalled();
-    alertSpy.mockRestore();
     unmount(renderer);
   });
 
   it('a legacy wire (today present, leaveState ABSENT) never asks and never sends the flag', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     // Simulate the pre-17-8 wire: today carries the 16-4 fields only.
     const legacyFacts = { ...workingDayFacts };
     delete (legacyFacts as Partial<AttendanceTodayFacts>).leaveState;
@@ -432,15 +456,13 @@ describe('the full-day-leave pre-flight dialog (17-8 D2/D3/D6)', () => {
       await act(async () => {});
     });
 
-    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(renderer.root.findAllByType(ConfirmDialog)).toHaveLength(0);
     expect(checkIn).toHaveBeenCalledTimes(1);
     expect(checkIn.mock.calls[0][2]).toBeUndefined();
-    alertSpy.mockRestore();
     unmount(renderer);
   });
 
-  it('an OFF DAY inside a leave span surfaces the HOLIDAY dialog, never the leave dialog (mutual exclusivity)', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  it('an OFF DAY inside a leave span surfaces the HOLIDAY confirmation, never the leave one (mutual exclusivity)', async () => {
     const renderer = renderProbe(offDayInsideLeaveFacts);
 
     await act(async () => {
@@ -448,15 +470,12 @@ describe('the full-day-leave pre-flight dialog (17-8 D2/D3/D6)', () => {
       await Promise.resolve();
     });
 
-    expect(Alert.alert).toHaveBeenCalledWith(
-      "It's a holiday. Check in anyway?",
-      undefined,
-      expect.any(Array),
-    );
-    expect(Alert.alert).toHaveBeenCalledTimes(1);
-    await settleDialog('Cancel');
+    const dialog = renderedDialog(renderer.root);
+    expect(dialog.props.title).toBe(HOLIDAY_DIALOG.title);
+    expect(dialog.props.confirmLabel).toBe('Check in');
+    expect(dialog.props.cancelLabel).toBe('Cancel');
+    await settleDialog(renderer.root, 'cancel');
     expect(checkIn).not.toHaveBeenCalled();
-    alertSpy.mockRestore();
     unmount(renderer);
   });
 });
@@ -473,8 +492,7 @@ describe('the wire-driven 409 fallback (17-8 D4)', () => {
     message: SERVER_LINE,
   };
 
-  it('a 409 on a PLAIN working-day tap shows the SAME dialog UNCONDITIONALLY (facts fn not consulted), latch HELD', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  it('a 409 on a PLAIN working-day tap presents the SAME confirmation UNCONDITIONALLY (facts fn not consulted), latch HELD', async () => {
     const renderer = renderProbe(workingDayFacts);
     // The first capture returns FIX1; the retry's FRESH capture returns FIX2.
     const FIX2 = { ...FIX, latitude: 12.98, longitude: 77.6 };
@@ -487,9 +505,10 @@ describe('the wire-driven 409 fallback (17-8 D4)', () => {
       await act(async () => {});
     });
 
-    // The facts said NO leave — the dialog shows anyway (wire-driven).
-    expect(Alert.alert).toHaveBeenCalledTimes(1);
-    expect(Alert.alert).toHaveBeenCalledWith(LEAVE_TITLE, LEAVE_BODY, expect.any(Array));
+    // The facts said NO leave — the confirmation shows anyway (wire-driven).
+    const dialog = renderedDialog(renderer.root);
+    expect(dialog.props.title).toBe(LEAVE_TITLE);
+    expect(dialog.props.message).toBe(LEAVE_BODY);
     expect(probe.message).toBeNull(); // the 409 is not an error message
 
     // The latch stays HELD: a tap mid-fallback is a no-op — no double dialog.
@@ -497,12 +516,12 @@ describe('the wire-driven 409 fallback (17-8 D4)', () => {
       probe.press('check_in');
       await Promise.resolve();
     });
-    expect(Alert.alert).toHaveBeenCalledTimes(1);
+    expect(renderer.root.findAllByType(ConfirmDialog)).toHaveLength(1);
     expect(checkIn).toHaveBeenCalledTimes(1);
 
     // Continue = full FRESH capture + FRESH idempotency key + the flag.
     const firstKey = checkIn.mock.calls[0][1];
-    await settleDialog('Check in');
+    await settleDialog(renderer.root, 'confirm');
     expect(capture).toHaveBeenCalledTimes(2);
     expect(checkIn).toHaveBeenCalledTimes(2);
     expect(checkIn.mock.calls[1][0]).toEqual(FIX2); // the SECOND capture's fix
@@ -512,12 +531,10 @@ describe('the wire-driven 409 fallback (17-8 D4)', () => {
     expect(checkIn.mock.calls[1][2]).toBe(true);
     expect(settled).toHaveBeenCalled();
     expect(probe.record).toMatchObject({ checkinAt: '2026-09-29T10:16:00+05:30' });
-    alertSpy.mockRestore();
     unmount(renderer);
   });
 
-  it('a SECOND 409 (wiring regression) is the generic error, NEVER a re-dialog (loop guard)', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  it('a SECOND 409 (wiring regression) is the generic error, NEVER a re-presentation (loop guard)', async () => {
     const renderer = renderProbe(workingDayFacts);
     checkIn.mockRejectedValueOnce(leave409).mockRejectedValueOnce(leave409);
 
@@ -525,16 +542,14 @@ describe('the wire-driven 409 fallback (17-8 D4)', () => {
       probe.press('check_in');
       await act(async () => {});
     });
-    await settleDialog('Check in'); // the flag-carrying retry — also 409s
+    await settleDialog(renderer.root, 'confirm'); // the flag-carrying retry — also 409s
 
-    expect(Alert.alert).toHaveBeenCalledTimes(1); // never re-dialoged
+    expect(renderer.root.findAllByType(ConfirmDialog)).toHaveLength(0); // never re-presented
     expect(probe.message).toEqual({ tone: 'error', text: SERVER_LINE });
-    alertSpy.mockRestore();
     unmount(renderer);
   });
 
   it('fallback-CANCEL renders NOTHING (the dialog was the communication) and releases the latch without replaying the flag', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const renderer = renderProbe(workingDayFacts);
     checkIn.mockRejectedValueOnce(leave409);
 
@@ -542,10 +557,11 @@ describe('the wire-driven 409 fallback (17-8 D4)', () => {
       probe.press('check_in');
       await act(async () => {});
     });
-    await settleDialog("Don't check in");
+    await settleDialog(renderer.root, 'cancel');
 
     expect(checkIn).toHaveBeenCalledTimes(1); // only the burned first attempt
     expect(probe.message).toBeNull(); // nothing renders
+    expect(renderer.root.findAllByType(ConfirmDialog)).toHaveLength(0);
 
     // The latch released — a fresh tap works and sends NO flag.
     await act(async () => {
@@ -554,31 +570,27 @@ describe('the wire-driven 409 fallback (17-8 D4)', () => {
     });
     expect(checkIn).toHaveBeenCalledTimes(2);
     expect(checkIn.mock.calls[1][2]).toBeUndefined();
-    alertSpy.mockRestore();
     unmount(renderer);
   });
 
   it('revoke-staleness: a flag-carrying submit against a leave that is GONE succeeds normally (inert flag, no leave-cancelled outcome)', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const renderer = renderProbe(approvedFullDayLeaveFacts);
 
     await act(async () => {
       probe.press('check_in');
       await Promise.resolve();
     });
-    await settleDialog('Check in'); // facts stale — the owner already revoked
+    await settleDialog(renderer.root, 'confirm'); // facts stale — the owner already revoked
 
     expect(checkIn).toHaveBeenCalledTimes(1);
     expect(checkIn.mock.calls[0][2]).toBe(true);
     expect(probe.record).toMatchObject({ checkinAt: '2026-09-29T10:16:00+05:30' });
     expect(settled).toHaveBeenCalled();
     expect(probe.message).toBeNull();
-    alertSpy.mockRestore();
     unmount(renderer);
   });
 
-  it('the fallback fires on the HOLIDAY-dialog path too (stale off-day facts, server says working day with leave)', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  it('the fallback fires on the HOLIDAY path too (stale off-day facts, server says working day with leave)', async () => {
     const renderer = renderProbe(weeklyOffFacts);
     checkIn.mockRejectedValueOnce(leave409);
 
@@ -586,14 +598,18 @@ describe('the wire-driven 409 fallback (17-8 D4)', () => {
       probe.press('check_in');
       await Promise.resolve();
     });
-    await settleDialog('Check in'); // the holiday confirm → submit 409s
+    const holidayDialog = renderedDialog(renderer.root); // the holiday confirmation is up
+    expect(holidayDialog.props.title).toBe(HOLIDAY_DIALOG.title);
+    expect(probe.confirmAsk).toBe('holiday');
+    await settleDialog(renderer.root, 'confirm'); // → submit 409s
 
-    expect(Alert.alert).toHaveBeenCalledTimes(2); // holiday dialog, then the SAME leave dialog
-    expect(Alert.alert).toHaveBeenLastCalledWith(LEAVE_TITLE, LEAVE_BODY, expect.any(Array));
-    await settleDialog('Check in');
+    // The SAME leave confirmation now presents (second dialog, same wiring).
+    const leaveDialog = renderedDialog(renderer.root);
+    expect(leaveDialog.props.title).toBe(LEAVE_TITLE);
+    expect(probe.confirmAsk).toBe('leave');
+    await settleDialog(renderer.root, 'confirm');
     expect(checkIn).toHaveBeenCalledTimes(2);
     expect(checkIn.mock.calls[1][2]).toBe(true);
-    alertSpy.mockRestore();
     unmount(renderer);
   });
 });
@@ -802,17 +818,16 @@ describe('the offline gate', () => {
     unmount(renderer);
   });
 
-  it('offline DURING the dialog re-checks at CONFIRM (a new moment of decision) and still sends nothing', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  it('offline DURING the confirmation re-checks at CONFIRM (a new moment of decision) and still sends nothing', async () => {
     const renderer = renderProbe(weeklyOffFacts);
 
     await act(async () => {
       probe.press('check_in');
       await Promise.resolve();
     });
-    // The network dies while the dialog is up.
+    // The network dies while the confirmation is up.
     __setNetInfoState(offlineState);
-    await settleDialog('Check in');
+    await settleDialog(renderer.root, 'confirm');
 
     expect(capture).not.toHaveBeenCalled();
     expect(probe.message).toMatchObject({
@@ -820,7 +835,6 @@ describe('the offline gate', () => {
     });
 
     __setNetInfoState(onlineState);
-    alertSpy.mockRestore();
     unmount(renderer);
   });
 });

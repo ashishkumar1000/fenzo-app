@@ -1,7 +1,6 @@
 import {
-  buildDoneCard,
+  buildTodayTiles,
   deriveTodayButtonState,
-  formatCheckedInLine,
   formatCountdown,
   formatCountdownWords,
   messageForApiError,
@@ -341,37 +340,49 @@ describe('countdown and checked-in formatting', () => {
     expect(formatCountdownWords(60)).toBe('Try again in 1 minute');
     expect(formatCountdownWords(600)).toBe('Try again in 10 minutes');
   });
-
-  it('formatCheckedInLine carries the late flag ("Checked in 10:16 AM · Late by 61 min")', () => {
-    expect(formatCheckedInLine({ lateMinutes: 61, isLate: true }, '10:16 AM')).toBe(
-      'Checked in 10:16 AM · Late by 61 min',
-    );
-    expect(formatCheckedInLine({ lateMinutes: 0, isLate: false }, '9:00 AM')).toBe(
-      'Checked in 9:00 AM',
-    );
-    expect(formatCheckedInLine({ lateMinutes: null, isLate: false }, null)).toBeNull();
-  });
 });
 
-describe('buildDoneCard — the summary card inputs (merged record)', () => {
+describe('buildTodayTiles — the punch card\'s data (2026-10 tab redesign)', () => {
   const formatTime = (iso: string) => (iso.includes('10:16') ? '10:16 AM' : '6:05 PM');
 
-  it('a closed record builds times, worked and flags from the merge(checkIn, checkOut) shape', () => {
-    expect(buildDoneCard(closedRecord, formatTime)).toEqual({
+  it('a closed record builds both tile times, the worked pill and the late pill from the merge(checkIn, checkOut) shape', () => {
+    expect(buildTodayTiles(closedRecord, formatTime)).toEqual({
       checkinText: '10:16 AM',
       checkoutText: '6:05 PM',
       workedText: '7 h 49 m',
       lateText: 'Late by 61 min',
       earlyText: null,
+      earlyBeforeShiftText: null,
     });
   });
 
-  it('early checkout surfaces its flag; a non-late day has no late flag', () => {
+  it('a MID-SESSION record still builds the card — the checkout tile reads null ("—" on screen), no worked pill yet', () => {
+    expect(buildTodayTiles(openRecord, formatTime)).toEqual({
+      checkinText: '10:16 AM',
+      checkoutText: null,
+      workedText: null,
+      lateText: 'Late by 61 min',
+      earlyText: null,
+      earlyBeforeShiftText: null,
+    });
+  });
+
+  it('early checkout surfaces its pill + the before-shift caption; a non-late day has no late pill', () => {
     expect(
-      buildDoneCard(
+      buildTodayTiles(
         { ...closedRecord, isLate: false, lateMinutes: 0, earlyCheckout: true, earlyCheckoutMinutes: 30 },
         formatTime,
       ),
-    ).toMatchObject({ lateText: null, earlyText: 'Early by 30 min' });
+    ).toMatchObject({
+      lateText: null,
+      earlyText: 'Early by 30 min',
+      earlyBeforeShiftText: '0 h 30 m before shift',
+    });
+  });
+
+  it('a corrupt worked value (non-finite) renders no pill — never a negative or NaN string', () => {
+    expect(
+      buildTodayTiles({ ...closedRecord, workedMinutes: Number.NaN } as never, formatTime),
+    ).toMatchObject({ workedText: null });
   });
 });

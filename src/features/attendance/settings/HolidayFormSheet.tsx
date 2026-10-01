@@ -38,8 +38,8 @@
  * and therefore never implies that anything was written.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, StyleSheet, Text } from 'react-native';
-import { DatePickerField, Input, Sheet } from '../../../components/ui';
+import { StyleSheet, Text } from 'react-native';
+import { ConfirmDialog, DatePickerField, Input, Sheet } from '../../../components/ui';
 import { colors, typography } from '../../../theme';
 import type {
   ApiError,
@@ -197,32 +197,26 @@ export default function HolidayFormSheet({
     }
   };
 
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
   const onDelete = () => {
     if (!holiday || isSaving || deleteLatchRef.current) return;
-    Alert.alert(
-      'Delete holiday',
-      `${holiday.name} (${holiday.date}) will be removed. Future dates notify tracked employees.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (deleteLatchRef.current) return;
-            deleteLatchRef.current = true;
-            try {
-              await remove(holiday.id);
-              onSaved?.('delete');
-              onClose();
-            } catch {
-              // saveError surfaces inline.
-            } finally {
-              deleteLatchRef.current = false;
-            }
-          },
-        },
-      ],
-    );
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!holiday || deleteLatchRef.current) return;
+    setDeleteConfirmOpen(false);
+    deleteLatchRef.current = true;
+    try {
+      await remove(holiday.id);
+      onSaved?.('delete');
+      onClose();
+    } catch {
+      // saveError surfaces inline.
+    } finally {
+      deleteLatchRef.current = false;
+    }
   };
 
   return (
@@ -288,6 +282,18 @@ export default function HolidayFormSheet({
         Holidays affect attendance for everyone — past dates can still be
         edited or removed.
       </Text>
+
+      <ConfirmDialog
+        visible={deleteConfirmOpen && holiday != null}
+        title="Delete holiday"
+        message={`${holiday?.name ?? ''} (${holiday?.date ?? ''}) will be removed. Future dates notify tracked employees.`}
+        confirmLabel="Delete"
+        confirmVariant="danger"
+        cancelLabel="Cancel"
+        submitting={isSaving}
+        onConfirm={() => void confirmDelete()}
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
     </Sheet>
   );
 }

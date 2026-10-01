@@ -5,12 +5,16 @@
  *
  * Removal ends the override FROM the sheet's effective date (BE DELETE
  * `?effectiveFrom=`, default today) — a scheduled future edit can be
- * removed without clipping today's rule. Goes through the destructive
- * `Alert.alert` confirm; the destructive button only runs the DELETE, and
- * a ref latch covers the double-tap window (15-6 review P13).
+ * removed without clipping today's rule. The confirm moved to the shared
+ * `ConfirmDialog` (the 20-1 modal ask): `onRemove` only OPENS the dialog
+ * — the sheet renders it from the returned `removeOpen` state, with
+ * `removeMessage` as the body — and `confirmRemove` runs the DELETE, with
+ * a ref latch covering the double-tap window (15-6 review P13).
+ *
+ * The hook cannot render the dialog itself (it is hook-only), so the
+ * open/close/confirm triple rides back to the sheet.
  */
-import { useCallback, useRef } from 'react';
-import { Alert } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
 import type { WeeklyOffOverrideResponse } from '../../../services';
 
 export function useOverrideRemove({
@@ -31,38 +35,38 @@ export function useOverrideRemove({
   onClose: () => void;
 }) {
   const removeLatchRef = useRef(false);
+  const [removeOpen, setRemoveOpen] = useState(false);
+
+  // Composed from the sheet's state up-front so the dialog body is ready
+  // the moment the destructive button opens it.
+  const effective = effectiveFrom || undefined;
+  const removeMessage = override
+    ? effective
+      ? `${override.employeeName} will follow the tenant default from ${effective}.`
+      : `${override.employeeName} will follow the tenant default from today.`
+    : '';
 
   const onRemove = useCallback(() => {
     if (!override || isSaving || removeLatchRef.current) return;
-    const id = override.employeeId;
-    const effective = effectiveFrom || undefined;
-    Alert.alert(
-      'Remove weekly off',
-      effective
-        ? `${override.employeeName} will follow the tenant default from ${effective}.`
-        : `${override.employeeName} will follow the tenant default from today.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            if (removeLatchRef.current) return;
-            removeLatchRef.current = true;
-            try {
-              await removeOverride(id, effective);
-              onSaved?.('delete');
-              onClose();
-            } catch {
-              // saveError surfaces inline.
-            } finally {
-              removeLatchRef.current = false;
-            }
-          },
-        },
-      ],
-    );
-  }, [override, isSaving, effectiveFrom, removeOverride, onSaved, onClose]);
+    setRemoveOpen(true);
+  }, [override, isSaving]);
 
-  return onRemove;
+  const confirmRemove = useCallback(async () => {
+    if (!override || removeLatchRef.current) return;
+    setRemoveOpen(false);
+    removeLatchRef.current = true;
+    try {
+      await removeOverride(override.employeeId, effectiveFrom || undefined);
+      onSaved?.('delete');
+      onClose();
+    } catch {
+      // saveError surfaces inline.
+    } finally {
+      removeLatchRef.current = false;
+    }
+  }, [override, effectiveFrom, removeOverride, onSaved, onClose]);
+
+  const cancelRemove = useCallback(() => setRemoveOpen(false), []);
+
+  return { onRemove, confirmRemove, cancelRemove, removeOpen, removeMessage };
 }

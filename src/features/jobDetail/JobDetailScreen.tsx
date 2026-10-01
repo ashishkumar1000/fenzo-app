@@ -30,6 +30,7 @@ import {
   Copy,
   FileQuestion,
   Info,
+  XCircle,
 } from 'lucide-react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -37,6 +38,7 @@ import {
   Badge,
   Button,
   Card,
+  ConfirmDialog,
   EmptyState,
   IconButton,
   InlineError,
@@ -82,6 +84,10 @@ export default function JobDetailScreen() {
   // — the only source of server-issued ids safe to send on a reassign.
   const { profile } = useMyProfile();
   const [isEditOpen, setIsEditOpen] = useState(false);
+  // Cancel job asks through the shared ConfirmDialog instead of a system
+  // Alert (the 20-1 modal ask); `submitting` mirrors the cancel PATCH.
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
 
   // Copy affordances on the person cards (after the phone number): a brief
   // "Copied" note confirms the tap. Copies the raw diallable number.
@@ -216,6 +222,7 @@ export default function JobDetailScreen() {
   const handleCancelJob = useCallback(async () => {
     if (!detail || isCancellingRef.current) return;
     isCancellingRef.current = true;
+    setCancelSubmitting(true);
     try {
       const updated = await jobService.update(detail.id, { status: 'cancelled' });
       applyJobUpdate(updated);
@@ -228,24 +235,24 @@ export default function JobDetailScreen() {
         void load(false);
         return;
       }
-      // The confirm dialog is long gone by now — a failed cancel must be
-      // visible, not a console.warn. Reuse the alert so the feedback lands
-      // where the user's attention already is.
+      // A failed cancel must be visible, not a console.warn. Reuse the alert
+      // so the feedback lands where the user's attention already is; the
+      // dialog closes beneath it (the alert is the communication now).
       Alert.alert(
         "Couldn't cancel the job",
         flattenApiMessage(apiError.message) || 'Please try again.',
       );
     } finally {
       isCancellingRef.current = false;
+      setCancelSubmitting(false);
+      // Every settled path closes the dialog: the success morphs into the
+      // refreshed detail, the 409 into the reloaded detail, the failure
+      // into the alert above.
+      setCancelConfirmOpen(false);
     }
   }, [applyJobUpdate, detail, load]);
 
-  const confirmCancel = useCallback(() => {
-    Alert.alert('Cancel job', 'The technician will no longer see this job.', [
-      { text: 'Keep job', style: 'cancel' },
-      { text: 'Cancel job', style: 'destructive', onPress: () => void handleCancelJob() },
-    ]);
-  }, [handleCancelJob]);
+  const confirmCancel = useCallback(() => setCancelConfirmOpen(true), []);
 
   if (!jobId) return null;
 
@@ -534,6 +541,19 @@ export default function JobDetailScreen() {
             onSaved={handleEditSaved}
           />
         ) : null}
+
+        <ConfirmDialog
+          visible={cancelConfirmOpen && detail != null}
+          title="Cancel job"
+          message="The technician will no longer see this job."
+          confirmLabel="Cancel job"
+          confirmVariant="danger"
+          icon={<XCircle size={20} color={colors.danger} strokeWidth={2} />}
+          cancelLabel="Keep job"
+          submitting={cancelSubmitting}
+          onConfirm={() => void handleCancelJob()}
+          onCancel={() => setCancelConfirmOpen(false)}
+        />
       </>
     )}
     </SafeAreaView>

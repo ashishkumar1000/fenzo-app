@@ -11,6 +11,7 @@ import type ReactTestRenderer from 'react-test-renderer';
 import { act, create } from 'react-test-renderer';
 import { AccessibilityInfo, Text } from 'react-native';
 import { AttendanceTodayView } from './AttendanceTodayView';
+import { CheckInOutButton } from './CheckInOutButton';
 import { useCheckInOut } from './useCheckInOut';
 import type { AttendanceSummaryState } from '../me/useAttendanceSummary';
 import type { AttendanceTodayRecord } from '../../../services/resources/attendanceMe';
@@ -99,6 +100,13 @@ function textContaining(root: ReactTestRenderer.ReactTestRenderer['root'], part:
   });
 }
 
+/** The big action is the CheckInOutButton (its own Pressable shell, not a
+ *  DS Button) — presence/absence is the state line, never a label string
+ *  colliding with the punch card's tile labels. */
+function actionButtonsUp(root: ReactTestRenderer.ReactTestRenderer['root']) {
+  return root.findAllByType(CheckInOutButton);
+}
+
 function renderView(
   summary: AttendanceSummaryState,
   hook: Record<string, unknown>,
@@ -141,24 +149,31 @@ afterAll(() => {
 describe('the button states (one action at a time)', () => {
   it('a fresh working day renders exactly one Check in and no Check out', () => {
     const view = renderView(summaryState(), {});
-    console.log('VIEWTREE:', JSON.stringify(view.toJSON())?.slice(0, 120));
     expect(textContaining(view.root, 'Check in').length).toBeGreaterThan(0);
     expect(textContaining(view.root, 'Check out')).toHaveLength(0);
   });
 
-  it('the checked-in state renders the line + Check out (late flag with the server minutes)', () => {
+  it('the checked-in state renders the punch card + exactly one Check out button; the late pill carries the server minutes', () => {
     const view = renderView(summaryState(), { record: openRecord });
-    expect(textContaining(view.root, 'Checked in 10:16 AM · Late by 61 min')).toHaveLength(1);
-    expect(textContaining(view.root, 'Check out').length).toBeGreaterThan(0);
+    // The redesigned layout (2026-10): tile times replace the old
+    // "Checked in 10:16 AM · Late by 61 min" line.
+    expect(textContaining(view.root, 'Checked in 10:16 AM')).toHaveLength(0);
+    expect(textContaining(view.root, 'Late by 61 min').length).toBeGreaterThan(0);
+    expect(actionButtonsUp(view.root)).toHaveLength(1);
+
+    // The mid-session card coexists with the button — the checkout tile
+    // reads the "—" placeholder (no checkout), never hides the card.
+    expect(textContaining(view.root, '—').length).toBeGreaterThan(0);
   });
 
-  it('the done state REPLACES the button with the summary card (never both visible — AC)', () => {
+  it('the done state REMOVES the check-in/out button; the punch card remains (never both visible — AC)', () => {
     const view = renderView(summaryState(), { record });
-    expect(textContaining(view.root, 'Check out')).toHaveLength(0);
-    expect(textContaining(view.root, 'Checked in').length).toBeGreaterThan(0);
+    expect(actionButtonsUp(view.root)).toHaveLength(0);
     // 10:16 → 18:05 = 469 whole minutes = 7 h 49 m (not the PRD's example string).
     expect(textContaining(view.root, '7 h 49 m').length).toBeGreaterThan(0);
     expect(textContaining(view.root, 'Late by 61 min').length).toBeGreaterThan(0);
+    // The old "Checked in" line is gone — the tile is the time now.
+    expect(textContaining(view.root, 'Checked in 10:16 AM')).toHaveLength(0);
   });
 
   it.each([
@@ -236,8 +251,11 @@ describe('the offline block and announcements', () => {
     );
   });
 
-  it('the office line renders the office name and 12-hour timings', () => {
+  it('the today section renders NO office/timings line — it moved to the summary card', () => {
     const view = renderView(summaryState(), {});
-    expect(textContaining(view.root, 'Hero wala · 9:00 AM – 4:00 PM')).toHaveLength(1);
+    // The 2026-10 redesign moved the office/timings truth to the summary
+    // card; a second render here would let the two truths drift.
+    expect(textContaining(view.root, 'Hero wala ·')).toHaveLength(0);
+    expect(textContaining(view.root, '9:00 AM – 4:00 PM')).toHaveLength(0);
   });
 });

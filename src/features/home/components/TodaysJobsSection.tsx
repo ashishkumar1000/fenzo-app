@@ -18,6 +18,7 @@ import { JobCard } from '../../jobs/components/JobCard';
 import type { ProfileJob, ProfileTechnician } from '../../../services';
 import { selectTodayJobs } from '../selectTodayJobs';
 import { OverdueStrip } from './OverdueStrip';
+import { LeaveReviewStrip } from './LeaveReviewStrip';
 
 export type TodaysJobsSectionProps = {
   jobs: ProfileJob[];
@@ -25,6 +26,12 @@ export type TodaysJobsSectionProps = {
   technicianCount: number;
   /** Roster fallback for `job.technician.name` on a data-anomaly row. */
   technicians: ProfileTechnician[];
+  /** 20-1 (AC 12): the owner's pending leave-review count — the strip
+   *  renders only when non-zero AND `onPressLeaveStrip` is provided;
+   *  omitted (or undefined) renders nothing and keeps older callers
+   *  byte-identical. */
+  pendingLeaveRequests?: number;
+  onPressLeaveStrip?: () => void;
   onPressJob: (jobId: string) => void;
   onPressStrip: () => void;
   onPressCreate: () => void;
@@ -35,13 +42,21 @@ export function TodaysJobsSection({
   overdueCount,
   technicianCount,
   technicians,
+  pendingLeaveRequests,
+  onPressLeaveStrip,
   onPressJob,
   onPressStrip,
   onPressCreate,
 }: TodaysJobsSectionProps) {
   const todayJobs = selectTodayJobs(jobs);
   const technicianNames = new Map(technicians.map(t => [t.id, t.name]));
-  const isEmpty = todayJobs.length === 0 && overdueCount === 0;
+  const leaveStrip =
+    pendingLeaveRequests != null &&
+    pendingLeaveRequests > 0 &&
+    onPressLeaveStrip != null;
+  // "You're all clear" would lie under a visible leave-review strip —
+  // pending requests count as something needing attention too.
+  const isEmpty = todayJobs.length === 0 && overdueCount === 0 && !leaveStrip;
   // The urgency rail's clock — one 60s tick for the section's rows.
   const now = useNow();
 
@@ -50,6 +65,15 @@ export function TodaysJobsSection({
       <Text style={styles.sectionTitle}>Today & needs attention</Text>
 
       {overdueCount > 0 ? <OverdueStrip count={overdueCount} onPress={onPressStrip} /> : null}
+
+      {pendingLeaveRequests != null &&
+      pendingLeaveRequests > 0 &&
+      onPressLeaveStrip != null ? (
+        <LeaveReviewStrip
+          count={pendingLeaveRequests}
+          onPress={onPressLeaveStrip}
+        />
+      ) : null}
 
       {todayJobs.map(job => (
         <JobCard

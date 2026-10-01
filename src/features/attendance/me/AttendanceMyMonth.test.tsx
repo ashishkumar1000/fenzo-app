@@ -19,13 +19,28 @@ jest.mock('../../../services/resources/attendanceDayStatus', () => ({
 jest.mock('../../../services', () => ({
   ...jest.requireActual('../../../services'),
   fetchMyMonthly: jest.fn(),
+  attendanceLeaveService: {
+    ...jest.requireActual('../../../services').attendanceLeaveService,
+    listMyLeave: jest.fn(),
+    cancelLeave: jest.fn(),
+    applyLeave: jest.fn(),
+  },
 }));
 
-// The hook's focus refresh needs a navigator; this suite drives the
-// parameter/echo paths directly, so focus is a recorded no-op.
-jest.mock('@react-navigation/native', () => ({
-  useFocusEffect: jest.fn(),
-}));
+// The hook's focus refresh needs a navigator; this suite records the
+// focus callbacks and RUNS them on demand — the leave-return focus
+// refresh's skip-first discipline is a tested contract, not a no-op.
+jest.mock('@react-navigation/native', () => {
+  const cbs: (() => void)[] = [];
+  return {
+    __esModule: true,
+    useFocusEffect: (cb: () => void) => {
+      // eslint-disable-next-line @typescript-eslint/no-implied-eval
+      cbs.push(cb);
+    },
+    __focusCbs: cbs,
+  };
+});
 
 import type ReactTestRenderer from 'react-test-renderer';
 import { act, create } from 'react-test-renderer';
@@ -35,16 +50,22 @@ import {
   monthRange,
 } from '../../../services/resources/attendanceDayStatus';
 import type { DayStatusRow } from '../../../services/resources/attendanceDayStatus';
-import { fetchMyMonthly } from '../../../services';
+import { attendanceLeaveService, fetchMyMonthly } from '../../../services';
 import type { MeMonthlyData } from '../../../services';
+import type { LeaveRequestRow } from '../../../services/resources/attendanceLeave';
 import { AttendanceMyMonth } from './AttendanceMyMonth';
 import { RealMonthPane } from '../calendar/RealMonthPane';
 import { DayDetailSheet } from '../calendar/DayDetailSheet';
 import { dayMonthLabel } from '../calendar/dayDetailModel';
-import { shiftYearMonth } from '../monthly/monthlyModel';
+import { formatHolidayFullDate, shiftYearMonth } from '../monthly/monthlyModel';
 
 const fetchPane = fetchMyDayStatuses as jest.Mock;
 const fetchMe = fetchMyMonthly as jest.Mock;
+const listLeave = attendanceLeaveService.listMyLeave as jest.Mock;
+const cancelLeave = attendanceLeaveService.cancelLeave as jest.Mock;
+const focusState = jest.requireMock('@react-navigation/native') as {
+  __focusCbs: (() => void)[];
+};
 
 /** The device month — the component's declared navigation seed (the only
  *  place the device clock is allowed; tests derive expectations from it). */
@@ -76,6 +97,7 @@ function row(workDate: string): DayStatusRow {
     checkoutSource: null,
     checkinDistanceM: null,
     checkoutDistanceM: null,
+    leaveRequestId: null, // 20-1 — no leave day
     markers: [],
   };
 }
@@ -232,6 +254,8 @@ beforeEach(() => {
   // chain; individual tests override with mockResolvedValueOnce/… as needed.
   fetchPane.mockResolvedValue(paneEnvelope([], TODAY_IN_SEED));
   fetchMe.mockResolvedValue(meData());
+  listLeave.mockResolvedValue({ data: [], nextCursor: null, hasMore: false });
+  focusState.__focusCbs.length = 0;
   appStateListener = null;
   jest.spyOn(AppState, 'addEventListener').mockImplementation(((
     _type: string,
@@ -301,7 +325,7 @@ describe('the section shell + sheet wiring (D5)', () => {
 });
 
 describe('the summary block (D5/D9)', () => {
-  it('the so-far line renders ONLY on the canonical current month AND loaded, ABOVE the chips, with the formatCredit decimal', async () => {
+  it('the so-far line renders ONLY on the canonical current month AND loaded, ABOVE the tiles, with the formatCredit decimal', async () => {
     fetchPane.mockResolvedValue(paneEnvelope([], TODAY_IN_SEED));
     fetchMe.mockResolvedValue(meData());
     const renderer = renderSection({});
@@ -310,9 +334,11 @@ describe('the summary block (D5/D9)', () => {
     const all = texts(renderer);
     expect(all).toContain('Days worked: 14.5 so far');
     const soFar = all.indexOf('Days worked: 14.5 so far');
-    const workedChip = all.indexOf('14.5 worked');
+    // The worked TILE renders under the head (2026-10: the card's tile row
+    // replaced the chips line's worked anchor).
+    const workedTile = all.indexOf('Worked');
     expect(soFar).toBeGreaterThan(-1);
-    expect(workedChip).toBeGreaterThan(soFar); // ABOVE the chips
+    expect(workedTile).toBeGreaterThan(soFar);
 
     // ‹ to a past month: no so-far line (never a stale number).
     fetchPane.mockResolvedValue(paneEnvelope([], TODAY_IN_SEED));
@@ -347,20 +373,31 @@ describe('the summary block (D5/D9)', () => {
     expect(texts(renderer)).not.toContain('Days worked: 14.5 so far');
   });
 
-  it('the chips keep the worked anchor first; the meta line is counts-only and omitted when all zero', async () => {
+  it('the tiles carry worked/absent/offs/holiday; the residual chips carry the counts the tiles do not', async () => {
     fetchPane.mockResolvedValue(paneEnvelope([], TODAY_IN_SEED));
     fetchMe.mockResolvedValue(meData());
     const renderer = renderSection({});
     await flush();
 
     const all = texts(renderer);
-    expect(all.indexOf('14.5 worked')).toBeGreaterThan(-1);
+    // The four tiles (2026-10 stat-tile card).
+    expect(all).toContain('Worked');
+    expect(all).toContain('14.5');
+    expect(all).toContain('Absent');
+    expect(all).toContain('1'); // the absent tile's count
+    expect(all).toContain('Offs');
+    expect(all).toContain('Holiday');
+    // The tiles took over worked/absent/offs/holiday — those never render
+    // as chips any more.
+    expect(all).not.toContain('14.5 worked');
+    expect(all).not.toContain('1 absent');
+    expect(all).not.toContain('3 weekly offs');
+    expect(all).not.toContain('1 holiday');
+    // The residual chips — workedOnHoliday 0 suppressed (no chip, no meta).
     expect(all).toContain('2 half days');
     expect(all).toContain('1 late');
     expect(all).toContain('1 leave');
-    expect(all).toContain('1 absent');
     expect(all).toContain('2 missing checkouts');
-    expect(all).toContain('3 weekly offs · 1 holiday'); // workedOnHoliday 0 suppressed
   });
 
   it('an all-zero meta renders no meta line (the empty-omit precedent)', async () => {
@@ -388,7 +425,7 @@ describe('the summary block (D5/D9)', () => {
     expect(all).not.toContain('0 holidays');
   });
 
-  it('the grouped a11y label: current month carries the so-far sentence and OMITS the worked chip from the label (exact string)', async () => {
+  it('the grouped a11y label: the so-far sentence, then the four tiles, then the residual chips (exact string)', async () => {
     fetchPane.mockResolvedValue(paneEnvelope([], TODAY_IN_SEED));
     fetchMe.mockResolvedValue(meData());
     const renderer = renderSection({});
@@ -396,12 +433,12 @@ describe('the summary block (D5/D9)', () => {
 
     const group = summaryGroup(renderer);
     expect(group.props.accessibilityLabel).toBe(
-      'Days worked: 14.5 so far, 2 half days, 1 late, 1 leave, 1 absent, '
-        + '2 missing checkouts, 3 weekly offs, 1 holiday',
+      'Days worked: 14.5 so far, Worked 14.5, Absent 1, Days off 3, Holiday 1, '
+        + '2 half days, 1 late, 1 leave, 2 missing checkouts',
     );
   });
 
-  it('the grouped a11y label on a PAST month: chips (worked anchor first) + meta, commas', async () => {
+  it('the grouped a11y label on a PAST month: tiles + residual chips (no so-far sentence), commas', async () => {
     fetchPane.mockResolvedValue(paneEnvelope([], TODAY_IN_SEED));
     fetchMe.mockResolvedValue(meData());
     const renderer = renderSection({});
@@ -415,8 +452,7 @@ describe('the summary block (D5/D9)', () => {
     await flush();
 
     expect(summaryGroup(renderer).props.accessibilityLabel).toBe(
-      '14.5 worked, 2 half days, 1 late, 1 leave, 1 absent, '
-        + '2 missing checkouts, 3 weekly offs, 1 holiday',
+      'Worked 14.5, Absent 1, Days off 3, Holiday 1, 2 half days, 1 late, 1 leave, 2 missing checkouts',
     );
   });
 
@@ -442,7 +478,7 @@ describe('the summary block (D5/D9)', () => {
 });
 
 describe('the holidays block (D5 — ACTIVE only)', () => {
-  it('active: Eyebrow + «name · d MMM» rows with comma a11y labels', async () => {
+  it('active: Eyebrow + flagged bands; the name and the FULL date render as separate texts, and the a11y label reads both', async () => {
     fetchPane.mockResolvedValue(paneEnvelope([], TODAY_IN_SEED));
     fetchMe.mockResolvedValue(meData());
     const renderer = renderSection({});
@@ -450,10 +486,18 @@ describe('the holidays block (D5 — ACTIVE only)', () => {
 
     const all = texts(renderer);
     expect(all).toContain('Upcoming holidays');
-    expect(all).toContain('Gandhi Jayanti · 2 Oct');
+    expect(all).toContain('Gandhi Jayanti');
+    // The full date — a real calendar entry ("Sunday, 2 Oct 2026"), not
+    // "2 Oct" alone (2026-10 redesign).
+    expect(all).toContain(formatHolidayFullDate('2026-10-02'));
     const labelled = renderer.root.findAll(
-      node => node.props.accessibilityLabel === 'Gandhi Jayanti, 2 Oct',
+      node =>
+        node.props.accessibilityLabel ===
+        `Gandhi Jayanti, ${formatHolidayFullDate('2026-10-02')}`,
     );
+    // Presence pin — RTR can surface one a11y label on both the row View
+    // and its accessibility wrapper node, so the count itself is not the
+    // requirement; the exact label reading both parts is.
     expect(labelled.length).toBeGreaterThan(0);
   });
 
@@ -809,3 +853,158 @@ function monthTitleOf(yearMonth: string): string {
   ];
   return `${names[Number(yearMonth.slice(5, 7)) - 1]} ${yearMonth.slice(0, 4)}`;
 }
+
+// --- 20-1 review additions: the leave plumbing, the focus skip-first and
+// --- the combined pull-to-refresh handle -------------------------------------
+
+describe('the day-sheet leave plumbing (20-1 review)', () => {
+  it('a leave day opens: the resolving walk runs fresh and the sheet receives the resolved row + callbacks', async () => {
+    const leaveRow: LeaveRequestRow = {
+      id: 'lr1',
+      employeeId: 'emp1',
+      startDate: `${SEED}-14`,
+      endDate: `${SEED}-14`,
+      part: 'full_day',
+      reason: 'Not feeling well',
+      status: 'approved',
+      workingDays: 1,
+      totalDays: 1,
+      createdBy: 'emp1',
+      createdAt: '2026-09-30T10:00:00Z',
+      dates: [{ date: `${SEED}-14`, state: 'approved' }],
+    };
+    fetchPane.mockResolvedValue(
+      paneEnvelope(
+        [row(`${SEED}-14`), { ...row(`${SEED}-15`), leaveRequestId: 'lr1', status: 'leave' }],
+        TODAY_IN_SEED,
+      ),
+    );
+    listLeave.mockResolvedValue({ data: [leaveRow], nextCursor: null, hasMore: false });
+    const renderer = renderSection({});
+    await flush();
+
+    act(() => {
+      findCell(renderer, `${SEED}-15`).props.onPress();
+    });
+    const sheet = sheetNode(renderer);
+    expect(sheet.props.leaveRequest).toBeNull(); // resolving — no CTAs yet
+    expect(typeof sheet.props.onCancelLeave).toBe('function');
+    expect(typeof sheet.props.onConvertFullDay).toBe('function');
+    await flush();
+    expect(listLeave).toHaveBeenCalledWith({ limit: 50 }); // the fresh walk
+    expect(sheetNode(renderer).props.leaveRequest).toEqual(leaveRow);
+  });
+
+  it('a cancel write settles: the success routes to the pane refresh (one extra GET, nothing cleared)', async () => {
+    const leaveRow: LeaveRequestRow = {
+      id: 'lr1', employeeId: 'emp1',
+      startDate: `${SEED}-15`, endDate: `${SEED}-15`,
+      part: 'full_day', reason: 'Not feeling well', status: 'pending',
+      workingDays: 1, totalDays: 1, createdBy: 'emp1',
+      createdAt: '2026-09-30T10:00:00Z',
+      dates: [{ date: `${SEED}-15`, state: 'pending' }],
+    };
+    fetchPane.mockResolvedValue(
+      paneEnvelope([{ ...row(`${SEED}-15`), leaveRequestId: 'lr1', status: 'leave' }], TODAY_IN_SEED),
+    );
+    listLeave.mockResolvedValue({ data: [leaveRow], nextCursor: null, hasMore: false });
+    cancelLeave.mockResolvedValue({ ...leaveRow, status: 'cancelled' });
+    const renderer = renderSection({});
+    await flush();
+    const afterResolving = (fetchPane as unknown as jest.Mock).mock.calls.length;
+
+    act(() => {
+      findCell(renderer, `${SEED}-15`).props.onPress();
+    });
+    await flush();
+
+    const sheet = sheetNode(renderer);
+    act(() => {
+      sheet.props.onCancelLeave();
+    });
+    await flush();
+    // The success's pane refresh = one more day-status GET (plus the
+    // post-write re-drive's resolution walk fired a new listMyLeave, not
+    // a pane GET stack).
+    expect((fetchPane as unknown as jest.Mock).mock.calls.length).toBe(afterResolving + 0 + 1);
+    expect(cancelLeave).toHaveBeenCalledWith('lr1');
+  });
+});
+
+describe('the leave-return focus refresh (20-1 review): skip-first, then fire', () => {
+  it('the FIRST focus is a no-op; a later focus fires the pane refresh (one extra GET)', async () => {
+    renderSection({});
+    await flush();
+    // useFocusEffect captures a closure PER RENDER — the LATEST one is the
+    // section's live callback (running all of them would re-arm the
+    // skip-first ref once per recorded render).
+    const lastFocusCb = () =>
+      focusState.__focusCbs[focusState.__focusCbs.length - 1];
+    expect(focusState.__focusCbs.length).toBeGreaterThan(0);
+    const afterMount = (fetchPane as unknown as jest.Mock).mock.calls.length;
+
+    // First focus — the skip-first half.
+    act(() => {
+      lastFocusCb()();
+    });
+    await flush();
+    expect((fetchPane as unknown as jest.Mock).mock.calls.length).toBe(afterMount);
+
+    // A later focus (returning from Apply-leave) — fires the refresh.
+    act(() => {
+      lastFocusCb()();
+    });
+    await flush();
+    expect((fetchPane as unknown as jest.Mock).mock.calls.length).toBe(afterMount + 1);
+  });
+});
+
+describe('the combined pull-to-refresh handle (20-1 review)', () => {
+  it('refresh() via the forwarded ref drives BOTH truths: one pane GET + one summary GET', async () => {
+    // A fresh section, the handle captured through the forwarded ref (the
+    // screen's RefreshControl does exactly this on each pull). The
+    // baseline counts AFTER this section's own initial load.
+    const refObj = { current: null as null | { refresh: () => Promise<void> } };
+    let r2!: ReactTestRenderer.ReactTestRenderer;
+    act(() => {
+      r2 = create(
+        <AttendanceMyMonth
+          attendanceEndedOn={null}
+          historyOnly={false}
+          ref={(h: { refresh: () => Promise<void> }) => {
+            refObj.current = h;
+          }} />,
+      );
+    });
+    renderers.push(r2);
+    await flush();
+    const afterPane = (fetchPane as unknown as jest.Mock).mock.calls.length;
+    const afterSummary = (fetchMe as unknown as jest.Mock).mock.calls.length;
+    expect(refObj.current).not.toBeNull();
+
+    await refObj.current!.refresh();
+    expect((fetchPane as unknown as jest.Mock).mock.calls.length).toBe(afterPane + 1);
+    expect((fetchMe as unknown as jest.Mock).mock.calls.length).toBe(afterSummary + 1);
+  });
+
+  it('the handle settles when the pane is DOWN (the internally-settling refresh)', async () => {
+    const refObj = { current: null as null | { refresh: () => Promise<void> } };
+    let r2!: ReactTestRenderer.ReactTestRenderer;
+    act(() => {
+      r2 = create(
+        <AttendanceMyMonth
+          attendanceEndedOn={null}
+          historyOnly={false}
+          ref={(h: { refresh: () => Promise<void> }) => {
+            refObj.current = h;
+          }} />,
+      );
+    });
+    renderers.push(r2);
+    await flush();
+    // The pane's next (refresh) GET goes down — refresh must still settle
+    // (its internal catch), never strand the caller or spill a rejection.
+    (fetchPane as unknown as jest.Mock).mockRejectedValueOnce(new Error('down'));
+    await expect(refObj.current!.refresh()).resolves.toBeUndefined();
+  });
+});

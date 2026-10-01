@@ -38,24 +38,9 @@ jest.mock('./useAttendanceSummary', () => ({
 // MOUNTS (in order), the posture prop and the wire date are what the
 // router pins live on. (The factory may only reference `mock`-prefixed
 // out-of-scope variables, hence the require-built element.)
-jest.mock('./AttendanceMyMonth', () => ({
-  AttendanceMyMonth: (props: { attendanceEndedOn: string | null; historyOnly: boolean }) => {
-    // Mount-scoped (review 2026-09-30): the log gains an entry ONLY on a
-    // true remount — a hoisted single-instance section that merely
-    // re-renders on a flip must FAIL this pin, or the
-    // fresh-bootstrap-on-flip doctrine could be refactored away silently.
-    const { createElement, useEffect } = require('react');
-    const { Text } = require('react-native');
-    useEffect(() => {
-      mockMyMonthMounts.push(
-        `historyOnly=${props.historyOnly} endedOn=${props.attendanceEndedOn ?? 'null'}`,
-      );
-      // The MOUNT-time posture is the datum; deps stay empty by design.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-    return createElement(Text, null, 'MY_MONTH_PROBE');
-  },
-}));
+// 2026-10: the tab no longer MOUNTS the section inline — the My month
+// banner PUSHES the full screen carrying the posture pieces, so the
+// router pins moved to the push params (see the banner describe).
 
 // Story 17-6: the Leave section now embeds the history rows — their list
 // GET is mocked to an empty first page (the real barrel stays for the
@@ -72,9 +57,14 @@ jest.mock('../../../services', () => ({
 import type ReactTestRenderer from 'react-test-renderer';
 import { act, create } from 'react-test-renderer';
 import { useFocusEffect } from '@react-navigation/native';
-import { Text } from 'react-native';
+import { RefreshControl, Text } from 'react-native';
 import { Button, Skeleton } from '../../../components/ui';
-import { useAttendanceAccess, refreshAttendanceAccessOnFocus } from './attendanceAccessStore';
+import {
+  refreshAttendanceAccessNow,
+  useAttendanceAccess,
+  refreshAttendanceAccessOnFocus,
+} from './attendanceAccessStore';
+import { BannerCard } from './BannerCard';
 import { useAttendanceSummary } from './useAttendanceSummary';
 import { AttendanceSummaryView } from './AttendanceSummaryView';
 import type { AttendanceSummaryState } from './useAttendanceSummary';
@@ -88,11 +78,9 @@ const useAttendanceAccessMock = useAttendanceAccess as jest.Mock;
 const useAttendanceSummaryMock = useAttendanceSummary as jest.Mock;
 const refreshOnFocusMock = refreshAttendanceAccessOnFocus as jest.Mock;
 
-/** 19-6 — the probe section's MOUNT log (one entry per true mount, in
- *  order — the probe pushes from a mount-scoped effect, so a flip that
- *  reuses the instance adds no entry, which is exactly the regression the
- *  FLIP pin exists to catch). */
-const mockMyMonthMounts: string[] = [];
+// 19-6 — the push ROUTE: what the My month banner carries when it opens
+// the full screen ("historyOnly", the ended date, and the active-only
+// today signal) is what this suite pins.
 
 // The LeaveHistorySection fetch — armed per-test after the reset below
 // (the preset wipes module-factory implementations).
@@ -151,6 +139,15 @@ function summaryState(
 
 const summaryRefresh = jest.fn();
 
+/** An unresolved promise the test holds and releases (the mid-flight pull). */
+function pend<T>(): { promise: Promise<T>; resolve: (v: T) => void } {
+  let resolve!: (v: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 /** Navigation as a plain object. The latch's 'state' listener arrives on
  *  the screen's OWN navigation (a tab screen sees its navigator's state);
  *  getParent() is the ROOT stack and must stay UNTOUCHED by the component —
@@ -189,11 +186,14 @@ type Screen = ReturnType<typeof renderScreen>;
 // own teardown discipline; react-test-renderer has no auto-cleanup).
 const mountedRenderers: ReactTestRenderer.ReactTestRenderer[] = [];
 
-function renderScreen(storeState: AttendanceAccessStateSnapshot = ACTIVE) {
+function renderScreen(
+  storeState: AttendanceAccessStateSnapshot = ACTIVE,
+  sumState: AttendanceSummaryState = summaryState(),
+) {
   const ctx = makeNavigation();
   useAttendanceAccessMock.mockReturnValue(storeState);
   useAttendanceSummaryMock.mockReturnValue({
-    state: summaryState(),
+    state: sumState,
     refresh: summaryRefresh,
   });
 
@@ -255,7 +255,6 @@ function textNodes(root: ReactTestRenderer.ReactTestInstance, value: string) {
 beforeEach(() => {
   jest.resetAllMocks();
   consumed = 0;
-  mockMyMonthMounts.length = 0;
   // The history GET stays PENDING: this suite renders and asserts
   // SYNCHRONOUSLY (the 15-10 state-router pins), so a resolving promise
   // would settle AFTER the test — a setState outside act whose scheduler
@@ -373,8 +372,23 @@ describe('the state router', () => {
   });
 });
 
-describe('the 19-6 My month routing (D1/D6)', () => {
-  it('active → My month sits BETWEEN Summary and Leave; the section rides the active posture', () => {
+describe('the 19-6 My month routing, in the 2026-10 banner-push shape (D1/D6)', () => {
+  /** The tab's "My month" banner, if this posture renders one.
+   *  (2026-10: the banner PUSHES the full screen — nothing mounts inline.) */
+  function myMonthBanner(root: ReactTestRenderer.ReactTestInstance) {
+    const banners = root
+      .findAllByType(BannerCard)
+      .filter((b) => b.props.title === 'My month');
+    return banners.length === 0 ? null : bannerAt(banners);
+  }
+
+  // The tab can stack the history banner AND the active banner across a
+  // posture flip — the LAST one on screen is the live posture's.
+  function bannerAt(banners: ReactTestRenderer.ReactTestInstance[]) {
+    return banners[banners.length - 1];
+  }
+
+  it('active → My month sits BETWEEN the summary card and Leave', () => {
     const screen = renderScreen(ACTIVE);
     const labels = screen.root
       .findAll((n) => n.type === Text)
@@ -383,16 +397,60 @@ describe('the 19-6 My month routing (D1/D6)', () => {
           ? n.props.children.join('')
           : String(n.props.children ?? ''),
       );
-    const probe = labels.indexOf('MY_MONTH_PROBE');
-    expect(probe).toBeGreaterThan(labels.indexOf('Office'));
-    expect(probe).toBeLessThan(labels.indexOf('Leave'));
-    expect(mockMyMonthMounts).toEqual(['historyOnly=false endedOn=null']);
+    // Office comes from the summary card's office/timings line (the 2026-10
+    // redesign moved it there), Leave from the section header.
+    expect(labels.indexOf('My month')).toBeGreaterThan(labels.indexOf('Office'));
+    expect(labels.indexOf('My month')).toBeLessThan(labels.indexOf('Leave'));
+  });
+
+  it('active (no today card yet) → the push carries a NULL today signal', () => {
+    const screen = renderScreen(ACTIVE);
+    act(() => {
+      myMonthBanner(screen.root)!.props.onOpen();
+    });
+    expect(screen.navigation.navigate).toHaveBeenCalledTimes(1);
+    const [route, params] = screen.navigation.navigate.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(route).toBe('AttendanceMyMonth');
+    expect(params.historyOnly).toBe(false);
+    expect(params.attendanceEndedOn).toBeNull();
+    expect(params.todaySignal).toBeNull();
+  });
+
+  it('active (a today card) → the push today signal snapshots the day and record', () => {
+    const screen = renderScreen(
+      ACTIVE,
+      summaryState({
+        summary: {
+          ...SUMMARY,
+          today: {
+            date: '2026-10-01',
+            isWorkingDay: true,
+            isWeeklyOff: false,
+            isHoliday: false,
+            holidayName: null,
+            leaveState: null,
+            leavePart: null,
+          },
+        },
+      }),
+    );
+    act(() => {
+      myMonthBanner(screen.root)!.props.onOpen();
+    });
+    const params = screen.navigation.navigate.mock.calls[0][1] as Record<
+      string,
+      unknown
+    >;
+    expect(params.todaySignal).toBe('2026-10-01||');
   });
 
   it('upcoming → NO My month at all (absent, not disabled — the zero-fetch posture)', () => {
-    renderScreen(ready('upcoming', { attendanceStartDate: '2026-11-01' }));
+    const screen = renderScreen(ready('upcoming', { attendanceStartDate: '2026-11-01' }));
 
-    expect(mockMyMonthMounts).toEqual([]);
+    expect(myMonthBanner(screen.root)).toBeNull();
   });
 
   it('history_only → the dated headline, My month in the history posture, and the Leave history WITHOUT the Apply row', () => {
@@ -402,22 +460,48 @@ describe('the 19-6 My month routing (D1/D6)', () => {
 
     expect(textContaining(screen.root, 'Attendance tracking ended on')).toHaveLength(1);
     expect(textContaining(screen.root, '31 Aug')).toHaveLength(1);
-    expect(mockMyMonthMounts).toEqual(['historyOnly=true endedOn=2026-08-31']);
     expect(screen.root.findAllByType(AttendanceSummaryView)).toHaveLength(0);
     expect(textContaining(screen.root, 'Apply for leave')).toHaveLength(0);
     expect(screen.root.findAllByType(LeaveHistorySection)).toHaveLength(1);
+
+    act(() => {
+      myMonthBanner(screen.root)!.props.onOpen();
+    });
+    const params = screen.navigation.navigate.mock.calls[0][1] as Record<
+      string,
+      unknown
+    >;
+    // The history posture pushes the bootstrap's ended month — the screen
+    // opens on the past truth, never today's empty grid.
+    expect(params).toEqual({
+      attendanceEndedOn: '2026-08-31',
+      historyOnly: true,
+      todaySignal: null,
+    });
   });
 
-  it('history_only with a null date (older BE) → the dateless fallback headline', () => {
+  it('history_only with a null date (older BE) → the dateless fallback headline, and the push still carries null', () => {
     const screen = renderScreen(HISTORY_ONLY);
 
     expect(textNodes(screen.root, 'Attendance tracking has ended').length).toBeGreaterThan(0);
-    expect(mockMyMonthMounts).toEqual(['historyOnly=true endedOn=null']);
+    act(() => {
+      myMonthBanner(screen.root)!.props.onOpen();
+    });
+    expect(screen.navigation.navigate).toHaveBeenCalledWith(
+      'AttendanceMyMonth',
+      { attendanceEndedOn: null, historyOnly: true, todaySignal: null },
+    );
   });
 
-  it('a posture flip REMOUNTS My month (fresh bootstrap) in BOTH directions', () => {
+  it('a posture flip re-points the SAME banner; each push snapshots the CURRENT posture', () => {
     const screen = renderScreen(ACTIVE);
-    expect(mockMyMonthMounts).toEqual(['historyOnly=false endedOn=null']);
+    act(() => {
+      myMonthBanner(screen.root)!.props.onOpen();
+    });
+    expect(screen.navigation.navigate).toHaveBeenLastCalledWith(
+      'AttendanceMyMonth',
+      expect.objectContaining({ historyOnly: false }),
+    );
 
     useAttendanceAccessMock.mockReturnValue(
       ready('history_only', { attendanceEndedOn: '2026-08-31' }),
@@ -425,20 +509,15 @@ describe('the 19-6 My month routing (D1/D6)', () => {
     act(() => {
       screen.renderer.update(screen.element(screen.navigation));
     });
-    expect(mockMyMonthMounts).toEqual([
-      'historyOnly=false endedOn=null',
-      'historyOnly=true endedOn=2026-08-31',
-    ]);
-
-    useAttendanceAccessMock.mockReturnValue(ACTIVE);
+    // The banner survives the flip (history keeps its live My month).
+    expect(myMonthBanner(screen.root)).not.toBeNull();
     act(() => {
-      screen.renderer.update(screen.element(screen.navigation));
+      myMonthBanner(screen.root)!.props.onOpen();
     });
-    expect(mockMyMonthMounts).toEqual([
-      'historyOnly=false endedOn=null',
-      'historyOnly=true endedOn=2026-08-31',
-      'historyOnly=false endedOn=null',
-    ]);
+    expect(screen.navigation.navigate).toHaveBeenLastCalledWith(
+      'AttendanceMyMonth',
+      expect.objectContaining({ historyOnly: true, attendanceEndedOn: '2026-08-31' }),
+    );
   });
 });
 
@@ -534,5 +613,89 @@ describe('the none-while-focused exit (finding #9)', () => {
     const screen = renderScreen(NONE);
 
     expect(screen.navigation.navigate).not.toHaveBeenCalled();
+  });
+});
+
+describe('the 20-1 pull-to-refresh (AC 15)', () => {
+  it('a pull revalidates BOTH truths together; the spinner is up only while the summary settles', async () => {
+    useAttendanceAccessMock.mockReturnValue(ACTIVE);
+    const refreshNow = jest.fn(() => Promise.resolve());
+    const accessNow = jest.fn();
+    (refreshAttendanceAccessNow as unknown as jest.Mock).mockImplementation(accessNow);
+    useAttendanceSummaryMock.mockReturnValue({
+      state: summaryState(),
+      refresh: summaryRefresh,
+      refreshNow,
+    });
+    let renderer!: ReactTestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = create(<AttendanceTabScreen navigation={makeNavigation().navigation as never} route={{} as never} />);
+    });
+    mountedRenderers.push(renderer);
+    const refreshControl = renderer.root.findAllByType(RefreshControl)[0];
+    act(() => {
+      refreshControl.props.onRefresh();
+    });
+    // The access gate and the summary card revalidate as one pull.
+    expect(accessNow).toHaveBeenCalledTimes(1);
+    expect(refreshNow).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    // Spinner held until the summary settles — then it drops.
+    expect(refreshControl.props.refreshing).toBe(false);
+  });
+
+  it('a pull while one is already revalidating is ignored — one refresh, no double spinner', async () => {
+    useAttendanceAccessMock.mockReturnValue(ACTIVE);
+    const release = pend<void>();
+    const refreshNow = jest.fn(() => release.promise);
+    (refreshAttendanceAccessNow as unknown as jest.Mock).mockImplementation(jest.fn());
+    useAttendanceSummaryMock.mockReturnValue({
+      state: summaryState(),
+      refresh: summaryRefresh,
+      refreshNow,
+    });
+    let renderer!: ReactTestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = create(<AttendanceTabScreen navigation={makeNavigation().navigation as never} route={{} as never} />);
+    });
+    mountedRenderers.push(renderer);
+    const refreshControl = renderer.root.findAllByType(RefreshControl)[0];
+    act(() => {
+      refreshControl.props.onRefresh();
+      refreshControl.props.onRefresh();
+    });
+    expect(refreshNow).toHaveBeenCalledTimes(1);
+    expect(refreshControl.props.refreshing).toBe(true); // held mid-flight
+    release.resolve(undefined);
+    await act(async () => {
+      await release.promise;
+    });
+    expect(refreshControl.props.refreshing).toBe(false);
+  });
+
+  it('a DOWN summary pull still clears the spinner (the failure never strands the spinner)', async () => {
+    useAttendanceAccessMock.mockReturnValue(ACTIVE);
+    const refreshNow = jest.fn(() => Promise.reject(new Error('down')));
+    (refreshAttendanceAccessNow as unknown as jest.Mock).mockImplementation(jest.fn());
+    useAttendanceSummaryMock.mockReturnValue({
+      state: summaryState(),
+      refresh: summaryRefresh,
+      refreshNow,
+    });
+    let renderer!: ReactTestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = create(<AttendanceTabScreen navigation={makeNavigation().navigation as never} route={{} as never} />);
+    });
+    mountedRenderers.push(renderer);
+    const refreshControl = renderer.root.findAllByType(RefreshControl)[0];
+    act(() => {
+      refreshControl.props.onRefresh();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(refreshControl.props.refreshing).toBe(false);
   });
 });
