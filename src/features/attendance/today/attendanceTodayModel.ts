@@ -260,11 +260,11 @@ export function buildTodayTiles(
 ): TodayTilesModel {
   const lateText =
     record.isLate && record.lateMinutes !== null && record.lateMinutes > 0
-      ? `Checkin Late by ${formatWorkedMinutes(record.lateMinutes)} min`
+      ? `Checked in late by ${formatWorkedMinutes(record.lateMinutes)}`
       : null;
   const earlyText =
     record.earlyCheckout && record.earlyCheckoutMinutes !== null
-      ? `Early Checkout by ${record.earlyCheckoutMinutes} min`
+      ? `Checked out early by ${formatWorkedMinutes(record.earlyCheckoutMinutes)}`
       : null;
   const beforeShift =
     record.earlyCheckout && record.earlyCheckoutMinutes !== null

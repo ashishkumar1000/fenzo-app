@@ -354,8 +354,8 @@ describe('buildTodayTiles — the punch card\'s data (2026-10 tab redesign)', ()
     expect(buildTodayTiles(closedRecord, formatTime)).toEqual({
       checkinText: '10:16 AM',
       checkoutText: '6:05 PM',
-      workedText: '7 h 49 m',
-      lateText: 'Late by 61 min',
+      workedText: '7 hrs 49 min',
+      lateText: 'Checked in late by 1 hr 1 min',
       earlyText: null,
       earlyBeforeShiftText: null,
     });
@@ -366,7 +366,7 @@ describe('buildTodayTiles — the punch card\'s data (2026-10 tab redesign)', ()
       checkinText: '10:16 AM',
       checkoutText: null,
       workedText: null,
-      lateText: 'Late by 61 min',
+      lateText: 'Checked in late by 1 hr 1 min',
       earlyText: null,
       earlyBeforeShiftText: null,
     });
@@ -380,8 +380,8 @@ describe('buildTodayTiles — the punch card\'s data (2026-10 tab redesign)', ()
       ),
     ).toMatchObject({
       lateText: null,
-      earlyText: 'Early by 30 min',
-      earlyBeforeShiftText: '0 h 30 m before shift',
+      earlyText: 'Checked out early by 30 min',
+      earlyBeforeShiftText: '30 min before shift',
     });
   });
 

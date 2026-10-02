@@ -55,15 +55,15 @@ describe('formatOffsetInstantDate — wall-clock date part', () => {
   });
 });
 
-describe('formatWorkedMinutes — the "8 h 08 m" contract (PRD example shape)', () => {
+describe('formatWorkedMinutes — the "8 hrs 8 min" contract (PRD example shape)', () => {
   it('whole hours and zero-padded minutes', () => {
-    expect(formatWorkedMinutes(488)).toBe('8 h 08 m');
-    expect(formatWorkedMinutes(0)).toBe('0 h 00 m');
-    expect(formatWorkedMinutes(63)).toBe('1 h 03 m');
+    expect(formatWorkedMinutes(488)).toBe('8 hrs 8 min');
+    expect(formatWorkedMinutes(0)).toBe('0 min');
+    expect(formatWorkedMinutes(63)).toBe('1 hr 3 min');
   });
 
   it('sub-minute values truncate (a 90-second day works 1 m, never rounds to 2)', () => {
-    expect(formatWorkedMinutes(1.5)).toBe('0 h 01 m');
+    expect(formatWorkedMinutes(1.5)).toBe('1 min');
   });
 
   it('null/undefined/NaN → null (the open-day card renders nothing, not "0 h 00 m")', () => {
@@ -73,6 +73,6 @@ describe('formatWorkedMinutes — the "8 h 08 m" contract (PRD example shape)', 
   });
 
   it('a corrupt negative clamps to zero, never renders "-2 h"', () => {
-    expect(formatWorkedMinutes(-120)).toBe('0 h 00 m');
+    expect(formatWorkedMinutes(-120)).toBe('0 min');
   });
 });

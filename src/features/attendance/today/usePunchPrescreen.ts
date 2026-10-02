@@ -1,23 +1,29 @@
 /**
  * usePunchPrescreen — the Today-tab geofence's fix supplier (story 20-3).
  *
- * NFR-11's no-watcher rule, resolved deliberately in the story: there is
- * NO continuous location tracking — the screen fires repeated ONE-SHOT
- * captures (mount/focus, every foreground return, a 30 s cadence while the
- * tab is focused, and once after each punch settles) and the model re-judges
- * freshness against the ticker. The prescreen never nags: a failed capture
- * is silent (the previous fix simply ages past the freshness lease and the
- * punch fails open), and an employee without attendance access captures
- * NOTHING (enabled=false ⇒ zero location work).
+ * Maps-style bounded stream (user-directed, 2026-10-02): while the Today
+ * tab is focused AND the app is foregrounded, a live location watch
+ * (balanced priority — the fix WiFi-derived positioning can produce)
+ * feeds every update into the prescreen; it stops on blur, background and
+ * unmount, so there is NO background watcher, ever — NFR-11's battery
+ * rule survives. The 30 s one-shot cadence stays as a fallback beneath
+ * the stream, and the punch PRESS still does its own strict capture at
+ * the moment of truth (nothing here changes what the server re-judges).
+ *
+ * The prescreen never nags: a failed capture is silent (the previous fix
+ * simply ages past the freshness lease and the punch fails open), and an
+ * employee without attendance access captures NOTHING (enabled=false ⇒
+ * zero location work).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { watchPosition, unwatch } from 'react-native-nitro-geolocation';
 import { captureAttendanceLocation } from '../../../services/location/attendanceLocation';
 import type { PunchFixSample } from './attendanceTodayModel';
 
-/** The capture cadence while the Today tab is focused (the unlock
- *  re-probe bound: a walk into the radius unlocks within ≤ 30 s). */
+/** The one-shot cadence — now the FALLBACK beneath the live stream (a
+ *  provider that yields no stream updates still gets probed). */
 const CAPTURE_INTERVAL_MS = 30_000;
 
 export function usePunchPrescreen(input: { enabled: boolean }): {
@@ -30,6 +36,7 @@ export function usePunchPrescreen(input: { enabled: boolean }): {
   const { enabled } = input;
   const [fix, setFix] = useState<PunchFixSample | null>(null);
   const [focused, setFocused] = useState(false);
+  const [appActive, setAppActive] = useState(true);
   const mounted = useRef(true);
   const inFlight = useRef(false);
   const enabledRef = useRef(enabled);
@@ -44,10 +51,8 @@ export function usePunchPrescreen(input: { enabled: boolean }): {
     };
   }, []);
 
+  /** One-shot capture — the fallback probe and the post-punch re-probe. */
   const capture = useCallback(async () => {
-    // A foreground return can fire while the user is on ANOTHER tab (the
-    // screen stays mounted) — the story scopes every capture to the Today
-    // tab being focused; the interval already is, and so is this.
     if (!enabledRef.current || !focusedRef.current || inFlight.current) return;
     inFlight.current = true;
     try {
@@ -76,6 +81,46 @@ export function usePunchPrescreen(input: { enabled: boolean }): {
     }
   }, []);
 
+  // Foreground state: the stream is foreground-only by direction — the
+  // watcher must never run behind another app or the lock screen.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', appState => {
+      setAppActive(appState === 'active');
+      if (appState === 'active') void capture();
+    });
+    return () => sub?.remove();
+  }, [capture]);
+
+  // THE STREAM: live updates while (enabled && focused && foregrounded).
+  // Balanced priority — the fix WiFi-derived positioning can actually
+  // produce — with the same 15 s staleness allowance as the one-shot.
+  useEffect(() => {
+    if (!enabled || !focused || !appActive) return undefined;
+    const token = watchPosition(
+      position => {
+        const { latitude, longitude } = position.coords;
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+        if (!mounted.current || !focusedRef.current) return;
+        // Stream fixes arrive as they are computed; the fix's own timestamp
+        // is the freshest truth about its age.
+        const ts = Number(position.timestamp);
+        setFix({
+          latitude,
+          longitude,
+          capturedAt:
+            Number.isFinite(ts) && ts > 0 ? Math.min(Date.now(), ts) : Date.now(),
+        });
+      },
+      err => {
+        // Non-fatal: the 30 s one-shot cadence below stays on as the
+        // fallback probe when the stream errors out.
+        console.warn('[usePunchPrescreen] location stream error:', err);
+      },
+      { accuracy: { android: 'balanced', ios: 'best' }, maximumAge: 15_000 },
+    );
+    return () => unwatch(token);
+  }, [enabled, focused, appActive]);
+
   // Focus gates the whole cycle (a tab screen stays mounted across tab
   // switches — the cadence must not fire in the background).
   useFocusEffect(
@@ -89,15 +134,6 @@ export function usePunchPrescreen(input: { enabled: boolean }): {
       };
     }, [capture]),
   );
-
-  // Foreground return: the fix from before the background is stale by the
-  // time the app is visible again (GPS moved with the user).
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', appState => {
-      if (appState === 'active') void capture();
-    });
-    return () => sub?.remove();
-  }, [capture]);
 
   const recapture = useCallback(() => {
     void capture();

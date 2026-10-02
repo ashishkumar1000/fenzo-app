@@ -47,9 +47,11 @@ export function formatOffsetInstantDate(iso: string | null | undefined): string 
   return `${day} ${monthNames[month - 1]} ${parts.date.slice(0, 4)}`;
 }
 
-/** Whole worked minutes → "8 h 08 m" (the PRD's example shape). Zero →
- *  "0 h 00 m"; negative inputs are clamped by the caller's contract, but a
- *  defensive max(0) keeps a corrupt value from rendering "-2 h". */
+/** Whole worked minutes → business-readable time (user-directed,
+ *  2026-10-02): "1 min" / "30 min" under an hour, "1 hr 20 min" above
+ *  (pluralised, minutes dropped when they are zero). Zero → "0 min";
+ *  negative inputs are clamped by the caller's contract, but a defensive
+ *  max(0) keeps a corrupt value from rendering "-2 hrs". */
 export function formatWorkedMinutes(minutes: number | null | undefined): string | null {
   if (minutes === null || minutes === undefined || !Number.isFinite(minutes)) {
     return null;
@@ -57,5 +59,8 @@ export function formatWorkedMinutes(minutes: number | null | undefined): string 
   const whole = Math.max(0, Math.trunc(minutes));
   const h = Math.floor(whole / 60);
   const m = whole % 60;
-  return `${h} h ${String(m).padStart(2, '0')} m`;
+  const minPart = (n: number) => (n === 1 ? '1 min' : `${n} min`);
+  if (h === 0) return minPart(m);
+  const hrPart = h === 1 ? '1 hr' : `${h} hrs`;
+  return m === 0 ? hrPart : `${hrPart} ${minPart(m)}`;
 }

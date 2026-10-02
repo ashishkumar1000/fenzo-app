@@ -170,7 +170,7 @@ describe('the button states (one action at a time)', () => {
     // The redesigned layout (2026-10): tile times replace the old
     // "Checked in 10:16 AM · Late by 61 min" line.
     expect(textContaining(view.root, 'Checked in 10:16 AM')).toHaveLength(0);
-    expect(textContaining(view.root, 'Late by 61 min').length).toBeGreaterThan(0);
+    expect(textContaining(view.root, 'Checked in late by 1 hr 1 min').length).toBeGreaterThan(0);
     expect(actionButtonsUp(view.root)).toHaveLength(1);
 
     // The mid-session card coexists with the button — the checkout tile
@@ -182,8 +182,8 @@ describe('the button states (one action at a time)', () => {
     const view = renderView(summaryState(), { record });
     expect(actionButtonsUp(view.root)).toHaveLength(0);
     // 10:16 → 18:05 = 469 whole minutes = 7 h 49 m (not the PRD's example string).
-    expect(textContaining(view.root, '7 h 49 m').length).toBeGreaterThan(0);
-    expect(textContaining(view.root, 'Late by 61 min').length).toBeGreaterThan(0);
+    expect(textContaining(view.root, '7 hrs 49 min').length).toBeGreaterThan(0);
+    expect(textContaining(view.root, 'Checked in late by 1 hr 1 min').length).toBeGreaterThan(0);
     // The old "Checked in" line is gone — the tile is the time now.
     expect(textContaining(view.root, 'Checked in 10:16 AM')).toHaveLength(0);
   });

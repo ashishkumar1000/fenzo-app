@@ -304,9 +304,9 @@ describe('the value rows + distance rules', () => {
     expect(texts(root).some(t => t.includes('(next day)'))).toBe(false);
   });
 
-  it('worked renders "8 h 08 m"; office renders the name; null office omits the row', async () => {
+  it('worked renders "8 hrs 8 min"; office renders the name; null office omits the row', async () => {
     const root = await renderSheet();
-    expect(texts(root)).toContain('8 h 08 m');
+    expect(texts(root)).toContain('8 hrs 8 min');
     expect(texts(root)).toContain('Andheri');
 
     const withoutOffice = await renderSheet({ day: row({ officeName: null }) });
