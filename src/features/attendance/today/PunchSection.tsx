@@ -43,12 +43,15 @@ interface Props {
   refreshSummaryNow: () => Promise<void>;
   /** Forced access-store refresh — the 403 mid-session-disable path. */
   refreshAccessNow: () => void;
+  /** Bump to force a fresh fence probe (the host's pull-to-refresh). */
+  refreshTick?: number;
 }
 
 export function PunchSection({
   summary,
   refreshSummaryNow,
   refreshAccessNow,
+  refreshTick = 0,
 }: Props) {
   const today = summary.state.summary?.today;
   const todayRecord = summary.state.summary?.todayRecord;
@@ -75,6 +78,12 @@ export function PunchSection({
   useEffect(() => {
     if (check.lastFix) adoptFix(check.lastFix);
   }, [check.lastFix, adoptFix]);
+
+  // The host's pull-to-refresh rides this tick: a manual refresh must also
+  // re-probe the fence, not just the job list.
+  useEffect(() => {
+    if (refreshTick > 0) recapture();
+  }, [refreshTick, recapture]);
 
   // The POST response owns the record mid-session (D12); the summary owns
   // it on load. seedRecord merges — a summary arrival never overwrites a

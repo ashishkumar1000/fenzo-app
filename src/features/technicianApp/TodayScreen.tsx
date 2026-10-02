@@ -65,6 +65,9 @@ export default function TodayScreen() {
     refresh: refreshPunchSummary,
     refreshNow: refreshPunchSummaryNow,
   } = useAttendanceSummary(punchEnabled);
+  // Bumped by pull-to-refresh: the punch's own re-probe (a pull refreshes
+  // the whole screen — jobs, summary AND the fence), not just the list.
+  const [punchRefreshTick, setPunchRefreshTick] = useState(0);
 
   // A failed refresh keeps its rows on screen behind a dismissible banner;
   // the dismissal is local (the store's error clears on the next attempt).
@@ -85,9 +88,13 @@ export default function TodayScreen() {
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
+    // One pull, three truths: the day's jobs, the punch's summary inputs
+    // (office pin/record — the fence reads them) and the fence probe itself.
+    setPunchRefreshTick(tick => tick + 1);
+    if (punchEnabled) void refreshPunchSummaryNow().catch(() => undefined);
     await refreshToday();
     setIsRefreshing(false);
-  }, [refreshToday]);
+  }, [refreshToday, punchEnabled, refreshPunchSummaryNow]);
 
   const handleOpenJob = useCallback(
     (job: ApiJob) => {
@@ -171,6 +178,7 @@ export default function TodayScreen() {
                   summary={{ state: punchSummaryState, refresh: refreshPunchSummary }}
                   refreshSummaryNow={refreshPunchSummaryNow}
                   refreshAccessNow={refreshAttendanceAccessNow}
+                  refreshTick={punchRefreshTick}
                 />
               </View>
             ) : undefined
@@ -183,6 +191,7 @@ export default function TodayScreen() {
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
+              testID="today-refresh"
               refreshing={isRefreshing}
               onRefresh={() => void handleRefresh()}
               colors={[colors.primary]}

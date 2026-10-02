@@ -74,12 +74,15 @@ jest.mock('../attendance/me/useAttendanceSummary', () => ({
 }));
 
 jest.mock('../attendance/today/PunchSection', () => ({
-  PunchSection: () => {
+  PunchSection: (props: Record<string, unknown>) => {
+    mockLastPunchProps = props;
     const React = require('react');
     const { Text } = require('react-native');
     return React.createElement(Text, null, 'PUNCH-STUB');
   },
 }));
+
+let mockLastPunchProps: Record<string, unknown> | null = null;
 
 jest.mock('../../hooks', () => ({ useNow: () => 0 }));
 
@@ -182,5 +185,21 @@ describe('the 20-3 punch hosting gate', () => {
     mockAccessSnapshot = { status: 'unknown', access: null };
     const renderer = await mountScreen();
     expect(renderedText(renderer)).not.toContain('PUNCH-STUB');
+  });
+
+  it('a pull refreshes ALL the truths — jobs, the punch summary AND a fresh fence probe', async () => {
+    mockAccessSnapshot = {
+      status: 'ready',
+      access: { attendanceAccess: 'active' },
+    };
+    const renderer = await mountScreen();
+    mockLastPunchProps = null;
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'today-refresh' }).props.onRefresh();
+    });
+    expect(mockJobsStore.refreshToday).toHaveBeenCalled();
+    expect(mockSummaryHook.refreshNow).toHaveBeenCalled();
+    expect(mockLastPunchProps).not.toBeNull();
+    expect(mockLastPunchProps!.refreshTick).toBe(1);
   });
 });
