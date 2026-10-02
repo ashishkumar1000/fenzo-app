@@ -83,24 +83,24 @@ describe('captureAttendanceLocation — the closed failure union', () => {
     expect(mockGetCurrentPosition).toHaveBeenCalledTimes(1);
   });
 
-  it('a TIMEOUT falls back to ONE balanced retry — its fix is the capture (the indoor path)', async () => {
+  it('a TIMEOUT falls back to ONE strict high-accuracy retry — its fix is the capture (the outdoor case)', async () => {
     mockGetCurrentPosition
-      .mockRejectedValueOnce({ code: 3, message: 'Unable to fetch location within 15.0s.' })
+      .mockRejectedValueOnce({ code: 3, message: 'Unable to fetch location within 10.0s.' })
       .mockResolvedValueOnce(aFix({ coords: { latitude: 12.97, longitude: 77.59, accuracy: 35 } }));
 
     const fix = await captureAttendanceLocation();
 
     expect(fix).toMatchObject({ latitude: 12.97, longitude: 77.59, accuracyM: 35 });
     expect(mockGetCurrentPosition).toHaveBeenCalledTimes(2);
-    // The retry loosens PRIORITY and staleness — never the freshness
-    // contract the server enforces (fixAgeMs still travels; max 15 s old).
-    expect(mockGetCurrentPosition.mock.calls[1][0]).toMatchObject({
+    // Attempt 1 is the indoor-capable capture: balanced priority, a 15 s
+    // staleness allowance, short window.
+    expect(mockGetCurrentPosition.mock.calls[0][0]).toMatchObject({
       accuracy: { android: 'balanced' },
       maximumAge: 15_000,
-      timeout: 25_000,
+      timeout: 10_000,
     });
-    // ...and the first attempt is unchanged strict high-accuracy.
-    expect(mockGetCurrentPosition.mock.calls[0][0]).toMatchObject({
+    // Attempt 2 is the strict AD-20 capture: high accuracy, never cached.
+    expect(mockGetCurrentPosition.mock.calls[1][0]).toMatchObject({
       accuracy: { android: 'high' },
       maximumAge: 0,
       timeout: 15_000,
