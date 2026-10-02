@@ -150,6 +150,7 @@ beforeEach(() => {
   (usePunchPrescreen as jest.Mock).mockImplementation(() => ({
     fix: null,
     recapture: jest.fn(),
+    adoptFix: jest.fn(),
   }));
 });
 
@@ -268,5 +269,70 @@ describe('the offline block and announcements', () => {
     // card; a second render here would let the two truths drift.
     expect(textContaining(view.root, 'Hero wala ·')).toHaveLength(0);
     expect(textContaining(view.root, '9:00 AM – 4:00 PM')).toHaveLength(0);
+  });
+});
+
+describe('the geofence LOCKED display (the user-found gap: a rejected press must show it)', () => {
+  const fencedSummary = () => {
+    const state = summaryState();
+    state.summary = {
+      ...state.summary!,
+      officeLatitude: 12.98,
+      officeLongitude: 77.74,
+      officeRadius: 150,
+    };
+    return state;
+  };
+  /** Fresh (16 s old) and ~97 km from the fixture office pin — beyond any
+   *  radius, so the prescreen must lock. */
+  const farFix = { latitude: 12.1, longitude: 77.74, capturedAt: 999_000 };
+
+  function prescreen(over: Record<string, unknown> = {}) {
+    (usePunchPrescreen as jest.Mock).mockReturnValue({
+      fix: farFix,
+      recapture: jest.fn(),
+      adoptFix: jest.fn(),
+      ...over,
+    });
+  }
+
+  it('a fresh beyond-radius fix renders the mockup LOCKED card verbatim (pill + card)', () => {
+    prescreen();
+    const view = renderView(fencedSummary(), {});
+    expect(textContaining(view.root, 'Outside Office Geofence').length).toBeGreaterThan(0);
+    expect(textContaining(view.root, 'PUNCH DISABLED').length).toBeGreaterThan(0);
+    expect(textContaining(view.root, 'LOCKED').length).toBeGreaterThan(0);
+  });
+
+  it('a server-rejected press (message set) shows the CARD, not the flat server line', () => {
+    prescreen();
+    const view = renderView(fencedSummary(), {
+      message: { tone: 'error', text: 'You are 1355 m from Hero wala. Move within 150 m.' },
+    });
+    expect(textContaining(view.root, 'Outside Office Geofence').length).toBeGreaterThan(0);
+    expect(
+      textContaining(view.root, 'You are 1355 m from Hero wala. Move within 150 m.'),
+    ).toHaveLength(0);
+  });
+
+  it('non-locked postures keep the message-over-card precedence (the 16-4 rule)', () => {
+    prescreen({ fix: null });
+    const view = renderView(fencedSummary(), {
+      message: { tone: 'error', text: 'You are 1355 m from Hero wala. Move within 150 m.' },
+    });
+    expect(
+      textContaining(view.root, 'You are 1355 m from Hero wala. Move within 150 m.'),
+    ).toHaveLength(1);
+    expect(textContaining(view.root, 'Outside Office Geofence')).toHaveLength(0);
+  });
+
+  it('the press flow\'s own fix is adopted into the prescreen (the fence verdict survives a failed capture cycle)', () => {
+    const adoptFix = jest.fn();
+    prescreen({ adoptFix });
+    const view = renderView(fencedSummary(), {
+      lastFix: { latitude: 12.1, longitude: 77.74 },
+    });
+    expect(adoptFix).toHaveBeenCalledWith({ latitude: 12.1, longitude: 77.74 });
+    expect(textContaining(view.root, 'Outside Office Geofence').length).toBeGreaterThan(0);
   });
 });

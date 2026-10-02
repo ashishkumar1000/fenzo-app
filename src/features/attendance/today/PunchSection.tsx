@@ -53,7 +53,7 @@ export function PunchSection({
   const today = summary.state.summary?.today;
   const todayRecord = summary.state.summary?.todayRecord;
 
-  const { fix, recapture } = usePunchPrescreen({ enabled: true });
+  const { fix, recapture, adoptFix } = usePunchPrescreen({ enabled: true });
 
   const onSettled = useCallback(() => {
     // The post-write pass refreshes the summary AND re-probes the fence —
@@ -67,6 +67,14 @@ export function PunchSection({
     onSettled,
     onAccessDenied: refreshAccessNow,
   });
+
+  // The press flow's own capture is the freshest fix the device ever held
+  // (fresher than anything the cadence will get indoors) — adopt it so a
+  // server-rejected too-far press renders the LOCKED card immediately
+  // instead of the fallback while waiting for the next GPS win.
+  useEffect(() => {
+    if (check.lastFix) adoptFix(check.lastFix);
+  }, [check.lastFix, adoptFix]);
 
   // The POST response owns the record mid-session (D12); the summary owns
   // it on load. seedRecord merges — a summary arrival never overwrites a
@@ -166,13 +174,16 @@ export function PunchSection({
       ? formatWorkedMinutes(elapsedMin)
       : null;
 
-  // A settled server message outranks the card (the old message-over-hint
-  // precedence — the server copy is the authoritative explanation). The
-  // card also stays down while the day facts are unknown (the contract-
-  // break posture): a green READY card beside a permanently disabled
-  // button would lie about the fence.
+  // Card-vs-message precedence: a settled server message outranks the card
+  // (the server copy is the authoritative explanation) — EXCEPT the locked
+  // postures: when the fence verdict is on screen, the approved card is the
+  // truth surface (it carries the same fact with the live distance) and the
+  // flat server line would only duplicate it worse.
+  const fenceLocked =
+    !done && factsKnown &&
+    (buttonState.kind === 'locked' || buttonState.kind === 'lockedOut');
   const statusCard =
-    !check.message && !done && factsKnown
+    !done && factsKnown && (!check.message || fenceLocked)
       ? punchStatusCard({
           state: buttonState,
           fix,
@@ -230,7 +241,7 @@ export function PunchSection({
         </>
       )}
 
-      {check.message ? (
+      {check.message && !fenceLocked ? (
         <Text
           style={[
             styles.message,

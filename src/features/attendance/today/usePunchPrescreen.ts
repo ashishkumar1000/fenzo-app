@@ -24,6 +24,8 @@ export function usePunchPrescreen(input: { enabled: boolean }): {
   fix: PunchFixSample | null;
   /** Post-punch settle re-probe (the fresh record may change the fence). */
   recapture: () => void;
+  /** Adopt a fix the press flow already captured (see the docblock). */
+  adoptFix: (f: { latitude: number; longitude: number }) => void;
 } {
   const { enabled } = input;
   const [fix, setFix] = useState<PunchFixSample | null>(null);
@@ -101,5 +103,18 @@ export function usePunchPrescreen(input: { enabled: boolean }): {
     void capture();
   }, [capture]);
 
-  return { fix, recapture };
+  /** Adopt a fix the press flow already captured — the freshest fix the
+   *  device ever held. Without this, a server-rejected too-far press left
+   *  the UI on the fallback posture even though the fence verdict was
+   *  known (user-found gap, 2026-10-02): the LOCKED card must render the
+   *  moment that fix exists, not whenever the next GPS lottery lands. */
+  const adoptFix = useCallback(
+    (f: { latitude: number; longitude: number }) => {
+      if (!enabledRef.current) return;
+      setFix({ latitude: f.latitude, longitude: f.longitude, capturedAt: Date.now() });
+    },
+    [],
+  );
+
+  return { fix, recapture, adoptFix };
 }
