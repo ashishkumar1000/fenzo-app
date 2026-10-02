@@ -81,6 +81,28 @@ describe('actionBarAction', () => {
       .toEqual({ kind: 'photoHint' });
   });
 
+  it('photo step next, explicit photoCount 0 → still the hint pill', () => {
+    expect(actionBarAction(job({ currentStepIndex: 2, currentStep: 'in_progress', status: 'in_progress' }), [stepLog('in_progress')], 0))
+      .toEqual({ kind: 'photoHint' });
+  });
+
+  it('photo step next WITH photos already on the job → manual Continue button (early-upload rescue)', () => {
+    // The 2026-10-02 dead-end: photos uploaded before the job reached this
+    // step can't re-trigger the server's confirm auto-advance, so the pill
+    // offered no working action at all (JB-2026-0004 stuck with 5/5 photos).
+    // Any photo count > 0 must surface the manual advance instead.
+    const atPhotoStep = { currentStepIndex: 2, currentStep: 'in_progress', status: 'in_progress' as const };
+    expect(actionBarAction(job(atPhotoStep), [stepLog('in_progress')], 1))
+      .toEqual({ kind: 'button', step: 'photos_uploaded', label: 'Continue' });
+    expect(actionBarAction(job(atPhotoStep), [stepLog('in_progress')], 5))
+      .toEqual({ kind: 'button', step: 'photos_uploaded', label: 'Continue' });
+  });
+
+  it('photos on the job at a NON-photo step → the step’s own button (photoCount ignored)', () => {
+    expect(actionBarAction(job({ currentStepIndex: 3, currentStep: 'photos_uploaded', status: 'in_progress' }), [stepLog('photos_uploaded')], 2))
+      .toEqual({ kind: 'button', step: 'signature_captured', label: 'Capture signature' });
+  });
+
   it('next step is signature_captured → button with template label', () => {
     expect(actionBarAction(job({ currentStepIndex: 3, currentStep: 'photos_uploaded', status: 'in_progress' }), [stepLog('photos_uploaded')]))
       .toEqual({ kind: 'button', step: 'signature_captured', label: 'Capture signature' });

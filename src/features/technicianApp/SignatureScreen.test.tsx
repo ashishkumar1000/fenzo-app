@@ -149,6 +149,24 @@ describe('SignatureScreen', () => {
     expect(mockNav.goBack).toHaveBeenCalledTimes(1);
   });
 
+  it('a failed location capture still advances without coordinates (best-effort) and pops', async () => {
+    // CAP-4 parity: the signature save must never be blocked on GPS — the
+    // capture failure degrades to an advance without location (the server
+    // records the omission) and the screen pops as normal.
+    positionMock.mockRejectedValueOnce(new Error('Location request timed out'));
+    mockUploadOne.mockResolvedValue({ id: 'att-1' });
+    advanceMock.mockResolvedValue({ currentStep: 'completed' });
+    const root = renderScreen();
+    act(() => {
+      mockPadProps.onBegin();
+    });
+    await act(async () => {
+      savePressable(root).props.onPress();
+    });
+    expect(advanceMock).toHaveBeenCalledWith('job-1', 'signature_captured', 'key-1', undefined);
+    expect(mockNav.goBack).toHaveBeenCalledTimes(1);
+  });
+
   it('a network-class failure keeps the pad open with the offline copy, never advances', async () => {
     mockUploadOne.mockRejectedValue({ status: 0, code: 'NETWORK', message: 'offline' });
     const root = renderScreen();
