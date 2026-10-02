@@ -352,12 +352,16 @@ function card(
   chip: string | null,
   segments: PunchBodySegment[],
 ): PunchStatusCardModel {
+  // The segments carry their own spacing (they render as contiguous Text
+  // spans) — the announce must read them verbatim, never re-join with
+  // extra separators.
+  const body = segments.map(s => s.text).join('');
   return {
     tone,
     title,
     chip,
     segments,
-    announce: [title, ...segments.map(s => s.text)].filter(Boolean).join(' '),
+    announce: title ? `${title} ${body}` : body,
   };
 }
 
