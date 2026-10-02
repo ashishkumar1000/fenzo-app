@@ -73,13 +73,19 @@ export async function requestLocationPermission(): Promise<LocationPermissionOut
   }
 }
 
-export async function getCurrentPosition(timeout: number = 15000): Promise<GeolocationCoordinates> {
+/** One native compat capture with its own timeout belt. Errors are
+ *  classified into plain Errors (messages are the consumer contract). */
+function attemptPosition(options: {
+  enableHighAccuracy: boolean;
+  maximumAge: number;
+  timeout: number;
+}): Promise<GeolocationCoordinates> {
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {
-      const err = new Error(`Location request timed out after ${timeout}ms`);
+      const err = new Error(`Location request timed out after ${options.timeout}ms`);
       console.error('[geolocation] timeout:', err.message);
       reject(err);
-    }, timeout);
+    }, options.timeout);
 
     Geolocation.getCurrentPosition(
       (position) => {
@@ -122,9 +128,42 @@ export async function getCurrentPosition(timeout: number = 15000): Promise<Geolo
         }
         reject(finalError);
       },
-      // Fresh, high-accuracy fix — never a cached one: the office pin and
-      // step verification both depend on where the device actually is.
-      { enableHighAccuracy: true, maximumAge: 0, timeout },
+      options,
     );
   });
+}
+
+function isTimeout(err: unknown): boolean {
+  return err instanceof Error && /timed out|TIMEOUT/.test(err.message);
+}
+
+export async function getCurrentPosition(timeout: number = 15000): Promise<GeolocationCoordinates> {
+  try {
+    // Attempt 1 — the strict capture, unchanged shape: fresh, high
+    // accuracy. Step verification and the office pin both depend on where
+    // the device actually is.
+    return await attemptPosition({
+      enableHighAccuracy: true,
+      maximumAge: 0,
+      timeout,
+    });
+  } catch (err) {
+    // Only a TIMEOUT earns the indoor fallback (user-directed, 2026-10-02
+    // — offices saw every strict capture time out while Maps located
+    // instantly): one retry at balanced priority accepting a fix up to
+    // 15 s old. Permission and services-off failures keep their own copy.
+    if (!isTimeout(err)) throw err;
+
+    console.error('[geolocation] high-accuracy attempt timed out; retrying balanced');
+    try {
+      return await attemptPosition({
+        enableHighAccuracy: false,
+        maximumAge: 15_000,
+        timeout: 25_000,
+      });
+    } catch (retryErr) {
+      console.error('[geolocation] fallback error:', retryErr);
+      throw retryErr;
+    }
+  }
 }
