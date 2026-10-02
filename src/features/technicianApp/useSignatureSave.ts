@@ -32,6 +32,7 @@ import { workflowCurrentStep } from '../../services/api/apiError';
 import { generateIdempotencyKey } from '../../utils/idempotency';
 import { useAttachmentUpload } from './useAttachmentUpload';
 import { errorMessage } from './attachmentUploadModel';
+import { getCurrentPosition } from './geolocation';
 import { SIGNATURE_MIME_TYPE, signatureFilename } from '../../utils/signatureExport';
 import type { WorkflowTemplateStep } from '../../services/resources/jobs';
 
@@ -91,10 +92,28 @@ export function useSignatureSave({ jobId, stepKey, steps, pop }: Props) {
           confirmedThisSession.current = true;
         }
         try {
+          // Capture the technician's position for the advance — best-effort,
+          // CAP-4 parity with the other steps: a failed capture (timeout,
+          // permission, services off) never blocks the save; the server
+          // records the omission and the step still completes.
+          let location:
+            | { latitude: number; longitude: number; accuracy: number }
+            | undefined;
+          try {
+            const position = await getCurrentPosition();
+            location = {
+              latitude: position.latitude,
+              longitude: position.longitude,
+              accuracy: position.accuracy,
+            };
+          } catch {
+            // Best-effort only — advance without coordinates.
+          }
           await jobService.advanceWorkflow(
             jobId,
             stepKey,
             generateIdempotencyKey(),
+            location,
           );
         } catch (caught) {
           // A 422 whose body names this stepKey (or a later step) means

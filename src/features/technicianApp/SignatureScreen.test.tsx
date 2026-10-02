@@ -50,6 +50,15 @@ jest.mock('@react-navigation/native', () => ({
 jest.mock('./useAttachmentUpload', () => ({
   useAttachmentUpload: () => ({ uploadOne: mockUploadOne }),
 }));
+jest.mock('./geolocation', () => ({
+  // The save chain captures a position before advancing — a deterministic
+  // fix keeps the existing assertions exact.
+  getCurrentPosition: jest.fn().mockResolvedValue({
+    latitude: 12.9767,
+    longitude: 77.7384,
+    accuracy: 20,
+  }),
+}));
 jest.mock('../../services', () => ({
   jobService: { advanceWorkflow: jest.fn() },
 }));
@@ -65,10 +74,12 @@ import {
 } from 'react-test-renderer';
 import { jobService } from '../../services';
 import { generateIdempotencyKey } from '../../utils/idempotency';
+import { getCurrentPosition } from './geolocation';
 import SignatureScreen from './SignatureScreen';
 
 const advanceMock = jobService.advanceWorkflow as jest.Mock;
 const keyMock = generateIdempotencyKey as jest.Mock;
+const positionMock = getCurrentPosition as jest.Mock;
 const mockUploadOne = jest.fn();
 
 // Hoisted-mock seams (assigned by the factories above).
@@ -80,6 +91,12 @@ beforeEach(() => {
   jest.resetAllMocks();
   mockRouteJobId = 'job-1';
   keyMock.mockReturnValue('key-1');
+  // resetAllMocks clears the module factory's value — re-seed the fix.
+  positionMock.mockResolvedValue({
+    latitude: 12.9767,
+    longitude: 77.7384,
+    accuracy: 20,
+  });
 });
 
 function renderScreen() {
@@ -124,7 +141,11 @@ describe('SignatureScreen', () => {
       filename: 'signature-job-1.png',
       mimeType: 'image/png',
     });
-    expect(advanceMock).toHaveBeenCalledWith('job-1', 'signature_captured', 'key-1');
+    expect(advanceMock).toHaveBeenCalledWith('job-1', 'signature_captured', 'key-1', {
+      latitude: 12.9767,
+      longitude: 77.7384,
+      accuracy: 20,
+    });
     expect(mockNav.goBack).toHaveBeenCalledTimes(1);
   });
 

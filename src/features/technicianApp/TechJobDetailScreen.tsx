@@ -245,8 +245,13 @@ export default function TechJobDetailScreen() {
   const statusBadge = detail ? statusToBadge(detail.status) : null;
   // 3.3 — the bar's content is derived, never stored: it re-derives from the
   // detail on every render (status, current step, activity log). `none`
-  // (cancelled) unmounts the bar entirely.
-  const action = detail ? actionBarAction(detail, detail.activityLog) : null;
+  // (cancelled) unmounts the bar entirely. Photo count feeds the photo-step
+  // branch: photos already on the job turn the hint pill into a manual
+  // Continue button (early uploads can't trigger the server auto-advance).
+  const photoCount = detail
+    ? detail.attachments.filter(a => a.type === 'photo').length
+    : 0;
+  const action = detail ? actionBarAction(detail, detail.activityLog, photoCount) : null;
   const barAction = action && action.kind !== 'none' ? action : null;
 
   return (

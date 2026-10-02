@@ -40,7 +40,11 @@ export type ActionBarAction =
   /** Terminal/cancelled — the bar renders nothing. */
   | { kind: 'none' };
 
-export function actionBarAction(job: StepperJob, log: ActivityLogEntry[]): ActionBarAction {
+export function actionBarAction(
+  job: StepperJob,
+  log: ActivityLogEntry[],
+  photoCount = 0,
+): ActionBarAction {
   if (job.status === 'cancelled') return { kind: 'none' };
   if (job.status === 'completed') return { kind: 'completed' };
 
@@ -48,7 +52,16 @@ export function actionBarAction(job: StepperJob, log: ActivityLogEntry[]): Actio
   // A non-terminal job always has exactly one actionable step — an absent
   // `next` is a contract violation, and showing no bar is the safe fallback.
   if (!next) return { kind: 'none' };
-  if ((next.advancesOn ?? null) === 'photo_confirm') return { kind: 'photoHint' };
+  if ((next.advancesOn ?? null) === 'photo_confirm') {
+    // Photos already on the job (e.g. one uploaded early, before the job
+    // reached this step) can no longer be relied on to auto-advance it — the
+    // server's photo-confirm trigger only moves the step when the confirm
+    // happens AT it. Offer the same manual advance every other step has (the
+    // backend accepts the step POST); it also rescues jobs already stuck.
+    return photoCount > 0
+      ? { kind: 'button', step: next.step, label: 'Continue' }
+      : { kind: 'photoHint' };
+  }
   return { kind: 'button', step: next.step, label: next.label };
 }
 

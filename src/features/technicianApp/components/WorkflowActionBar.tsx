@@ -47,9 +47,11 @@ export function WorkflowActionBar({ action, pending, onAdvance, error, onDismiss
             {action.label}
           </Button>
         ) : action.kind === 'photoHint' ? (
-          // Photos are required before the next step unlocks; the pill is NOT
-          // tappable — the Photos card above carries the capture action, and
-          // the server auto-advances photos_uploaded on the first confirm.
+          // No photos on the job yet: Photos are required before the next
+          // step unlocks, and the pill is NOT tappable — the Photos card
+          // above carries the capture action, and the server auto-advances
+          // photos_uploaded on the confirm. (With photos already uploaded,
+          // the model returns a button instead — see actionBarAction.)
           <View style={styles.photoHint} accessibilityLabel={PHOTO_HINT_MESSAGE}>
             <Camera size={18} color={colors.status.progress.fg} strokeWidth={2} />
             <Text style={styles.photoHintText}>{PHOTO_HINT_MESSAGE}</Text>
