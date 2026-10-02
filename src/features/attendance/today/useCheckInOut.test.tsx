@@ -8,7 +8,7 @@
  * re-check, the check-out merge, and the seedRecord freshness contract.
  *
  * The Probe wires the hook's confirmAsk/settleConfirm pair to the SAME
- * ConfirmDialog rendering AttendanceTodayView runs — copy straight from
+ * ConfirmDialog rendering PunchSection runs — copy straight from
  * checkInDialogs — so a test presses the dialog exactly as the screen
  * does (settleConfirm is the verdict both dialog buttons route to).
  * NetInfo goes through the root mock's __setNetInfoState seam (plain

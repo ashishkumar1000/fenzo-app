@@ -3,7 +3,7 @@
  * D5/D9/D10/D12; 17-8 adds the full-day-leave branch and the awaited
  * wire-driven 409 fallback, D2–D4). Owns: the permission probe (+
  * foreground re-probe), the latched pre-flight confirmations (weekly off /
- * holiday; full-day leave — since 20-1 rendered by AttendanceTodayView as
+ * holiday; full-day leave — since 20-1 rendered by PunchSection as
  * the shared ConfirmDialog, awaited here via the confirmAsk/state pair
  * instead of native Alert promises), the tap-time offline re-checks (at tap AND
  * at confirm), capture → submit with one fresh idempotency key per tap,
@@ -76,7 +76,7 @@ export function useCheckInOut(input: {
   const [online, setOnline] = useState(true);
   const [resolving, setResolving] = useState(false);
   const [dialogPending, setDialogPending] = useState(false);
-  /** Which pre-flight confirmation the AttendanceTodayView's ConfirmDialog
+  /** Which pre-flight confirmation the PunchSection's ConfirmDialog
    *  is presenting (20-1 port off the native Alerts) — null = none up. */
   const [confirmAsk, setConfirmAsk] = useState<'holiday' | 'leave' | null>(null);
   const [message, setMessage] = useState<TodayOutcomeMessage | null>(null);

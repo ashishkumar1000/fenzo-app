@@ -3,7 +3,7 @@
  * copy contracts (16-4: weekly off / holiday; 17-8: full-day leave).
  * Through 20-1 they rendered as native `Alert.alert` promise wrappers;
  * the 2026-10-01 user decision ports them onto the shared DS
- * `ConfirmDialog`, rendered once by AttendanceTodayView and driven by
+ * `ConfirmDialog`, rendered once by PunchSection and driven by
  * useCheckInOut's `confirmAsk` + `settleConfirm` pair. This module stays
  * the ONLY home of their copy — the 16-4 holding string for
  * ATTENDANCE_LEAVE_CONFIRMATION_REQUIRED is retired — a 409 that escapes

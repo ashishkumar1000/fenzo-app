@@ -1,20 +1,17 @@
 /**
- * AttendanceTodayView.tsx — the Today section of the technician's
- * Attendance tab (Story 16-4, spec D11; redesigned 2026-10): the punch
- * card (tiles + status pills, PunchCard.tsx) and the CheckInOutButton.
- * The office/timings line moved to the summary card — the policy card is
- * the single home of those facts now. Rendered for `active` only, ABOVE
- * the summary view.
+ * PunchSection — the Today tab's punch block (story 20-3): the relocated
+ * AttendanceTodayView subtree (punch tiles, button, messages, dialogs)
+ * restyled to the approved mockup — PunchButton + PunchStatusCard — with
+ * the geofence prescreen feeding the model. The press pipeline is the
+ * SAME useCheckInOut contract (dialogs, rate-limit, idempotency, a11y
+ * announcements): the move is a re-host, not a rewrite. The old
+ * display-only distance hint is gone — the status card is its successor.
  *
- * Card presence: with NO record (the check-in zero-state) no card renders
- * — the zero-state's mostly-whitespace, one-CTA rule (DESIGN.md); as soon
- * as a record exists the punch card renders (mid-session: checkout tile
- * reads "—"). Failure posture: while the summary's first load has not
- * landed (loading or errored), this section shows its own loading/error
- * state and NO interactive button — the holiday pre-flight gate must be
- * ABLE to fire before any check-in happens. A loaded summary whose
- * `today` is absent (pre-16-4 backend) renders legacy mode: interactive,
- * no dialog, the server still records the truth.
+ * Failure postures are inherited verbatim: the first-load shimmer and the
+ * error + Retry block render NO interactive control (the holiday
+ * pre-flight gate must be ABLE to fire before any check-in happens). A
+ * settled server message outranks the status card (the server copy is the
+ * truth surface — the old message-over-hint precedence).
  */
 import { AccessibilityInfo } from 'react-native';
 import { StyleSheet, Text, View } from 'react-native';
@@ -22,21 +19,21 @@ import { CalendarX, Sun } from 'lucide-react-native';
 import { useCallback, useEffect, useRef } from 'react';
 import { Button, ConfirmDialog, Skeleton } from '../../../components/ui';
 import { colors, fontSize, spacing } from '../../../theme';
+import { useNow } from '../../../hooks';
 import type { AttendanceSummaryState } from '../me/useAttendanceSummary';
-import {
-  formatDistance,
-  haversineMetres,
-} from '../../../utils/distanceUtils';
-import { formatOffsetInstantTime } from '../../../utils/offsetInstant';
+import { formatOffsetInstantTime, formatWorkedMinutes } from '../../../utils/offsetInstant';
 import {
   buildTodayTiles,
   deriveTodayButtonState,
-  offlineMessage,
+  punchStatusCard,
+  type PunchOffice,
 } from './attendanceTodayModel';
-import { CheckInOutButton } from './CheckInOutButton';
+import { PunchButton } from './PunchButton';
+import { PunchStatusCard } from './PunchStatusCard';
 import { PunchCard } from './PunchCard';
 import { HOLIDAY_DIALOG, LEAVE_DIALOG } from './checkInDialogs';
 import { useCheckInOut } from './useCheckInOut';
+import { usePunchPrescreen } from './usePunchPrescreen';
 import type { AttendanceTodayRecord } from '../../../services/resources/attendanceMe';
 
 interface Props {
@@ -48,7 +45,7 @@ interface Props {
   refreshAccessNow: () => void;
 }
 
-export function AttendanceTodayView({
+export function PunchSection({
   summary,
   refreshSummaryNow,
   refreshAccessNow,
@@ -56,9 +53,18 @@ export function AttendanceTodayView({
   const today = summary.state.summary?.today;
   const todayRecord = summary.state.summary?.todayRecord;
 
+  const { fix, recapture } = usePunchPrescreen({ enabled: true });
+
+  const onSettled = useCallback(() => {
+    // The post-write pass refreshes the summary AND re-probes the fence —
+    // the fresh record flips the ready posture, the fresh fix re-judges it.
+    void refreshSummaryNow();
+    recapture();
+  }, [refreshSummaryNow, recapture]);
+
   const check = useCheckInOut({
     today,
-    onSettled: refreshSummaryNow,
+    onSettled,
     onAccessDenied: refreshAccessNow,
   });
 
@@ -95,6 +101,22 @@ export function AttendanceTodayView({
 
   const formatTime = useCallback((iso: string) => formatOffsetInstantTime(iso), []);
 
+  // The fence inputs: the anchored office from the summary (no pin ⇒ no
+  // fence), the prescreen's freshest fix, and the clock — the rate-limit
+  // countdown's 1 s tick and the 30 s cadence tick fold into one `now`.
+  const cadence = useNow(30_000);
+  const now = Math.max(check.now, cadence);
+  const s = summary.state.summary;
+  const office: PunchOffice | null =
+    s?.officeLatitude != null && s?.officeLongitude != null
+      ? {
+          latitude: s.officeLatitude,
+          longitude: s.officeLongitude,
+          radiusM: s.officeRadius ?? null,
+          name: s.officeName ?? null,
+        }
+      : null;
+
   // undefined = legacy backend (no field on the wire) → interactive, no
   // dialog. null = explicitly no facts → NOT interactive (fail-safe).
   const factsKnown = today === undefined || today !== null;
@@ -106,7 +128,9 @@ export function AttendanceTodayView({
     resolving: check.resolving,
     dialogPending: check.dialogPending,
     rateLimitedUntil: check.rateLimitedUntil,
-    now: check.now,
+    now,
+    fix,
+    office,
   });
 
   const onPress = useCallback(() => {
@@ -130,6 +154,35 @@ export function AttendanceTodayView({
     ? buildTodayTiles(check.record, formatTime)
     : null;
   const done = buttonState.kind === 'done';
+
+  // The status card's time inputs (wall-clock rendering is the view's job):
+  // the check-in instant formatted, and the open shift's client elapsed.
+  const checkinTimeText = check.record ? formatTime(check.record.checkinAt) : null;
+  const elapsedMin = check.record
+    ? Math.max(0, Math.round((now - Date.parse(check.record.checkinAt)) / 60_000))
+    : 0;
+  const elapsedText =
+    check.record && !check.record.checkoutAt
+      ? formatWorkedMinutes(elapsedMin)
+      : null;
+
+  // A settled server message outranks the card (the old message-over-hint
+  // precedence — the server copy is the authoritative explanation). The
+  // card also stays down while the day facts are unknown (the contract-
+  // break posture): a green READY card beside a permanently disabled
+  // button would lie about the fence.
+  const statusCard =
+    !check.message && !done && factsKnown
+      ? punchStatusCard({
+          state: buttonState,
+          fix,
+          office,
+          now,
+          checkinTimeText,
+          elapsedText,
+        })
+      : null;
+
   // The confirmation copy the hook has asked the view to present (20-1) —
   // null while no dialog is up.
   const confirmDialog =
@@ -138,21 +191,6 @@ export function AttendanceTodayView({
       : check.confirmAsk === 'holiday'
         ? HOLIDAY_DIALOG
         : null;
-  // The D7 display-only distance hint: the most recent capture fix vs the
-  // office pin (haversine, never gating). Only when no server message is
-  // showing — the too_far copy carries the authoritative distance.
-  const distanceHint =
-    !check.message &&
-    check.lastFix &&
-    summary.state.summary?.officeLatitude != null &&
-    summary.state.summary?.officeLongitude != null
-      ? `You are ${formatDistance(
-          haversineMetres(check.lastFix, {
-            latitude: summary.state.summary.officeLatitude,
-            longitude: summary.state.summary.officeLongitude,
-          }),
-        ).replace(' away', '')} from ${summary.state.summary.officeName ?? 'your office'}`
-      : null;
 
   return (
     <View style={styles.section}>
@@ -174,13 +212,20 @@ export function AttendanceTodayView({
         <>
           {tilesModel ? <PunchCard tiles={tilesModel} /> : null}
           {/* The done posture replaces the button ENTIRELY (never both
-              visible — the 16-4 AC; the card is the done render now). */}
+              visible — the 16-4 AC; the tiles are the done render now). */}
           {!done ? (
-            <CheckInOutButton
-              state={buttonState}
-              enabled={factsKnown}
-              onPress={onPress}
-            />
+            <>
+              <PunchButton
+                state={buttonState}
+                enabled={factsKnown}
+                onPress={onPress}
+              />
+              {statusCard ? (
+                <View style={styles.cardWrap}>
+                  <PunchStatusCard model={statusCard} />
+                </View>
+              ) : null}
+            </>
           ) : null}
         </>
       )}
@@ -195,22 +240,6 @@ export function AttendanceTodayView({
           ]}
           maxFontSizeMultiplier={1.6}>
           {check.message.text}
-        </Text>
-      ) : distanceHint && !done ? (
-        // D7: display-only, from the most recent capture fix — never gates
-        // (NFR-2), and only while there is an action to take.
-        <Text style={styles.messageInfo} maxFontSizeMultiplier={1.6}>
-          {distanceHint}
-        </Text>
-      ) : null}
-
-      {/* The offline block is a STATE, not just a tap outcome: the button
-          disables itself (the tap can never fire), so the blocking message
-          must render from the state — UX-DR8: the employee sees WHY before
-          any tap. */}
-      {buttonState.kind === 'offline' && !check.message ? (
-        <Text style={[styles.message, styles.messageError]} maxFontSizeMultiplier={1.6}>
-          {offlineMessage}
         </Text>
       ) : null}
 
@@ -262,6 +291,9 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.status.cancelled.fg,
     textAlign: 'center',
+  },
+  cardWrap: {
+    alignSelf: 'stretch',
   },
   message: {
     fontSize: fontSize.sm,

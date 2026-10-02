@@ -46,6 +46,7 @@ function summary(overrides: Partial<AttendanceSummary> = {}): AttendanceSummary 
     weeklyOffDays: [6, 7],
     officeLatitude: 19.076,
     officeLongitude: 72.8777,
+    officeRadius: 150,
     ...overrides,
   };
 }

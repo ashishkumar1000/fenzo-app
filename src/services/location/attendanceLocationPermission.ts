@@ -5,7 +5,7 @@
  * Deliberately SEPARATE from the job flow's
  * `features/technicianApp/geolocation.ts` helper (AC: attendance gets its
  * own function, NFR-12: the job flow is untouched). The states are the
- * CheckInOutButton's vocabulary — each renders its own label and its own
+ * PunchButton's vocabulary — each renders its own label and its own
  * remediation, and "precise location off" (Android "Approximate only" /
  * iOS reduced accuracy) is its OWN state, never folded into "denied"
  * (addendum §C2), because the permission is technically granted there.

@@ -113,6 +113,12 @@ export interface AttendanceSummary {
   /** Office pin (display-only distance hint input; null when no office). */
   officeLatitude: number | null;
   officeLongitude: number | null;
+  /** The office's geofence radius in metres — the SAME value the check-in/
+   *  out gates read server-side. Prescreen/display input ONLY: the server
+   *  stays authoritative for every punch, so a client lock must never
+   *  reject on its own. null (no office, a radiusless column, or a field
+   *  ABSENT on the wire — a pre-20-3 backend) means "never locked". */
+  officeRadius: number | null;
   /** Active only; null otherwise (upcoming's anchor is a future date).
    *  `undefined` = the field was ABSENT on the wire (a pre-16-4 backend) —
    *  the Today screen's legacy-mode signal, never treated as facts. */
@@ -165,6 +171,12 @@ function normalizeSummary(raw: Partial<AttendanceSummary> | null | undefined): A
     officeLongitude:
       typeof raw?.officeLongitude === 'number' && Number.isFinite(raw.officeLongitude)
         ? raw.officeLongitude
+        : null,
+    // Defensively absent (a pre-20-3 backend) means "never locked" — the
+    // summary is never rejected over the punch prescreen input.
+    officeRadius:
+      typeof raw?.officeRadius === 'number' && Number.isFinite(raw.officeRadius)
+        ? raw.officeRadius
         : null,
     today: raw?.today === undefined ? undefined : normalizeTodayFacts(raw.today),
     todayRecord:

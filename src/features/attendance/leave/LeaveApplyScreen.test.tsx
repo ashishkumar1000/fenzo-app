@@ -446,6 +446,7 @@ const TAB_SUMMARY: AttendanceSummary = {
   weeklyOffDays: [6, 7],
   officeLatitude: 19.076,
   officeLongitude: 72.8777,
+  officeRadius: null,
   today: {
     date: '2026-10-01',
     isWeeklyOff: false,

@@ -1,23 +1,33 @@
 /**
- * Component tests for AttendanceTodayView (Story 16-4, spec D11): the
- * failure posture (no interactive check-in while facts are unknown), the
- * done card REPLACING the button (never both visible), the distinct
- * permission-state labels, and the offline block message rendering from
- * STATE (the walkthrough-found defect). useCheckInOut is mocked so each
- * state is driven deterministically; the summary prop carries the
+ * Component tests for PunchSection (the 20-3 re-host of the AttendanceTodayView
+ * suite — story 16-4's postures over the restyled punch block): the failure
+ * posture (no interactive check-in while facts are unknown), the done card
+ * REPLACING the button (never both visible), the distinct permission-state
+ * labels, and the offline block rendering from STATE (the walkthrough-found
+ * defect). useCheckInOut is mocked so each state is driven deterministically;
+ * the prescreen is mocked to a no-fix posture; the summary prop carries the
  * AttendanceSummaryState shape.
  */
 import type ReactTestRenderer from 'react-test-renderer';
 import { act, create } from 'react-test-renderer';
 import { AccessibilityInfo, Text } from 'react-native';
-import { AttendanceTodayView } from './AttendanceTodayView';
-import { CheckInOutButton } from './CheckInOutButton';
+import { PunchSection } from './PunchSection';
+import { PunchButton } from './PunchButton';
 import { useCheckInOut } from './useCheckInOut';
+import { usePunchPrescreen } from './usePunchPrescreen';
 import type { AttendanceSummaryState } from '../me/useAttendanceSummary';
 import type { AttendanceTodayRecord } from '../../../services/resources/attendanceMe';
 
 jest.mock('./useCheckInOut', () => ({
   useCheckInOut: jest.fn(),
+}));
+
+jest.mock('./usePunchPrescreen', () => ({
+  usePunchPrescreen: jest.fn(() => ({ fix: null, recapture: jest.fn() })),
+}));
+
+jest.mock('../../../hooks', () => ({
+  useNow: () => 1_000_000,
 }));
 
 const useCheckInOutMock = useCheckInOut as jest.Mock;
@@ -35,6 +45,7 @@ function summaryState(
       weeklyOffDays: [7],
       officeLatitude: 12.98,
       officeLongitude: 77.74,
+      officeRadius: null,
       today: {
         date: '2026-09-29',
         isWeeklyOff: false,
@@ -85,10 +96,6 @@ function hookOverrides(over: Record<string, unknown> = {}) {
 
 /** RN Text carries its string in props.children (never props.text) —
  *  the house matcher from the AttendanceTabScreen suite. */
-function textNodes(root: ReactTestRenderer.ReactTestRenderer['root'], value: string) {
-  return root.findAll(n => n.type === Text && n.props.children === value);
-}
-
 function textContaining(root: ReactTestRenderer.ReactTestRenderer['root'], part: string) {
   return root.findAll(n => {
     if (n.type !== Text) return false;
@@ -100,11 +107,11 @@ function textContaining(root: ReactTestRenderer.ReactTestRenderer['root'], part:
   });
 }
 
-/** The big action is the CheckInOutButton (its own Pressable shell, not a
+/** The big action is the PunchButton (its own Pressable shell, not a
  *  DS Button) — presence/absence is the state line, never a label string
  *  colliding with the punch card's tile labels. */
 function actionButtonsUp(root: ReactTestRenderer.ReactTestRenderer['root']) {
-  return root.findAllByType(CheckInOutButton);
+  return root.findAllByType(PunchButton);
 }
 
 function renderView(
@@ -115,7 +122,7 @@ function renderView(
   let renderer!: ReactTestRenderer.ReactTestRenderer;
   act(() => {
     renderer = create(
-      <AttendanceTodayView
+      <PunchSection
         summary={{ state: summary, refresh: jest.fn() }}
         refreshSummaryNow={jest.fn(() => Promise.resolve())}
         refreshAccessNow={jest.fn()}
@@ -140,6 +147,10 @@ afterEach(() => {
 beforeEach(() => {
   jest.resetAllMocks();
   jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+  (usePunchPrescreen as jest.Mock).mockImplementation(() => ({
+    fix: null,
+    recapture: jest.fn(),
+  }));
 });
 
 afterAll(() => {

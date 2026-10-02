@@ -55,6 +55,7 @@ function summary(
     weeklyOffDays: [6, 7],
     officeLatitude: 19.076,
     officeLongitude: 72.8777,
+    officeRadius: 150,
     ...overrides,
   };
 }

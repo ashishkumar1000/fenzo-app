@@ -7,12 +7,13 @@
  *                  state; this body is the defensive in-between frame).
  *   none         → nothing (the tab cannot normally be focused in this
  *                  state — FR-3: no attendance UI anywhere).
- *   active       → punch card + apply banner + summary card + My month
- *                  banner + Leave history (redesigned 2026-10: My month
- *                  is a NAV banner that pushes the full-screen
- *                  AttendanceMyMonth — the month grid no longer renders
- *                  inline; the header always reads "Attendance", never
- *                  bare "Today", per the UX naming-collision rule).
+ *   active       → apply banner + summary card + My month banner + Leave
+ *                  history (the punch section moved to the Today tab,
+ *                  20-3; redesigned 2026-10: My month is a NAV banner that
+ *                  pushes the full-screen AttendanceMyMonth — the month
+ *                  grid no longer renders inline; the header always reads
+ *                  "Attendance", never bare "Today", per the UX
+ *                  naming-collision rule).
  *   upcoming     → "Attendance starts on {date}" + summary + Leave (the
  *                  apply row stays the entry here); no check-in control
  *                  (absent, not disabled) and NO My month (an all-zero
@@ -64,7 +65,6 @@ import {
 import { useAttendanceSummary } from './useAttendanceSummary';
 import { AttendanceSummaryView } from './AttendanceSummaryView';
 import { AttendanceLeaveSection } from './AttendanceLeaveSection';
-import { AttendanceTodayView } from '../today/AttendanceTodayView';
 import type { TechnicianTabParamList } from '../../../navigation/types';
 import type { TechnicianRootStackParamList } from '../../../navigation/types';
 
@@ -270,27 +270,18 @@ export default function AttendanceTabScreen({ navigation }: Props) {
                   </Text>
                 </View>
               )}
-              {/* The Today punch section (16-4): active only — upcoming
-                  renders no check-in control (absent, not disabled). */}
+              {/* The punch section moved to the Today tab (20-3) — this
+                  tab keeps the record's read surfaces: summary card, My
+                  month, Leave. No check-in control renders here any more. */}
               {accessState === 'active' && (
-                <>
-                  <AttendanceTodayView
-                    summary={{ state: summaryState, refresh: refreshSummary }}
-                    refreshSummaryNow={refreshSummaryNow}
-                    refreshAccessNow={refreshAttendanceAccessNow}
-                  />
-                  {/* 2026-10 — the apply entry became the solid banner
-                      (the Leave section's row would be a second door to
-                      the same form). */}
-                  <BannerCard
-                    tone="success"
-                    icon={CalendarPlus}
-                    title="Apply for leave"
-                    chipLabel="Time off"
-                    subtitle="Request planned time off or sick leave"
-                    onOpen={openLeave}
-                  />
-                </>
+                <BannerCard
+                  tone="success"
+                  icon={CalendarPlus}
+                  title="Apply for leave"
+                  chipLabel="Time off"
+                  subtitle="Request planned time off or sick leave"
+                  onOpen={openLeave}
+                />
               )}
               <AttendanceSummaryView state={summaryState} onRetry={onRetrySummary} />
               {/* 2026-10 — My month is the banner → the FULL SCREEN

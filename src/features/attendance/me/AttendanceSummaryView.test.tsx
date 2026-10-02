@@ -32,6 +32,7 @@ function state(overrides: Partial<AttendanceSummaryState>): AttendanceSummarySta
       weeklyOffDays: [7],
       officeLatitude: 12.97,
       officeLongitude: 77.59,
+      officeRadius: null,
     },
     isLoading: false,
     error: null,

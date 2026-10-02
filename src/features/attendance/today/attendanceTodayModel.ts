@@ -1,6 +1,7 @@
 /**
- * attendanceTodayModel.ts — the CheckInOutButton's pure state machine
- * (Story 16-4, spec D4) and the exact copy table (spec §4).
+ * attendanceTodayModel.ts — the punch button's pure state machine
+ * (Story 16-4, spec D4; 20-3 adds the geofence rungs + the status-card
+ * model) and the exact copy table (spec §4).
  *
  * One derivation function, first match wins:
  *   offline → permissionDenied → preciseOff → serviceOff → rateLimited →
@@ -12,6 +13,7 @@
  * done replaces the button entirely (never both visible — AC).
  */
 import { formatWorkedMinutes } from '../../../utils/offsetInstant';
+import { haversineMetres } from '../../../utils/distanceUtils';
 import type {
   AttendanceTodayFacts,
   AttendanceTodayRecord,
@@ -23,6 +25,30 @@ export type AttendanceLocationPermission =
   | 'preciseOff'
   | 'serviceOff';
 
+/** A location fix kept by the screen's prescreen capture (the punch
+ *  geofence's client-side input). `capturedAt` is epoch ms — freshness is
+ *  rechecked against the ticker on every derivation, never stored as a
+ *  verdict. */
+export interface PunchFixSample {
+  latitude: number;
+  longitude: number;
+  capturedAt: number;
+}
+
+/** The anchored office's geofence inputs from the summary. `radiusM` null
+ *  (no office / radiusless column / field absent on the wire) = the client
+ *  can never lock — fail-safe, the server stays authoritative anyway. */
+export interface PunchOffice {
+  latitude: number;
+  longitude: number;
+  radiusM: number | null;
+  name: string | null;
+}
+
+/** A prescreen fix younger than this may ground a geofence posture; an
+ *  older or missing one falls back to today's unlocked behaviour. */
+export const PUNCH_FIX_FRESH_MS = 120_000;
+
 export type TodayButtonState =
   | { kind: 'offline' }
   | { kind: 'permissionDenied' }
@@ -32,8 +58,13 @@ export type TodayButtonState =
   | { kind: 'dialogPending' }
   | { kind: 'resolving' }
   | { kind: 'done' }
-  | { kind: 'readyOut' }
-  | { kind: 'readyIn' };
+  /** `distanceM` present ONLY when the prescreen fix is fresh and inside
+   *  the fence — its absence is the no-fix fallback (the mockup's dimmed
+   *  row-5 posture, never the inviting ready face). */
+  | { kind: 'readyOut'; distanceM?: number }
+  | { kind: 'readyIn'; distanceM?: number }
+  | { kind: 'locked'; distanceM: number }
+  | { kind: 'lockedOut'; distanceM: number };
 
 export interface TodayModelInput {
   permission: AttendanceLocationPermission;
@@ -47,6 +78,47 @@ export interface TodayModelInput {
   /** Epoch ms when the rate-limit block lifts; null when not blocked. */
   rateLimitedUntil: number | null;
   now: number;
+  /** The prescreen's freshest fix + the anchored office (geofence rungs).
+   *  Either absent ⇒ never locked. */
+  fix?: PunchFixSample | null;
+  office?: PunchOffice | null;
+}
+
+/**
+ * The geofence prescreen: with a FRESH fix and a known radius, distance
+ * beyond the radius locks the punch (locked/lockedOut, by record state);
+ * every other combination — no fix, stale fix, no office, radiusless
+ * office — falls through unlocked. A lock is a CLIENT prescreen only: the
+ * press path never consults it, and the server still gates every punch.
+ */
+function geofenceLock(
+  input: TodayModelInput,
+): { locked: true; distanceM: number } | { locked: false } {
+  const fix = input.fix;
+  const office = input.office;
+  if (!fix || !office || office.radiusM == null) return { locked: false };
+  // A backward clock step would make a capturedAt in the future read as
+  // forever-fresh — the fail-safe direction is unlocked, like any stale fix.
+  if (input.now < fix.capturedAt) return { locked: false };
+  if (input.now - fix.capturedAt > PUNCH_FIX_FRESH_MS) return { locked: false };
+  const distanceM = haversineMetres(fix, office);
+  return distanceM > office.radiusM
+    ? { locked: true, distanceM }
+    : { locked: false };
+}
+
+/** The straight-line distance to the office when the prescreen fix is
+ *  fresh (status-card input); null when the fix is missing/stale or the
+ *  office/radius is unknown — exactly the cases that may never lock. */
+export function freshDistanceM(
+  fix: PunchFixSample | null | undefined,
+  office: PunchOffice | null | undefined,
+  now: number,
+): number | null {
+  if (!fix || !office || office.radiusM == null) return null;
+  if (now < fix.capturedAt) return null;
+  if (now - fix.capturedAt > PUNCH_FIX_FRESH_MS) return null;
+  return haversineMetres(fix, office);
 }
 
 export function deriveTodayButtonState(input: TodayModelInput): TodayButtonState {
@@ -72,13 +144,36 @@ export function deriveTodayButtonState(input: TodayModelInput): TodayButtonState
   if (input.dialogPending) return { kind: 'dialogPending' };
   if (input.resolving) return { kind: 'resolving' };
   if (input.record?.checkoutAt) return { kind: 'done' };
+  const geo = geofenceLock(input);
+  if (geo.locked) {
+    // Beyond the fence: with an open record the punch out is locked, with
+    // none the punch in is. The button renders non-interactive — the lock
+    // never reaches the press path (the server re-judges every press).
+    return input.record
+      ? { kind: 'lockedOut', distanceM: geo.distanceM }
+      : { kind: 'locked', distanceM: geo.distanceM };
+  }
   if (!input.factsKnown) {
     // Facts unknown (first load in flight or failed) — the button is not
     // interactive until the holiday gate COULD fire. Rendered as readyIn
     // but disabled via factsKnown by the caller.
-    return { kind: 'readyIn' };
+    return withDistance({ kind: 'readyIn' }, input);
   }
-  return input.record ? { kind: 'readyOut' } : { kind: 'readyIn' };
+  return input.record
+    ? withDistance({ kind: 'readyOut' }, input)
+    : withDistance({ kind: 'readyIn' }, input);
+}
+
+/** Attach the fresh in-fence distance to a ready posture when the prescreen
+ *  knows it — the button's ready-vs-fallback visual discriminator. Absent
+ *  keeps the field out of the object entirely, so exact-shape pins on the
+ *  plain rungs stay valid. */
+function withDistance(
+  state: { kind: 'readyIn' } | { kind: 'readyOut' },
+  input: TodayModelInput,
+): TodayButtonState {
+  const distanceM = freshDistanceM(input.fix, input.office, input.now);
+  return distanceM != null ? { ...state, distanceM } : state;
 }
 
 /** The PRD's rate window (16-1 D6) — the fallback when the Retry-After
@@ -216,6 +311,150 @@ export function needsHolidayConfirm(
 ): boolean {
   if (!today) return false;
   return today.isWeeklyOff || today.isHoliday;
+}
+
+// --- The punch status card (the approved mockup's four geofence states,
+// --- copy verbatim; every other posture carries its existing copy). ----
+
+export type PunchCardTone = 'done' | 'progress' | 'cancelled' | 'scheduled' | 'neutral';
+
+/** One body span. `strong` = bold in the card's own ink (names, times);
+ *  `danger` = bold red (distances and radii — the mockup's accent). */
+export interface PunchBodySegment {
+  text: string;
+  emphasis?: 'strong' | 'danger';
+}
+
+export interface PunchStatusCardModel {
+  tone: PunchCardTone;
+  title: string | null;
+  chip: string | null;
+  segments: PunchBodySegment[];
+  /** The flat reading a screen reader announces. */
+  announce: string;
+}
+
+/** Metres with the mockup's comma grouping ("28 m" / "1,357 m"). Grouping
+ *  is done by hand — a toLocaleString dependency on Hermes Intl config is
+ *  one more environment axis than a display string earns. */
+export function formatMetresGrouped(metres: number): string {
+  const rounded = Math.max(0, Math.round(metres));
+  const grouped = rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return `${grouped} m`;
+}
+
+const seg = (text: string, emphasis?: PunchBodySegment['emphasis']): PunchBodySegment =>
+  emphasis ? { text, emphasis } : { text };
+
+function card(
+  tone: PunchCardTone,
+  title: string | null,
+  chip: string | null,
+  segments: PunchBodySegment[],
+): PunchStatusCardModel {
+  return {
+    tone,
+    title,
+    chip,
+    segments,
+    announce: [title, ...segments.map(s => s.text)].filter(Boolean).join(' '),
+  };
+}
+
+/**
+ * The status card under the punch button, per posture. The four geofence
+ * states render the approved mockup copy verbatim; the blocked postures
+ * carry their existing remediation copy in the same visual language; the
+ * done posture renders NO card (the punch tiles are the done render).
+ *
+ * `checkinTimeText`/`elapsedText` are preformatted by the caller (wall-
+ * clock rendering is a view concern); `elapsedText` null degrades the
+ * shift-active body gracefully rather than lying with a placeholder.
+ */
+export function punchStatusCard(input: {
+  state: TodayButtonState;
+  fix: PunchFixSample | null | undefined;
+  office: PunchOffice | null | undefined;
+  now: number;
+  checkinTimeText: string | null;
+  elapsedText: string | null;
+}): PunchStatusCardModel | null {
+  const { state, fix, office, now } = input;
+  const distance = freshDistanceM(fix, office, now);
+  const officeName = office?.name ?? 'your office';
+  const inRadius = distance !== null && office != null && office.radiusM !== null;
+
+  switch (state.kind) {
+    case 'readyIn': {
+      if (!inRadius || distance === null || office?.radiusM == null) {
+        // No fresh fix (or no fence to judge against): today's fallback —
+        // the punch stays available, the card explains what's missing.
+        return card('neutral', 'Getting your location…', null, []);
+      }
+      return card('done', 'Within Office Geofence', 'READY TO PUNCH', [
+        seg('You are at '),
+        seg(officeName, 'strong'),
+        seg(' ('),
+        seg(formatMetresGrouped(distance), 'danger'),
+        seg(' away). Location verified via GPS.'),
+      ]);
+    }
+    case 'readyOut': {
+      if (!inRadius) {
+        return card('neutral', 'Getting your location…', null, []);
+      }
+      const elapsed = input.elapsedText;
+      return card('progress', 'Shift Active • In Office', 'READY TO PUNCH OUT', [
+        seg('Checked in at '),
+        seg(input.checkinTimeText ?? '—', 'strong'),
+        ...(elapsed ? [seg(' ('), seg(elapsed, 'danger'), seg(' elapsed)')] : []),
+        seg('. Ready to conclude your workday at '),
+        seg(officeName, 'strong'),
+        seg('.'),
+      ]);
+    }
+    case 'locked': {
+      return card('cancelled', 'Outside Office Geofence', 'PUNCH DISABLED', [
+        seg('You are '),
+        seg(formatMetresGrouped(state.distanceM), 'danger'),
+        seg(' from '),
+        seg(officeName, 'strong'),
+        seg(' branch. Move within '),
+        seg(formatMetresGrouped(office?.radiusM ?? 0), 'danger'),
+        seg(' to punch.'),
+      ]);
+    }
+    case 'lockedOut': {
+      return card('scheduled', 'Out of Bounds for Check-out', 'LOCKED', [
+        seg('You checked in at '),
+        seg(input.checkinTimeText ?? '—', 'strong'),
+        seg('. You are currently '),
+        seg(formatMetresGrouped(state.distanceM), 'danger'),
+        seg(' away. Move closer to punch out.'),
+      ]);
+    }
+    case 'offline':
+      return card('neutral', null, null, [seg(offlineMessage)]);
+    case 'permissionDenied':
+      return card('neutral', null, null, [seg(captureFailureMessage('permission'))]);
+    case 'preciseOff':
+      return card('neutral', null, null, [
+        seg('Turn on precise location to check in'),
+      ]);
+    case 'serviceOff':
+      return card('neutral', null, null, [seg(captureFailureMessage('unavailable'))]);
+    case 'rateLimited':
+      return card('neutral', null, null, [
+        seg('Too many attempts. '),
+        seg(`Try again in ${formatCountdown(state.remainingS)}`, 'strong'),
+      ]);
+    case 'resolving':
+      return card('neutral', 'Getting your location…', null, []);
+    default:
+      // dialogPending: a confirm dialog owns the moment — no card behind
+      // it. done: the tiles are the done render.
+      return null;
+  }
 }
 
 /**

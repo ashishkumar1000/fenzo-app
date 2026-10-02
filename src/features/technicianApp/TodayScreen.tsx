@@ -25,7 +25,7 @@ import { ActivityIndicator, RefreshControl, SectionList, StyleSheet, Text, View 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Bell, CalendarCheck } from 'lucide-react-native';
+import { Bell, CalendarCheck, Plus, RefreshCw } from 'lucide-react-native';
 import { Button, EmptyState, Eyebrow, IconButton, InlineError } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import { useNow } from '../../hooks';
@@ -33,6 +33,12 @@ import { firstName, useMyProfile } from '../profile';
 import { JobCard } from '../jobs/components/JobCard';
 import { loadUnreadCount, useNotifications } from '../notifications';
 import { bellBadgeLabel } from '../notifications/bellBadge';
+import {
+  refreshAttendanceAccessNow,
+  useAttendanceAccess,
+} from '../attendance/me/attendanceAccessStore';
+import { useAttendanceSummary } from '../attendance/me/useAttendanceSummary';
+import { PunchSection } from '../attendance/today/PunchSection';
 import type { ApiJob } from '../jobs/types';
 import { buildTodaySections } from './todaySections';
 import { loadToday, useTechnicianJobs } from './useTechnicianJobs';
@@ -46,6 +52,19 @@ export default function TodayScreen() {
   const { unreadCount } = useNotifications();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const navigation = useNavigation<NativeStackNavigationProp<TechnicianRootStackParamList>>();
+
+  // Story 20-3: the punch lives HERE now. The access store gates it (an
+  // employee without `active` sees nothing new on this tab — no header, no
+  // summary fetch, no location work); the summary hook is per-mount and
+  // min-gap throttled (its second mount on the Attendance tab is accepted).
+  const { access } = useAttendanceAccess();
+  const accessState = access?.attendanceAccess ?? null;
+  const punchEnabled = accessState === 'active';
+  const {
+    state: punchSummaryState,
+    refresh: refreshPunchSummary,
+    refreshNow: refreshPunchSummaryNow,
+  } = useAttendanceSummary(punchEnabled);
 
   // A failed refresh keeps its rows on screen behind a dismissible banner;
   // the dismissal is local (the store's error clears on the next attempt).
@@ -142,6 +161,20 @@ export default function TodayScreen() {
               {section.title}
             </Eyebrow>
           )}
+          // The punch rides ABOVE the job sections (the 20-3 AC) — as the
+          // list header it scrolls with the day, and its loading/error
+          // postures are the section's own.
+          ListHeaderComponent={
+            punchEnabled ? (
+              <View style={styles.punchWrap}>
+                <PunchSection
+                  summary={{ state: punchSummaryState, refresh: refreshPunchSummary }}
+                  refreshSummaryNow={refreshPunchSummaryNow}
+                  refreshAccessNow={refreshAttendanceAccessNow}
+                />
+              </View>
+            ) : undefined
+          }
           contentContainerStyle={[
             styles.listContent,
             sections.length === 0 && styles.listContentEmpty,
@@ -161,6 +194,20 @@ export default function TodayScreen() {
               icon={<CalendarCheck size={36} color={colors.primary} strokeWidth={1.5} />}
               title="No job assigned yet"
               description="Your owner hasn't assigned you any jobs for today. Check back soon."
+              // The 20-3 mockup's empty state: rounded-square medallion with
+              // the + badge, and the sync pill on the screen's own refresh
+              // path. Additive props only — every other screen's render is
+              // untouched.
+              medallionShape="square"
+              badge={
+                <View style={styles.medallionBadge}>
+                  <Plus size={14} color={colors.onPrimary} strokeWidth={2.6} />
+                </View>
+              }
+              ctaShape="pill"
+              ctaLabel="Tap to sync status"
+              ctaIcon={<RefreshCw size={16} color={colors.primary} strokeWidth={2.2} />}
+              onPressCta={() => void handleRefresh()}
             />
           }
         />
@@ -212,6 +259,23 @@ const styles = StyleSheet.create({
   // DS `Eyebrow` — this only positions it inside the list.
   sectionHeaderSpacing: {
     paddingVertical: spacing.s2,
+  },
+  // The punch block's breathing room between the header and the job list.
+  punchWrap: {
+    paddingTop: spacing.s2,
+    paddingBottom: spacing.s3,
+  },
+  // The empty-state medallion's corner badge (20-3 mockup): blue disc with
+  // a page-coloured ring so it reads as overlaid on the tinted chip.
+  medallionBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.primary,
+    borderWidth: 3,
+    borderColor: colors.surfacePage,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   listContent: {
     padding: spacing.s4,
