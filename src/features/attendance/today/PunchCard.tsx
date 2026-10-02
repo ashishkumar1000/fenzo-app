@@ -192,7 +192,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     paddingHorizontal: spacing.s3,
     paddingVertical: spacing.s2,
-    flex: 1,
+    // Grow to fill the row, but size from CONTENT and never shrink — the
+    // old flex:1 forced three coexisting pills (total + late + early can
+    // legally coexist) to ⅓ width each, clipping "Late by 25 min" mid-word.
+    // With a content basis they wrap to the next line instead.
+    flexGrow: 1,
+    flexShrink: 0,
+    flexBasis: 'auto',
   },
   pillIcon: {
     width: 24,
