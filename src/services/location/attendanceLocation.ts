@@ -42,6 +42,14 @@ export type AttendanceLocationFailure =
 
 /** The AD-20 request constants (spec 16-3): fresh, high-accuracy, 15 s. */
 const CAPTURE_TIMEOUT_MS = 15_000;
+/** The indoor fallback (user-directed, 2026-10-02): high accuracy holds out
+ *  for GNSS samples that never arrive inside offices — desks saw every
+ *  capture time out while Google Maps (which accepts WiFi-derived fixes)
+ *  located instantly. When the first attempt TIMES OUT — and only then —
+ *  one retry at balanced priority accepts the fix the provider can actually
+ *  produce. maximumAge stays 0 on both attempts: still a fresh computation,
+ *  and the server re-judges distance and staleness on every punch. */
+const RETRY_TIMEOUT_MS = 25_000;
 /** Server-side FIX_MAX_AGE_MS (16-1 constants) — mirrored for the local
  *  pre-reject so the employee sees "outdated location" instead of a
  *  generic server 422. */
@@ -83,8 +91,26 @@ export async function captureAttendanceLocation(): Promise<AttendanceLocationFix
       timeout: CAPTURE_TIMEOUT_MS,
     });
   } catch (err) {
-    console.error('[attendanceLocation] capture failed:', err);
-    throw classifyFailure(err);
+    // Only a TIMEOUT earns the balanced retry: permission and
+    // services-off failures are deterministic — the retry cannot succeed,
+    // and the remediation copy depends on the exact failure.
+    if (classifyFailure(err) !== 'timeout') {
+      console.error('[attendanceLocation] capture failed:', err);
+      throw classifyFailure(err);
+    }
+    try {
+      fix = await getCurrentPosition({
+        accuracy: { android: 'balanced', ios: 'best' },
+        // Loosened by design (user-directed): the retry may hand back a fix
+        // up to 15 s old — still inside the server's 30 s freshness gate,
+        // and fixAgeMs travels so the server is the one who judges.
+        maximumAge: 15_000,
+        timeout: RETRY_TIMEOUT_MS,
+      });
+    } catch (retryErr) {
+      console.error('[attendanceLocation] capture failed:', retryErr);
+      throw classifyFailure(retryErr);
+    }
   }
 
   const { latitude, longitude, accuracy } = fix.coords;
