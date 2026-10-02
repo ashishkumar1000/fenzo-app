@@ -267,6 +267,19 @@ describe('attendanceMeService.getSummary', () => {
     });
   });
 
+  it('a numeric officeRadius passes through; non-finite degrades to null (the prescreen input)', async () => {
+    get.mockResolvedValueOnce({ data: { officeRadius: 150 } });
+    expect((await attendanceMeService.getSummary()).officeRadius).toBe(150);
+
+    get.mockResolvedValueOnce({ data: { officeRadius: 0 } });
+    expect((await attendanceMeService.getSummary()).officeRadius).toBe(0);
+
+    for (const bad of [Number.NaN, Infinity, '150', null]) {
+      get.mockResolvedValueOnce({ data: { officeRadius: bad } });
+      expect((await attendanceMeService.getSummary()).officeRadius).toBeNull();
+    }
+  });
+
   it('propagates a failure unchanged', async () => {
     const err = { status: 500, code: 'SERVER_ERROR', message: 'boom', details: null };
     get.mockRejectedValueOnce(err);

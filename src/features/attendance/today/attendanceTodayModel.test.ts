@@ -3,10 +3,15 @@ import {
   deriveTodayButtonState,
   formatCountdown,
   formatCountdownWords,
+  formatMetresGrouped,
+  freshDistanceM,
   messageForApiError,
   needsHolidayConfirm,
   needsLeaveConfirm,
+  punchStatusCard,
+  PUNCH_FIX_FRESH_MS,
 } from './attendanceTodayModel';
+import { haversineMetres } from '../../../utils/distanceUtils';
 import type { AttendanceTodayFacts } from '../../../services/resources/attendanceMe';
 
 /**
@@ -384,5 +389,323 @@ describe('buildTodayTiles — the punch card\'s data (2026-10 tab redesign)', ()
     expect(
       buildTodayTiles({ ...closedRecord, workedMinutes: Number.NaN } as never, formatTime),
     ).toMatchObject({ workedText: null });
+  });
+});
+
+// --- 20-3: the geofence prescreen (client lock rungs + the status card) ---
+
+/** Office at (12, 77); the fix sits ~28.5 m north of it — inside a 150 m
+ *  fence but outside a 20 m one, and ~11.1 km from the far anchor. */
+const OFFICE = { latitude: 12.0, longitude: 77.0, radiusM: 150, name: 'Hero wala' };
+const FAR_OFFICE = { ...OFFICE, radiusM: 20 };
+const IN_FIX = { latitude: 12.000256, longitude: 77.0, capturedAt: 900_000 };
+const OUT_FIX = { latitude: 12.1, longitude: 77.0, capturedAt: 900_000 };
+
+describe('deriveTodayButtonState — the geofence rungs (20-3 prescreen)', () => {
+  it('a fresh fix beyond the radius LOCKS the punch-in (the client prescreen posture, distance carried)', () => {
+    expect(
+      deriveTodayButtonState({ ...base, fix: OUT_FIX, office: FAR_OFFICE }),
+    ).toEqual({
+      kind: 'locked',
+      distanceM: haversineMetres(OUT_FIX, FAR_OFFICE),
+    });
+  });
+
+  it('beyond the radius with an OPEN record locks the CHECK OUT instead', () => {
+    expect(
+      deriveTodayButtonState({
+        ...base,
+        record: openRecord,
+        fix: OUT_FIX,
+        office: OFFICE,
+      }),
+    ).toEqual({
+      kind: 'lockedOut',
+      distanceM: haversineMetres(OUT_FIX, OFFICE),
+    });
+  });
+
+  it('a fresh IN-fence fix carries the distance on the ready rungs (the ready-vs-fallback discriminator)', () => {
+    expect(
+      deriveTodayButtonState({ ...base, fix: IN_FIX, office: OFFICE }),
+    ).toEqual({
+      kind: 'readyIn',
+      distanceM: haversineMetres(IN_FIX, OFFICE),
+    });
+    expect(
+      deriveTodayButtonState({
+        ...base,
+        record: openRecord,
+        fix: IN_FIX,
+        office: OFFICE,
+      }),
+    ).toEqual({
+      kind: 'readyOut',
+      distanceM: haversineMetres(IN_FIX, OFFICE),
+    });
+  });
+
+  it.each([
+    ['no fix', { office: OFFICE }],
+    ['no office', { fix: OUT_FIX }],
+    ['radiusless office', { fix: OUT_FIX, office: { ...OFFICE, radiusM: null } }],
+  ] as const)('%s NEVER locks — the plain ready rung (the row-5 fallback)', (_name, input) => {
+    expect(deriveTodayButtonState({ ...base, ...input })).toEqual({ kind: 'readyIn' });
+    expect(
+      deriveTodayButtonState({ ...base, record: openRecord, ...input }),
+    ).toEqual({ kind: 'readyOut' });
+  });
+
+  it('the freshness lease is exactly 120 s — one millisecond past it fails OPEN', () => {
+    const boundary = { ...OUT_FIX, capturedAt: base.now - PUNCH_FIX_FRESH_MS };
+    expect(
+      deriveTodayButtonState({ ...base, fix: boundary, office: FAR_OFFICE }),
+    ).toEqual({
+      kind: 'locked',
+      distanceM: haversineMetres(boundary, FAR_OFFICE),
+    });
+    const expired = { ...OUT_FIX, capturedAt: base.now - PUNCH_FIX_FRESH_MS - 1 };
+    expect(
+      deriveTodayButtonState({ ...base, fix: expired, office: FAR_OFFICE }),
+    ).toEqual({ kind: 'readyIn' });
+  });
+
+  it('a backward clock step (fix timestamp in the future) fails open like any stale fix', () => {
+    const timeTraveled = { ...OUT_FIX, capturedAt: base.now + 60_000 };
+    expect(
+      deriveTodayButtonState({ ...base, fix: timeTraveled, office: FAR_OFFICE }),
+    ).toEqual({ kind: 'readyIn' });
+  });
+
+  it('the lock is a PRESREEN: it never masks the blocking postures above it, nor done below', () => {
+    expect(
+      deriveTodayButtonState({
+        ...base,
+        online: false,
+        fix: OUT_FIX,
+        office: FAR_OFFICE,
+      }),
+    ).toEqual({ kind: 'offline' });
+    expect(
+      deriveTodayButtonState({
+        ...base,
+        rateLimitedUntil: base.now + 60_000,
+        fix: OUT_FIX,
+        office: FAR_OFFICE,
+      }),
+    ).toEqual({ kind: 'rateLimited', remainingS: 60, action: 'in' });
+    expect(
+      deriveTodayButtonState({
+        ...base,
+        record: closedRecord,
+        fix: OUT_FIX,
+        office: FAR_OFFICE,
+      }),
+    ).toEqual({ kind: 'done' });
+  });
+});
+
+describe('freshDistanceM — the status card input', () => {
+  it('answers the straight-line distance only for a fresh fix + known radius', () => {
+    expect(freshDistanceM(IN_FIX, OFFICE, base.now)).toBe(
+      haversineMetres(IN_FIX, OFFICE),
+    );
+    expect(
+      freshDistanceM({ ...IN_FIX, capturedAt: 0 }, OFFICE, base.now),
+    ).toBeNull();
+    expect(freshDistanceM(null, OFFICE, base.now)).toBeNull();
+    expect(freshDistanceM(IN_FIX, null, base.now)).toBeNull();
+    expect(
+      freshDistanceM(IN_FIX, { ...OFFICE, radiusM: null }, base.now),
+    ).toBeNull();
+  });
+});
+
+describe('formatMetresGrouped — the mockup\'s comma-grouped metres', () => {
+  it('rounds to whole metres and groups thousands', () => {
+    expect(formatMetresGrouped(0)).toBe('0 m');
+    expect(formatMetresGrouped(28)).toBe('28 m');
+    expect(formatMetresGrouped(1357)).toBe('1,357 m');
+    expect(formatMetresGrouped(1355.4)).toBe('1,355 m');
+    expect(formatMetresGrouped(-3)).toBe('0 m');
+  });
+});
+
+describe('punchStatusCard — the approved mockup table, copy verbatim', () => {
+  const flat = (c: { segments: { text: string }[] }) =>
+    c.segments.map(s => s.text).join('');
+
+  it('readyIn in-fence → the green card (row 1)', () => {
+    const card = punchStatusCard({
+      state: { kind: 'readyIn', distanceM: 28 },
+      fix: IN_FIX,
+      office: OFFICE,
+      now: base.now,
+      checkinTimeText: null,
+      elapsedText: null,
+    });
+    expect(card).toMatchObject({
+      tone: 'done',
+      title: 'Within Office Geofence',
+      chip: 'READY TO PUNCH',
+    });
+    expect(flat(card!)).toBe(
+      `You are at Hero wala (${formatMetresGrouped(
+        haversineMetres(IN_FIX, OFFICE),
+      )} away). Location verified via GPS.`,
+    );
+  });
+
+  it('readyOut in-fence → the BLUE card with the elapsed span (row 2)', () => {
+    const card = punchStatusCard({
+      state: { kind: 'readyOut', distanceM: 28 },
+      fix: IN_FIX,
+      office: OFFICE,
+      now: base.now,
+      checkinTimeText: '9:02 AM',
+      elapsedText: '7 h 14 m',
+    });
+    expect(card).toMatchObject({
+      tone: 'progress',
+      title: 'Shift Active • In Office',
+      chip: 'READY TO PUNCH OUT',
+    });
+    expect(flat(card!)).toBe(
+      'Checked in at 9:02 AM (7 h 14 m elapsed). Ready to conclude your workday at Hero wala.',
+    );
+  });
+
+  it('readyOut in-fence with no elapsed yet degrades the span, never a placeholder', () => {
+    const card = punchStatusCard({
+      state: { kind: 'readyOut', distanceM: 28 },
+      fix: IN_FIX,
+      office: OFFICE,
+      now: base.now,
+      checkinTimeText: '9:02 AM',
+      elapsedText: null,
+    });
+    expect(flat(card!)).toBe(
+      'Checked in at 9:02 AM. Ready to conclude your workday at Hero wala.',
+    );
+  });
+
+  it('locked → the red card with the radius instruction (row 3)', () => {
+    const card = punchStatusCard({
+      state: { kind: 'locked', distanceM: 1357 },
+      fix: OUT_FIX,
+      office: OFFICE,
+      now: base.now,
+      checkinTimeText: null,
+      elapsedText: null,
+    });
+    expect(card).toMatchObject({
+      tone: 'cancelled',
+      title: 'Outside Office Geofence',
+      chip: 'PUNCH DISABLED',
+    });
+    expect(flat(card!)).toBe(
+      'You are 1,357 m from Hero wala branch. Move within 150 m to punch.',
+    );
+  });
+
+  it('lockedOut → the amber card addressed to the checked-in employee (row 4)', () => {
+    const card = punchStatusCard({
+      state: { kind: 'lockedOut', distanceM: 1357 },
+      fix: OUT_FIX,
+      office: OFFICE,
+      now: base.now,
+      checkinTimeText: '9:02 AM',
+      elapsedText: '3 h 53 m',
+    });
+    expect(card).toMatchObject({
+      tone: 'scheduled',
+      title: 'Out of Bounds for Check-out',
+      chip: 'LOCKED',
+    });
+    expect(flat(card!)).toBe(
+      'You checked in at 9:02 AM. You are currently 1,357 m away. Move closer to punch out.',
+    );
+  });
+
+  it('the row-5 postures carry the EXISTING remediation copy in the neutral card', () => {
+    const offline = punchStatusCard({
+      state: { kind: 'offline' },
+      fix: null,
+      office: null,
+      now: base.now,
+      checkinTimeText: null,
+      elapsedText: null,
+    });
+    expect(flat(offline!)).toBe(
+      "You're offline. Check-in needs a working connection.",
+    );
+    const rateLimited = punchStatusCard({
+      state: { kind: 'rateLimited', remainingS: 582, action: 'in' },
+      fix: null,
+      office: null,
+      now: base.now,
+      checkinTimeText: null,
+      elapsedText: null,
+    });
+    expect(flat(rateLimited!)).toBe('Too many attempts. Try again in 9:42');
+    const resolving = punchStatusCard({
+      state: { kind: 'resolving' },
+      fix: null,
+      office: null,
+      now: base.now,
+      checkinTimeText: null,
+      elapsedText: null,
+    });
+    expect(resolving).toMatchObject({ tone: 'neutral', title: 'Getting your location…' });
+  });
+
+  it('a ready posture WITHOUT a fresh fix is the getting-location card — never a green lie', () => {
+    expect(
+      punchStatusCard({
+        state: { kind: 'readyIn' },
+        fix: null,
+        office: OFFICE,
+        now: base.now,
+        checkinTimeText: null,
+        elapsedText: null,
+      }),
+    ).toMatchObject({ tone: 'neutral', title: 'Getting your location…' });
+  });
+
+  it('done and dialogPending render NO card', () => {
+    expect(
+      punchStatusCard({
+        state: { kind: 'done' },
+        fix: IN_FIX,
+        office: OFFICE,
+        now: base.now,
+        checkinTimeText: null,
+        elapsedText: null,
+      }),
+    ).toBeNull();
+    expect(
+      punchStatusCard({
+        state: { kind: 'dialogPending' },
+        fix: IN_FIX,
+        office: OFFICE,
+        now: base.now,
+        checkinTimeText: null,
+        elapsedText: null,
+      }),
+    ).toBeNull();
+  });
+
+  it('every card announces its title + flat body for screen readers', () => {
+    const card = punchStatusCard({
+      state: { kind: 'locked', distanceM: 1357 },
+      fix: OUT_FIX,
+      office: OFFICE,
+      now: base.now,
+      checkinTimeText: null,
+      elapsedText: null,
+    });
+    expect(card!.announce).toBe(
+      'Outside Office Geofence You are 1,357 m from Hero wala branch. Move within 150 m to punch.',
+    );
   });
 });

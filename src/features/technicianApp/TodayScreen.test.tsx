@@ -49,6 +49,38 @@ jest.mock('../notifications', () => ({
   useNotifications: () => ({ unreadCount: mockUnreadCount }),
 }));
 
+// Story 20-3: the punch hosting gate. The snapshot + summary hook are
+// swappable per test; PunchSection is stubbed to a marker so the header's
+// PRESENCE is assertable without mounting the whole punch pipeline (its
+// postures are PunchSection.test's scope).
+let mockAccessSnapshot: {
+  status: string;
+  access: { attendanceAccess: string } | null;
+} = { status: 'unknown', access: null };
+const mockRefreshAccessNow = jest.fn();
+jest.mock('../attendance/me/attendanceAccessStore', () => ({
+  useAttendanceAccess: () => mockAccessSnapshot,
+  refreshAttendanceAccessNow: (...args: unknown[]) => mockRefreshAccessNow(...args),
+  refreshAttendanceAccessOnFocus: jest.fn(),
+}));
+
+const mockSummaryHook = {
+  state: { summary: null, isLoading: false, error: null, isStale: false },
+  refresh: jest.fn(),
+  refreshNow: jest.fn(() => Promise.resolve()),
+};
+jest.mock('../attendance/me/useAttendanceSummary', () => ({
+  useAttendanceSummary: () => mockSummaryHook,
+}));
+
+jest.mock('../attendance/today/PunchSection', () => ({
+  PunchSection: () => {
+    const React = require('react');
+    const { Text } = require('react-native');
+    return React.createElement(Text, null, 'PUNCH-STUB');
+  },
+}));
+
 jest.mock('../../hooks', () => ({ useNow: () => 0 }));
 
 import TodayScreen from './TodayScreen';
@@ -124,4 +156,31 @@ it("the badge shows the unread count, capped at 99+ (the shared bell's own vocab
 it('an empty day still renders the empty state (the bell changes nothing else)', async () => {
   const renderer = await mountScreen();
   expect(renderer.root.findByType(EmptyState).props.title).toBe('No job assigned yet');
+});
+
+describe('the 20-3 punch hosting gate', () => {
+  it('access active → the punch section mounts ABOVE the job list; the summary hook is enabled', async () => {
+    mockAccessSnapshot = {
+      status: 'ready',
+      access: { attendanceAccess: 'active' },
+    };
+    const renderer = await mountScreen();
+    expect(renderedText(renderer)).toContain('PUNCH-STUB');
+    expect(mockSummaryHook.refresh).not.toHaveBeenCalled(); // focus loads ride the store, not the summary hook
+  });
+
+  it.each(['none', 'upcoming', 'history_only'] as const)(
+    'access %s → no punch section (nothing new for employees without active access)',
+    async (state) => {
+      mockAccessSnapshot = { status: 'ready', access: { attendanceAccess: state } };
+      const renderer = await mountScreen();
+      expect(renderedText(renderer)).not.toContain('PUNCH-STUB');
+    },
+  );
+
+  it('access unknown (fetch in flight/failed) → no punch section', async () => {
+    mockAccessSnapshot = { status: 'unknown', access: null };
+    const renderer = await mountScreen();
+    expect(renderedText(renderer)).not.toContain('PUNCH-STUB');
+  });
 });
