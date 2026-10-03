@@ -120,6 +120,22 @@ describe('remoteConfig refresh throttle', () => {
     await expect(refreshRemoteConfig(true)).resolves.toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it('a failed fetch does not suppress the next foreground retry', async () => {
+    fetchMock.mockRejectedValueOnce(new Error('offline'));
+
+    await expect(refreshRemoteConfig()).resolves.toBe(false);
+    await expect(refreshRemoteConfig()).resolves.toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('a non-OK response does not suppress the next foreground retry', async () => {
+    serveConfig({ maintenance_banner: 'x' }, false);
+
+    await expect(refreshRemoteConfig()).resolves.toBe(false);
+    await expect(refreshRemoteConfig()).resolves.toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('remoteConfig change listeners', () => {

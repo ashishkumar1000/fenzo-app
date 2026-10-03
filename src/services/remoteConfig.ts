@@ -125,6 +125,10 @@ export async function refreshRemoteConfig(force = false): Promise<boolean> {
   if (!force && nowMs - lastFetchStartedAtMs < MIN_REFRESH_INTERVAL_MS) {
     return false;
   }
+  // Stamp before attempting so concurrent callers share one attempt — but
+  // every failure path resets the stamp: a failed attempt must not suppress
+  // the next foreground retry for the whole interval (BMAD review P2), only
+  // a completed attempt holds the throttle.
   lastFetchStartedAtMs = nowMs;
 
   const controller = new AbortController();
@@ -134,10 +138,14 @@ export async function refreshRemoteConfig(force = false): Promise<boolean> {
       signal: controller.signal,
       headers: { Accept: 'application/json' },
     });
-    if (!response.ok) return false;
+    if (!response.ok) {
+      lastFetchStartedAtMs = 0;
+      return false;
+    }
     const body = (await response.json()) as { config?: unknown } | null;
     return apply(pickKnown(body?.config));
   } catch {
+    lastFetchStartedAtMs = 0;
     return false;
   } finally {
     clearTimeout(timer);

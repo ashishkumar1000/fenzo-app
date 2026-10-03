@@ -1,5 +1,5 @@
 import { Text, View, StyleSheet } from 'react-native';
-import { getVersion } from 'react-native-device-info';
+import { installedAppVersion } from '../../services/clientMetadata';
 import { colors, spacing, typography } from '../../theme';
 
 /**
@@ -15,7 +15,7 @@ export function ForcedUpdateScreen({ message }: { message: string }) {
       <Text style={[typography.heading, styles.title]}>Update required</Text>
       <Text style={[typography.body, styles.message]}>{message}</Text>
       <Text style={[typography.bodySm, styles.version]}>
-        {`Installed version: v${getVersion()}`}
+        {`Installed version: v${installedAppVersion()}`}
       </Text>
     </View>
   );

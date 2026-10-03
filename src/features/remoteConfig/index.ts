@@ -5,12 +5,12 @@
  * composes all three; screens never touch config directly.
  */
 import { useEffect, useState } from 'react';
-import { getVersion } from 'react-native-device-info';
 import {
   compareVersions,
   getRemoteConfig,
   onRemoteConfigChange,
 } from '../../services/remoteConfig';
+import { installedAppVersion } from '../../services/clientMetadata';
 import type { RemoteConfigValues } from '../../services/remoteConfig';
 
 export type { RemoteConfigValues } from '../../services/remoteConfig';
@@ -28,10 +28,10 @@ export function useRemoteConfig(): RemoteConfigValues {
 
 /**
  * True when the running app is older than the server's minimum — read from
- * the native build (kept in sync with package.json by scripts/sync-version.js).
+ * the native build (fallback: package.json) via clientMetadata.
  */
 export function isVersionUnsupported(minVersion: string): boolean {
-  return compareVersions(minVersion, getVersion()) > 0;
+  return compareVersions(minVersion, installedAppVersion()) > 0;
 }
 
 export { compareVersions } from '../../services/remoteConfig';

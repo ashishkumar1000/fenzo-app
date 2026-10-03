@@ -39,6 +39,14 @@ jest.mock('react-native-safe-area-context', () => {
 
 import App from '../src/App';
 import { apiClient } from '../src/services';
+
+// The App mount effect fires refreshRemoteConfig(); pin the network down so
+// the wiring test never depends on whether the jest env polyfills fetch, and
+// a raised prod min_supported_version can never flip this render into the
+// forced-update gate (BMAD review P3).
+(global as Record<string, unknown>).fetch = jest.fn(() =>
+  Promise.reject(new Error('no network in tests')),
+);
 import { AuthFlow } from '../src/features/auth';
 import { OnboardingScreen } from '../src/features/onboarding';
 import { setAuthToken } from '../src/services/authToken';
