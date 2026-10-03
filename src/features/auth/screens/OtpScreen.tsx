@@ -93,7 +93,7 @@ export function OtpScreen({
 
   return (
     <AuthScaffold step={2}>
-      <Text style={styles.eyebrow}>Step 2 of 3</Text>
+      <Text style={styles.eyebrow}>Step 2</Text>
       <Text style={styles.heading}>Enter the code</Text>
       <Text style={styles.sub}>
         Sent to <Text style={styles.phone}>{formatPhone(phone)}</Text>
@@ -123,8 +123,8 @@ export function OtpScreen({
             {resending
               ? 'Resending…'
               : canResend
-                ? 'Resend OTP'
-                : `Resend OTP in ${mmss(seconds)}`}
+                ? 'Resend code'
+                : `New code in ${mmss(seconds)}`}
           </Text>
         </Pressable>
 

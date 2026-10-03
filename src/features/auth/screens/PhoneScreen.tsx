@@ -56,8 +56,8 @@ export function PhoneScreen({
 
   return (
     <AuthScaffold step={1}>
-      <Text style={styles.eyebrow}>Step 1 of 3</Text>
-      <Text style={styles.heading}>Set up your account</Text>
+      <Text style={styles.eyebrow}>Step 1</Text>
+      <Text style={styles.heading}>Welcome to Fenzit</Text>
       <Text style={styles.sub}>
         We'll send a {OTP_LENGTH}-digit code to this number.
       </Text>
@@ -93,7 +93,7 @@ export function PhoneScreen({
         disabled={sending}
         onPress={handleSubmit}
         style={styles.cta}>
-        {sending ? 'Sending…' : 'Send OTP'}
+        {sending ? 'Sending…' : 'Send code'}
       </Button>
     </AuthScaffold>
   );

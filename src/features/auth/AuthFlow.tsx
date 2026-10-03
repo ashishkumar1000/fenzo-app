@@ -139,10 +139,8 @@ export default function AuthFlow({ onComplete }: Props) {
       const res = await authApi.verifyOtp({ otpSessionId, otpCode: code });
       setAuthToken(res.token);
 
-      if (res.user.tenantId === null) {
-        // New owner, first time through — company setup (step 3) is next.
-        setStep('profile');
-      } else {
+      const { tenantId } = res.user;
+      if (tenantId !== null) {
         // Already has a tenant (returning owner, or a technician assigned
         // one at invite time) — nothing left to set up.
         onComplete({
@@ -150,8 +148,23 @@ export default function AuthFlow({ onComplete }: Props) {
           profile,
           role: res.user.role,
           name: res.user.name,
-          tenantId: res.user.tenantId,
+          tenantId,
         });
+      } else if (res.user.role === 'technician') {
+        // Corrupt-data corner: a technician without a tenant can't set up a
+        // company (the backend 403s step 3), so never route them there —
+        // into the app instead, where the tenant-less token surfaces the
+        // real problem.
+        onComplete({
+          phone: `${DIAL_CODE}${phone}`,
+          profile,
+          role: res.user.role,
+          name: res.user.name,
+          tenantId: '',
+        });
+      } else {
+        // New owner, first time through — company setup (step 3) is next.
+        setStep('profile');
       }
     } catch (err) {
       const apiError = err as ApiError;

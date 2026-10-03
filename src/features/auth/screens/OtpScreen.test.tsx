@@ -2,7 +2,7 @@
  * OtpScreen's WAIT surfaces (Story 20-1 loading sweep): the resend link's
  * three postures and the verify CTA's loading —
  *
- *  - counting → "Resend OTP in {m:ss}", the link files nothing.
+ *  - counting → "New code in {m:ss}", the link files nothing.
  *  - expired  → the active link fires onResend WITH the done callback; the
  *    window restarts only when done fires (a slow POST can't eat the 45s).
  *  - resending → "Resending…" and the link files NOTHING even at zero —
@@ -112,11 +112,11 @@ describe('the resend link postures', () => {
   it('fresh mount: the window is fresh (0:45) and COUNTING — the link files nothing while it runs', () => {
     const onResend = jest.fn();
     const root = renderScreen({ onResend }).root;
-    expect(texts(root)).toContain('Resend OTP in 0:45');
+    expect(texts(root)).toContain('New code in 0:45');
     act(() => {
       jest.advanceTimersByTime(1000);
     });
-    expect(texts(root)).toContain('Resend OTP in 0:44');
+    expect(texts(root)).toContain('New code in 0:44');
     expect(onResend).not.toHaveBeenCalled();
   });
 
@@ -130,8 +130,8 @@ describe('the resend link postures', () => {
     act(() => {
       jest.advanceTimersByTime(45_000);
     });
-    expect(texts(root)).toContain('Resend OTP'); // active
-    expect(texts(root)).not.toContain('Resend OTP in 0:1');
+    expect(texts(root)).toContain('Resend code'); // active
+    expect(texts(root)).not.toContain('New code in 0:1');
     act(() => {
       resendLink(root).props.onPress();
     });
@@ -140,12 +140,12 @@ describe('the resend link postures', () => {
     act(() => {
       jest.advanceTimersByTime(5_000);
     });
-    expect(texts(root)).toContain('Resend OTP'); // still active, frozen
+    expect(texts(root)).toContain('Resend code'); // still active, frozen
     act(() => {
       done();
     });
     // Done fires → the window restarts fresh.
-    expect(texts(root)).toContain('Resend OTP in 0:45');
+    expect(texts(root)).toContain('New code in 0:45');
   });
 
   it('resending: the link reads "Resending…" and files NOTHING even at zero', () => {
@@ -163,11 +163,11 @@ describe('the resend link postures', () => {
 
   it('while resending the countdown neither RUNS (no ticking) nor restarts from a stale done', () => {
     const root = renderScreen({ resending: true }).root;
-    const before = texts(root).find((t) => t.startsWith('Resend OTP in'));
+    const before = texts(root).find((t) => t.startsWith('New code in'));
     act(() => {
       jest.advanceTimersByTime(45_000 + 10_000);
     });
-    const after = texts(root).find((t) => t.startsWith('Resend OTP in'));
+    const after = texts(root).find((t) => t.startsWith('New code in'));
     expect(after).toBe(before); // frozen for the POST's whole flight
   });
 });
