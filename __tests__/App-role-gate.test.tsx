@@ -22,6 +22,8 @@ jest.mock('../src/features/splash', () => ({ AnimatedBootSplash: () => null }));
 jest.mock('../src/services', () => ({
   runAllResets: jest.fn(),
   setOnUnauthorized: jest.fn(),
+  // App pulls server-driven config on mount + foreground (remoteConfig spec).
+  refreshRemoteConfig: jest.fn(),
 }));
 jest.mock('../src/navigation/RootNavigator', () => () => null);
 jest.mock('../src/navigation/TechnicianRootNavigator', () => () => null);

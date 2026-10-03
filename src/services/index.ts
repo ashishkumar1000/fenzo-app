@@ -29,6 +29,14 @@ export {
   userNotificationsTopic,
 } from './supabaseRealtime';
 export { storage } from './storage';
+export {
+  compareVersions,
+  getRemoteConfig,
+  onRemoteConfigChange,
+  refreshRemoteConfig,
+} from './remoteConfig';
+export type { RemoteConfigValues } from './remoteConfig';
+export { clientMetadataHeaders } from './clientMetadata';
 export { currentResetEpoch, registerReset, runAllResets } from './resetRegistry';
 export {
   emitAttendanceAccessRefresh,

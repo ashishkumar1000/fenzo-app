@@ -6,7 +6,11 @@
  */
 
 import { useEffect, useState } from 'react';
-import { StatusBar, useColorScheme } from 'react-native';
+import {
+  AppState,
+  StatusBar,
+  useColorScheme,
+} from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { AnimatedBootSplash } from './features/splash';
@@ -15,14 +19,36 @@ import TechnicianRootNavigator from './navigation/TechnicianRootNavigator';
 import { navigationRef } from './navigation/navigationRef';
 import { OnboardingScreen, useOnboarding } from './features/onboarding';
 import { AuthFlow, useAuth, expireSession } from './features/auth';
+import {
+  ForcedUpdateScreen,
+  MaintenanceBanner,
+  isVersionUnsupported,
+  useRemoteConfig,
+} from './features/remoteConfig';
 import { RealtimeBridge } from './features/notifications/RealtimeBridge';
-import { runAllResets, setOnUnauthorized } from './services';
+import { refreshRemoteConfig, runAllResets, setOnUnauthorized } from './services';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
   const [splashVisible, setSplashVisible] = useState(true);
   const { status: onboardingStatus, complete: completeOnboarding } = useOnboarding();
   const { status: authStatus, session, complete: completeAuth } = useAuth();
+  const config = useRemoteConfig();
+  const updateRequired = isVersionUnsupported(config.min_supported_version);
+
+  // Server-driven config (SPEC-server-driven-config): pull on start and on
+  // every foreground return (throttled inside the service — a cold start
+  // always fetches). The gate/banner below re-render through the
+  // useRemoteConfig change subscription, never via this effect.
+  useEffect(() => {
+    refreshRemoteConfig();
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') {
+        refreshRemoteConfig();
+      }
+    });
+    return () => subscription.remove();
+  }, []);
 
   // Global 401 handling (story 5.3): any authenticated request that comes
   // back 401 forces the user back to the login screen. Data stores reset
@@ -38,9 +64,13 @@ function App() {
     return () => setOnUnauthorized(null);
   }, []);
 
-  // First launch: onboarding tour → account setup → main app.
+  // First launch: onboarding tour → account setup → main app. The
+  // force-update gate dominates the whole chain — an app older than the
+  // server's minimum must not reach login or data, whatever its state.
   let content;
-  if (onboardingStatus !== 'done') {
+  if (updateRequired) {
+    content = <ForcedUpdateScreen message={config.force_update_message} />;
+  } else if (onboardingStatus !== 'done') {
     content = <OnboardingScreen onDone={completeOnboarding} />;
   } else if (authStatus !== 'done') {
     content = (
@@ -84,6 +114,8 @@ function App() {
   return (
     <SafeAreaProvider>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+
+      {!updateRequired && <MaintenanceBanner text={config.maintenance_banner} />}
 
       {content}
 

@@ -6,14 +6,17 @@
  * `ApiService` (see ApiService.ts) so you get typed CRUD methods for free.
  *
  * Responsibilities (and nothing else — see apiError.ts for error shaping):
- *   1. Base URL + timeout, sourced from `src/config`.
- *   2. Request interceptors — three of them, registered below in this order:
+ *   1. Base URL + timeout, sourced from `src/config` (the timeout itself is
+ *      server-driven at request time — see remoteConfig.ts).
+ *   2. Request interceptors — four of them, registered below in this order:
  *      observability headers (a fresh `X-Correlation-ID` per request and a
  *      stable per-launch `X-Session-ID` — fenzit-be echoes them and puts both
  *      on every log line, so a reported issue can be traced to the exact
- *      request and the app sitting), the bearer token (if one is stored), and
- *      the abort deadline. None of them reads another's headers, so runtime
- *      order (axios runs request interceptors LIFO) is not load-bearing.
+ *      request and the app sitting), client metadata (X-App-* build/platform
+ *      headers for server-side logging and config targeting), the bearer
+ *      token (if one is stored), and the abort deadline. None of them reads
+ *      another's headers, so runtime order (axios runs request interceptors
+ *      LIFO) is not load-bearing.
  *   3. Abort deadline per request (below) — see the section comment.
  *   4. Response interceptor — hands every failure to `toApiError` so callers
  *      always receive the same `ApiError` shape, regardless of whether the
@@ -32,6 +35,8 @@ import axios from 'axios';
 import type { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { API_BASE_URL, API_TIMEOUT } from '../../config';
 import { clearAuthToken, getAuthToken } from '../authToken';
+import { clientMetadataHeaders } from '../clientMetadata';
+import { getRemoteConfig } from '../remoteConfig';
 import { generateIdempotencyKey } from '../../utils/idempotency';
 import { DEADLINE_ABORTED, toApiError } from './apiError';
 
@@ -96,6 +101,17 @@ apiClient.interceptors.request.use(config => {
   return config;
 });
 
+// --- Request interceptor: client metadata (X-App-*) -------------------------
+// Every request identifies the app build/platform/OS/device (see
+// clientMetadata.ts) — fenzit-be logs the set on each access-log line and
+// uses it to target server-driven config by client attributes. Additive
+// only: the server never requires these headers.
+apiClient.interceptors.request.use(config => {
+  config.headers = config.headers ?? {};
+  Object.assign(config.headers, clientMetadataHeaders());
+  return config;
+});
+
 // --- Request interceptor: attach auth token --------------------------------
 apiClient.interceptors.request.use(config => {
   const token = getAuthToken();
@@ -115,9 +131,27 @@ apiClient.interceptors.request.use(config => {
 // the Edit job sheet stayed locked on "Saving…"). An AbortController deadline
 // is honored natively by the RN network stack, so every request gets one,
 // combined with any caller-supplied signal (either source aborting cancels).
+//
+// The deadline tracks the server-driven `api_timeout_ms` (clamped to a sane
+// range) so ops can retune it without an app release; before the first
+// config read (and whenever the server value is malformed) it stays at the
+// shipped API_TIMEOUT.
 const requestTimers = new WeakMap<InternalAxiosRequestConfig, ReturnType<typeof setTimeout>>();
 
+const MIN_TIMEOUT_MS = 5_000;
+const MAX_TIMEOUT_MS = 120_000;
+
+function effectiveTimeoutMs(): number {
+  const configured = getRemoteConfig().api_timeout_ms;
+  if (typeof configured !== 'number' || !Number.isFinite(configured)) {
+    return API_TIMEOUT;
+  }
+  return Math.min(Math.max(configured, MIN_TIMEOUT_MS), MAX_TIMEOUT_MS);
+}
+
 apiClient.interceptors.request.use(config => {
+  const timeoutMs = effectiveTimeoutMs();
+  config.timeout = timeoutMs;
   const controller = new AbortController();
   const timer = setTimeout(() => {
     // Stamp the config BEFORE aborting: the rejection surfaces cancel-shaped
@@ -132,7 +166,7 @@ apiClient.interceptors.request.use(config => {
     // entry must not outlive its fired timer.
     requestTimers.delete(config);
     controller.abort();
-  }, API_TIMEOUT);
+  }, timeoutMs);
   requestTimers.set(config, timer);
 
   const callerSignal = config.signal;

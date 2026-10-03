@@ -34,6 +34,7 @@
     "react": "19.2.3",
     "react-native": "^0.87.1",
     "react-native-bootsplash": "^7.3.3",
+    "react-native-device-info": "^15.0.2",
     "react-native-image-picker": "^8.2.1",
     "react-native-image-viewing": "0.2.2",
     "react-native-maps": "1.29.8",

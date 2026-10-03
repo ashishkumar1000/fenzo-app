@@ -137,6 +137,18 @@ jest.mock('react-native-maps', () => {
   };
 });
 
+// react-native-device-info is a native TurboModule — jest cannot load it.
+// The app only reads static build/device facts (version/build/model) for
+// the X-App-* metadata headers and the remote-config gate; pin values that
+// match the shipped defaults (v1.0.0) so no gate/banner triggers under
+// default mocks. Suites that need a different story override locally.
+jest.mock('react-native-device-info', () => ({
+  __esModule: true,
+  getVersion: jest.fn(() => '1.0.0'),
+  getBuildNumber: jest.fn(() => '1'),
+  getModel: jest.fn(() => 'Pixel 6'),
+}));
+
 // Pin the test timezone: the screens format dates with toLocaleDateString
 // ('en-IN', …) on UTC timestamps, which shifts a day in behind-UTC timezones
 // — assertions like "12 Aug 2026" must not depend on the host TZ. IST is the
