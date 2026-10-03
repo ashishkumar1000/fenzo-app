@@ -184,7 +184,7 @@ export default function MoreScreen({ navigation }: Props) {
           icon={<FileText size={20} color={colors.status.progress.solid} strokeWidth={1.5} />}
           iconBg={colors.status.progress.bg}
           title="Reports"
-          subtitle="Job reports (PDF)"
+          subtitle="Job & attendance reports (PDF)"
           onPress={() => navigation.navigate('Reports')}
         />
 
