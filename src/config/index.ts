@@ -24,8 +24,16 @@ export const API_HOST = 'https://api.fenzit.com';
 export const API_VERSION_PREFIX = '/api/v1';
 export const API_BASE_URL = `${API_HOST}${API_VERSION_PREFIX}`;
 
-/** Default request timeout, in milliseconds. */
-export const API_TIMEOUT = 15000;
+/**
+ * Default request timeout, in milliseconds.
+ *
+ * 30s: the heaviest reads (attendance Today/Monthly on the Oregon↔Mumbai
+ * path) run 6–9s server-side, and a Render free-tier cold start can add
+ * ~50s ahead of them — 15s turned those into spurious error cards. This is
+ * a guard against hung connections, not a performance number; shrink it
+ * once the backend stops paying the cross-region round-trip tax.
+ */
+export const API_TIMEOUT = 30000;
 
 /**
  * Supabase project coordinates (Story 3.3 — Realtime as a refetch hint).
