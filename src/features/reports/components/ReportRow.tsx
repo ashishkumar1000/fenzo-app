@@ -18,8 +18,9 @@ import {
   failedReportCopy,
   formatRangeLabel,
   formatRequestedAt,
+  reportTypeLabel,
+  scopeLabel,
   statusBadge,
-  technicianScopeLabel,
 } from '../reportModel';
 
 type Props = {
@@ -45,12 +46,12 @@ export function ReportRow({ item, isOpening, isRetrying, onPress, onRetry }: Pro
       <View style={styles.topRow}>
         <View style={styles.titleWrap}>
           <Text style={styles.title} numberOfLines={1}>
-            Technician job report
+            {reportTypeLabel(item.reportType)}
           </Text>
           <Text style={styles.meta} numberOfLines={1}>
             {formatRangeLabel(item.range.startDate, item.range.endDate)}
             {' · '}
-            {technicianScopeLabel(item.technicianCount)}
+            {scopeLabel(item)}
           </Text>
         </View>
         <Badge status={badge.status} size="sm">

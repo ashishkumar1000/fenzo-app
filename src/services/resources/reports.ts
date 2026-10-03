@@ -29,8 +29,11 @@ import type { Paginated } from '../api/pagination';
 /** The request state machine (fenzit-be `report-status.enum.ts`). */
 export type ReportRequestStatus = 'queued' | 'generating' | 'ready' | 'failed';
 
-/** The only report type in the registry today (story 12-5). */
+/** Report types in the registry (fenzit-be `report-registry.ts`). */
 export const TECHNICIAN_JOB_ACTIVITY_TYPE = 'technician_job_activity';
+/** Epic 21: the attendance report — offered only when the tenant's
+ *  attendance module is enabled (the BE re-checks on submit). */
+export const ATTENDANCE_REPORT_TYPE = 'attendance_report';
 
 /** Body for `POST /reports`. `reportType` defaults to the first registered
  *  report server-side; `technicianIds` absent/empty = all technicians. */
@@ -40,6 +43,8 @@ export interface CreateReportRequest {
   startDate: string;
   endDate: string;
   technicianIds?: string[] | null;
+  /** Office-scoped reports (attendance) only; absent/empty = all offices. */
+  officeIds?: string[] | null;
 }
 
 /** `POST /reports` response — the row is queued, not generated. */
@@ -56,6 +61,8 @@ export interface ReportListItem {
   range: { startDate: string; endDate: string };
   /** Selected technician count; null = all technicians of the company. */
   technicianCount: number | null;
+  /** Selected office count (office-scoped reports); null otherwise. */
+  officeCount: number | null;
   status: ReportRequestStatus;
   /** Present only on a `failed` row — stable engine error code. */
   errorCode: string | null;
@@ -67,7 +74,12 @@ export interface ReportListItem {
 export interface ReportStatusResponse {
   id: string;
   reportType: string;
-  params: { startDate: string; endDate: string; technicianIds: string[] };
+  params: {
+    startDate: string;
+    endDate: string;
+    technicianIds: string[];
+    officeIds: string[];
+  };
   status: ReportRequestStatus;
   createdAt: string;
   completedAt: string | null;

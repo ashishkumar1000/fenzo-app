@@ -16,6 +16,7 @@ import {
 } from 'react-test-renderer';
 import { Button, MultiSelect } from '../../../components/ui';
 import { ReportRequestForm } from './ReportRequestForm';
+import { availableReportTypes } from '../reportModel';
 import type { Technician } from '../../technicians/types';
 
 const makeTechnician = (id: string, name: string): Technician => ({
@@ -33,10 +34,17 @@ const technicians = [
 ];
 
 const validProps = {
+  reportType: 'technician_job_activity',
+  availableTypes: availableReportTypes(false),
   startDate: '2026-09-01',
   endDate: '2026-09-20',
   selectedTechnicianIds: [] as string[],
   technicians,
+  selectedOfficeIds: [] as string[],
+  offices: [] as { id: string; name: string }[],
+  selectedEmployeeIds: [] as string[],
+  employees: [] as { id: string; name: string }[],
+  isLoadingScope: false,
   todayIso: '2026-09-20',
   isSubmitting: false,
   submitError: null as string | null,
@@ -46,6 +54,8 @@ type Change = {
   startDate?: string;
   endDate?: string;
   technicianIds?: string[];
+  officeIds?: string[];
+  employeeIds?: string[];
 };
 
 /** Renders the form; returns the tree plus the captured change calls. */
@@ -54,6 +64,7 @@ function renderForm(props: Partial<typeof validProps> = {}) {
   const onChange = (next: Change) => {
     changes.push(next);
   };
+  const onSelectType = jest.fn();
   let onSubmit = jest.fn();
   let renderer!: ReactTestRenderer;
   let root!: ReactTestInstance;
@@ -63,6 +74,7 @@ function renderForm(props: Partial<typeof validProps> = {}) {
         {...validProps}
         {...props}
         onChange={onChange}
+        onSelectType={onSelectType}
         onSubmit={onSubmit}
       />,
     );
@@ -171,6 +183,49 @@ describe('the technician MultiSelect', () => {
     expect(root.findAllByType(MultiSelect)[0].props.options).toEqual([
       { value: 't-1', label: 'Ravi' },
       { value: 't-2', label: 'Sana' },
+    ]);
+  });
+});
+describe('type select + attendance pickers (21-4)', () => {
+  it('renders Technicians for the job report (the default single-type view)', () => {
+    const { root } = renderForm();
+    const multi = root.findAllByType(MultiSelect);
+    expect(multi).toHaveLength(1);
+    expect(multi[0].props.label).toBe('Technicians');
+  });
+
+  it('swaps to Offices + Employees pickers for the attendance report', () => {
+    const { root } = renderForm({
+      reportType: 'attendance_report',
+      availableTypes: availableReportTypes(true),
+      offices: [{ id: 'o1', name: 'HQ' }],
+      employees: [{ id: 'e1', name: 'Asha' }],
+    });
+    const multi = root.findAllByType(MultiSelect);
+    expect(multi).toHaveLength(2);
+    expect(multi[0].props.label).toBe('Offices');
+    expect(multi[0].props.options).toEqual([{ value: 'o1', label: 'HQ' }]);
+    expect(multi[1].props.label).toBe('Employees');
+    expect(multi[1].props.options).toEqual([{ value: 'e1', label: 'Asha' }]);
+  });
+
+  it('office/employee selections ride the change callbacks (empty = all)', () => {
+    const { root, changes } = renderForm({
+      reportType: 'attendance_report',
+      availableTypes: availableReportTypes(true),
+      offices: [{ id: 'o1', name: 'HQ' }],
+      employees: [{ id: 'e1', name: 'Asha' }],
+    });
+    const multi = root.findAllByType(MultiSelect);
+    act(() => {
+      multi[0].props.onChange(['o1']);
+    });
+    act(() => {
+      multi[1].props.onChange(['e1']);
+    });
+    expect(changes).toEqual([
+      { officeIds: ['o1'] },
+      { employeeIds: ['e1'] },
     ]);
   });
 });

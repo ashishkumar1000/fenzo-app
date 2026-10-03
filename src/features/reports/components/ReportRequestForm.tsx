@@ -1,30 +1,51 @@
 /**
  * ReportRequestForm — the "new report" card of the Reports screen (story
- * 12-6): range pickers, technician MultiSelect and the Generate button.
+ * 12-6; the type row became the anticipated registry-fed Select in Epic
+ * 21): type Select, range pickers and the people/offices pickers for the
+ * selected type, plus the Generate button.
  *
- - Only `technician_job_activity` exists in the registry today, so the type
- * renders as a fixed labelled row rather than a Select — when a second type
- * lands, this becomes a Select fed by the report registry's labels.
- *
- * Generate is gated by `validateRange` (start ≤ end, ≤ 92 days inclusive,
- * nothing in the future on the IST clock); an empty technician selection
- * means "all technicians", which is what the placeholder says.
+ * The technician job report scopes by TECHNICIANS; the attendance report
+ * scopes by OFFICES and/or EMPLOYEES (an empty employee selection = every
+ * employee enrolled in attendance — the roster the screen hands in is
+ * already enrolled-only). Generate is gated by `validateRange` exactly as
+ * before (start ≤ end, ≤ 92 days inclusive, nothing future on the IST
+ * clock); the backend re-validates every id.
  */
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { FileText } from 'lucide-react-native';
-import { Button, InlineError, MultiSelect } from '../../../components/ui';
+import {
+  Button,
+  InlineError,
+  MultiSelect,
+  Select,
+} from '../../../components/ui';
 import { colors, spacing, typography } from '../../../theme';
 import type { Technician } from '../../technicians/types';
-import { MAX_RANGE_DAYS, validateRange } from '../reportModel';
+import {
+  MAX_RANGE_DAYS,
+  validateRange,
+  type ReportTypeOption,
+} from '../reportModel';
 import { ReportRangeFields } from './ReportRangeFields';
 
 type Props = {
+  /** The selected registry type (availableTypes[0] until changed). */
+  reportType: string;
+  /** The types this owner may pick (attendance included only when gated in). */
+  availableTypes: ReportTypeOption[];
   startDate: string;
   endDate: string;
+  /** Job-report scope: the owner's whole technician roster. */
   selectedTechnicianIds: string[];
-  /** The owner's roster — the MultiSelect's options. */
   technicians: Technician[];
+  /** Attendance scope: live offices + the ENROLLED roster (picker options). */
+  selectedOfficeIds: string[];
+  offices: { id: string; name: string }[];
+  selectedEmployeeIds: string[];
+  employees: { id: string; name: string }[];
+  /** True while the offices/enrolments reads for the attendance pickers load. */
+  isLoadingScope: boolean;
   todayIso: string;
   isSubmitting: boolean;
   /** Failure of the last submit, already mapped to friendly copy. */
@@ -33,24 +54,47 @@ type Props = {
     startDate?: string;
     endDate?: string;
     technicianIds?: string[];
+    officeIds?: string[];
+    employeeIds?: string[];
   }) => void;
+  onSelectType: (reportType: string) => void;
   onSubmit: () => void;
 };
 
 export function ReportRequestForm({
+  reportType,
+  availableTypes,
   startDate,
   endDate,
   selectedTechnicianIds,
   technicians,
+  selectedOfficeIds,
+  offices,
+  selectedEmployeeIds,
+  employees,
+  isLoadingScope,
   todayIso,
   isSubmitting,
   submitError,
   onChange,
+  onSelectType,
   onSubmit,
 }: Props) {
-  const options = useMemo(
+  const selectedType =
+    availableTypes.find(t => t.type === reportType) ?? availableTypes[0];
+  const isAttendance = selectedType?.requiresAttendance === true;
+
+  const technicianOptions = useMemo(
     () => technicians.map(t => ({ value: t.id, label: t.name })),
     [technicians],
+  );
+  const employeeOptions = useMemo(
+    () => employees.map(e => ({ value: e.id, label: e.name })),
+    [employees],
+  );
+  const officeOptions = useMemo(
+    () => offices.map(o => ({ value: o.id, label: o.name })),
+    [offices],
   );
 
   // The same gate the backend runs (DTO-level failures would 400 anyway) —
@@ -60,15 +104,20 @@ export function ReportRequestForm({
 
   return (
     <View style={styles.card}>
+      <Select
+        label="Report type"
+        value={selectedType?.type}
+        onChange={onSelectType}
+        options={availableTypes.map(t => ({ value: t.type, label: t.label }))}
+        disabled={availableTypes.length < 2}
+      />
       <View style={styles.typeRow}>
         <View style={styles.typeIcon}>
           <FileText size={18} color={colors.primary} strokeWidth={2} />
         </View>
         <View style={styles.typeInfo}>
-          <Text style={styles.typeTitle}>Technician job report</Text>
-          <Text style={styles.typeSubtitle}>
-            Jobs, timing and proofs for your team
-          </Text>
+          <Text style={styles.typeTitle}>{selectedType?.label}</Text>
+          <Text style={styles.typeSubtitle}>{selectedType?.subtitle}</Text>
         </View>
       </View>
 
@@ -79,14 +128,39 @@ export function ReportRequestForm({
         onChange={onChange}
       />
 
-      <MultiSelect
-        label="Technicians"
-        value={selectedTechnicianIds}
-        onChange={ids => onChange({ technicianIds: ids })}
-        options={options}
-        placeholder="All technicians"
-        helper={`Leave empty to include everyone · up to ${MAX_RANGE_DAYS}-day range`}
-      />
+      {isAttendance ? (
+        <>
+          <MultiSelect
+            label="Offices"
+            value={selectedOfficeIds}
+            onChange={ids => onChange({ officeIds: ids })}
+            options={officeOptions}
+            placeholder="All offices"
+            helper="Leave empty to include every office"
+          />
+          <MultiSelect
+            label="Employees"
+            value={selectedEmployeeIds}
+            onChange={ids => onChange({ employeeIds: ids })}
+            options={employeeOptions}
+            placeholder="All employees"
+            helper={
+              isLoadingScope
+                ? 'Loading your team…'
+                : 'Enrolled employees · leave empty to include everyone'
+            }
+          />
+        </>
+      ) : (
+        <MultiSelect
+          label="Technicians"
+          value={selectedTechnicianIds}
+          onChange={ids => onChange({ technicianIds: ids })}
+          options={technicianOptions}
+          placeholder="All technicians"
+          helper={`Leave empty to include everyone · up to ${MAX_RANGE_DAYS}-day range`}
+        />
+      )}
 
       {submitError ? <InlineError message={submitError} /> : null}
 

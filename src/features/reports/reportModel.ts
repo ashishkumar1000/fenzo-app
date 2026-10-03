@@ -10,6 +10,56 @@
  * no DST — same technique as `utils/istDate.ts`).
  */
 import type { ReportRequestStatus } from '../../services';
+import {
+  ATTENDANCE_REPORT_TYPE,
+  TECHNICIAN_JOB_ACTIVITY_TYPE,
+} from '../../services/resources/reports';
+
+/**
+ * The report-type catalog (Epic 21) — the FE mirror of the registry's
+ * LABELS. `requiresAttendance` types render only when the owner profile's
+ * `attendance.attendanceEnabled` mirror is true (the BE re-checks on
+ * submit with ATTENDANCE_NOT_ENABLED — this gate is the UX arm).
+ */
+export interface ReportTypeOption {
+  type: string;
+  /** Sentence-case label — also the history row's title. */
+  label: string;
+  /** One-line what's-inside subtitle under the Select. */
+  subtitle: string;
+  requiresAttendance: boolean;
+}
+
+export const REPORT_TYPES: ReportTypeOption[] = [
+  {
+    type: TECHNICIAN_JOB_ACTIVITY_TYPE,
+    label: 'Technician job report',
+    subtitle: 'Jobs, timing and proofs for your team',
+    requiresAttendance: false,
+  },
+  {
+    type: ATTENDANCE_REPORT_TYPE,
+    label: 'Attendance report',
+    subtitle: 'Presence, late marks and hours for your offices',
+    requiresAttendance: true,
+  },
+];
+
+/** The types the owner may pick right now, in registry order. */
+export function availableReportTypes(
+  attendanceEnabled: boolean | undefined,
+): ReportTypeOption[] {
+  return REPORT_TYPES.filter(
+    (t) => !t.requiresAttendance || attendanceEnabled === true,
+  );
+}
+
+/** The history row's title for any registered type. */
+export function reportTypeLabel(reportType: string): string {
+  return (
+    REPORT_TYPES.find((t) => t.type === reportType)?.label ?? reportType
+  );
+}
 
 /** The PRD's range cap — inclusive of both ends (BE enforces the same). */
 export const MAX_RANGE_DAYS = 92;
@@ -146,4 +196,35 @@ export function formatRequestedAt(iso: string): string {
 export function technicianScopeLabel(technicianCount: number | null): string {
   if (technicianCount === null) return 'All technicians';
   return technicianCount === 1 ? '1 technician' : `${technicianCount} technicians`;
+}
+
+/** The list row's scope subtitle for an office-scoped report. */
+export function attendanceScopeLabel(
+  officeCount: number | null,
+  technicianCount: number | null,
+): string {
+  const offices =
+    officeCount === null
+      ? 'All offices'
+      : officeCount === 1
+        ? '1 office'
+        : `${officeCount} offices`;
+  const employees =
+    technicianCount === null
+      ? 'all employees'
+      : technicianCount === 1
+        ? '1 employee'
+        : `${technicianCount} employees`;
+  return `${offices} · ${employees}`;
+}
+
+/** The scope subtitle for any report type's history row. */
+export function scopeLabel(item: {
+  reportType: string;
+  technicianCount: number | null;
+  officeCount: number | null;
+}): string {
+  return item.reportType === ATTENDANCE_REPORT_TYPE
+    ? attendanceScopeLabel(item.officeCount, item.technicianCount)
+    : technicianScopeLabel(item.technicianCount);
 }

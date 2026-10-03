@@ -15,6 +15,9 @@ import {
   rangeDays,
   statusBadge,
   technicianScopeLabel,
+  availableReportTypes,
+  reportTypeLabel,
+  scopeLabel,
   todayIst,
   validateRange,
 } from './reportModel';
@@ -221,5 +224,71 @@ describe('technicianScopeLabel', () => {
   it('uses the plural for more than one', () => {
     expect(technicianScopeLabel(3)).toBe('3 technicians');
     expect(technicianScopeLabel(12)).toBe('12 technicians');
+  });
+});
+describe('availableReportTypes (21-4) — the attendance gate', () => {
+  it('offers only the job report while the module flag is absent or false', () => {
+    expect(availableReportTypes(undefined).map(t => t.type)).toEqual([
+      'technician_job_activity',
+    ]);
+    expect(availableReportTypes(false).map(t => t.type)).toEqual([
+      'technician_job_activity',
+    ]);
+  });
+
+  it('offers both types, registry order first, once attendance is enabled', () => {
+    expect(availableReportTypes(true).map(t => t.type)).toEqual([
+      'technician_job_activity',
+      'attendance_report',
+    ]);
+  });
+});
+
+describe('reportTypeLabel (21-4) — history row titles', () => {
+  it('maps both registered types to their sentence-case labels', () => {
+    expect(reportTypeLabel('technician_job_activity')).toBe(
+      'Technician job report',
+    );
+    expect(reportTypeLabel('attendance_report')).toBe('Attendance report');
+  });
+
+  it('falls back to the raw type for an unknown value (never a blank row)', () => {
+    expect(reportTypeLabel('future_type')).toBe('future_type');
+  });
+});
+
+describe('scopeLabel (21-4) — the per-type row subtitle', () => {
+  it('job rows keep the technician scope line', () => {
+    expect(
+      scopeLabel({
+        reportType: 'technician_job_activity',
+        technicianCount: 3,
+        officeCount: null,
+      }),
+    ).toBe('3 technicians');
+  });
+
+  it('attendance rows read offices × employees, with the all-arms spelled out', () => {
+    expect(
+      scopeLabel({
+        reportType: 'attendance_report',
+        technicianCount: null,
+        officeCount: null,
+      }),
+    ).toBe('All offices · all employees');
+    expect(
+      scopeLabel({
+        reportType: 'attendance_report',
+        technicianCount: 24,
+        officeCount: 2,
+      }),
+    ).toBe('2 offices · 24 employees');
+    expect(
+      scopeLabel({
+        reportType: 'attendance_report',
+        technicianCount: 1,
+        officeCount: 1,
+      }),
+    ).toBe('1 office · 1 employee');
   });
 });

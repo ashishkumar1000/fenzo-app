@@ -22,6 +22,7 @@ const makeRow = (overrides: Partial<ReportListItem> = {}): ReportListItem => ({
   reportType: 'technician_job_activity',
   range: { startDate: '2026-09-01', endDate: '2026-09-07' },
   technicianCount: null,
+  officeCount: null,
   status: 'ready',
   errorCode: null,
   createdAt: '2026-09-08T06:05:00.000Z',
@@ -189,5 +190,41 @@ describe('a failed row', () => {
     const { root } = renderRow(makeRow({ status: 'failed' }));
     expect(root.findAllByType(ActivityIndicator)).toHaveLength(0);
     expect(retryButton(root)?.props.disabled).toBe(false);
+  });
+});
+describe('attendance rows (21-4) — per-type title and scope', () => {
+  it('titles an attendance row from its registry label and reads the office scope', () => {
+    const { root } = renderRow(
+      makeRow({
+        reportType: 'attendance_report',
+        technicianCount: 24,
+        officeCount: 2,
+      }),
+    );
+    const title = root
+      .findAllByType(Text)
+      .map(t => flatten(t.props.children))
+      .find(s => s === 'Attendance report');
+    expect(title).toBe('Attendance report');
+    const meta = root
+      .findAllByType(Text)
+      .map(t => flatten(t.props.children))
+      .find(s => s?.includes('2 offices · 24 employees'));
+    expect(meta).toBeDefined();
+  });
+
+  it('an attendance row with the all-arms reads "All offices · all employees"', () => {
+    const { root } = renderRow(
+      makeRow({
+        reportType: 'attendance_report',
+        technicianCount: null,
+        officeCount: null,
+      }),
+    );
+    const meta = root
+      .findAllByType(Text)
+      .map(t => flatten(t.props.children))
+      .find(s => s?.includes('All offices · all employees'));
+    expect(meta).toBeDefined();
   });
 });

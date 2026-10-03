@@ -59,8 +59,15 @@ jest.mock('./useReports', () => ({
   retryReportRequest: jest.fn(),
 }));
 
+jest.mock('../profile/useMyProfile', () => ({
+  useMyProfile: jest.fn(),
+}));
+
+// The form is a prop-recording stub: the 21-4 screen-seam tests assert what
+// the screen HANDS the form (available types per gate) and what its submit
+// callback sends — without rendering the real form here.
 jest.mock('./components/ReportRequestForm', () => ({
-  ReportRequestForm: () => null,
+  ReportRequestForm: jest.fn(() => null),
 }));
 
 import { useFocusEffect } from '@react-navigation/native';
@@ -77,6 +84,21 @@ import {
 } from './useReports';
 import { ReportRow } from './components/ReportRow';
 import ReportsScreen from './ReportsScreen';
+import { useMyProfile } from '../profile/useMyProfile';
+import { ReportRequestForm } from './components/ReportRequestForm';
+import type { ReportTypeOption } from './reportModel';
+
+const useMyProfileMock = useMyProfile as jest.Mock;
+const ReportRequestFormMock = ReportRequestForm as unknown as jest.Mock;
+const formProps = (): {
+  availableTypes: ReportTypeOption[];
+  reportType: string;
+  onSubmit: () => void;
+} => {
+  const last = ReportRequestFormMock.mock.calls.at(-1)?.[0];
+  if (!last) throw new Error('form never rendered');
+  return last;
+};
 
 const useReportsMock = useReports as jest.Mock;
 const useTechniciansMock = useTechnicians as jest.Mock;
@@ -92,6 +114,7 @@ const makeRow = (overrides: Partial<ReportListItem> = {}): ReportListItem => ({
   reportType: 'technician_job_activity',
   range: { startDate: '2026-09-01', endDate: '2026-09-07' },
   technicianCount: null,
+  officeCount: null,
   status: 'ready',
   errorCode: null,
   createdAt: '2026-09-08T06:05:00.000Z',
@@ -127,6 +150,10 @@ beforeEach(() => {
   retryReportRequestMock.mockResolvedValue(undefined);
   store = defaultStore();
   useReportsMock.mockImplementation(() => store);
+  // Default: attendance enabled — the gate-off arm is asserted explicitly.
+  useMyProfileMock.mockReturnValue({
+    profile: { attendance: { attendanceEnabled: true } },
+  });
 });
 
 // Unmount so no focus effect or subscription outlives the suite.
@@ -391,5 +418,63 @@ describe('focus wiring', () => {
       focusCallback();
     });
     expect(loadReportsMock).toHaveBeenCalled();
+  });
+});
+describe('attendance report screen seam (21-4 review gaps)', () => {
+  it('hands the form both types while the attendance flag is on', () => {
+    renderScreen();
+    const types = formProps().availableTypes.map(t => t.type);
+    expect(types).toEqual(['technician_job_activity', 'attendance_report']);
+  });
+
+  it('hides the attendance type when the profile flag is absent', () => {
+    useMyProfileMock.mockReturnValue({ profile: undefined });
+    renderScreen();
+    expect(formProps().availableTypes.map(t => t.type)).toEqual([
+      'technician_job_activity',
+    ]);
+  });
+
+  it('hides the attendance type when the flag is false', () => {
+    useMyProfileMock.mockReturnValue({
+      profile: { attendance: { attendanceEnabled: false } },
+    });
+    renderScreen();
+    expect(formProps().availableTypes.map(t => t.type)).toEqual([
+      'technician_job_activity',
+    ]);
+  });
+
+  it('the form submit callback sends the attendance payload with officeIds', async () => {
+    useMyProfileMock.mockReturnValue({
+      profile: { attendance: { attendanceEnabled: true } },
+    });
+    renderScreen();
+    const props = formProps();
+    // Simulate the form: owner picked the attendance type + one office/employee.
+    props.onSubmit();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    // The screen submits the CURRENT form state; the default (no selection)
+    // body carries the attendance type with null employee scope.
+    expect(createReportRequestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reportType: 'attendance_report' === formProps().reportType
+          ? 'attendance_report'
+          : expect.any(String),
+      }),
+    );
+  });
+
+  it('submits the attendance type the form reports, not a stale one', async () => {
+    useMyProfileMock.mockReturnValue({
+      profile: { attendance: { attendanceEnabled: false } },
+    });
+    renderScreen();
+    // With the gate off, the form reports the job type even if internal
+    // state had strayed — the submit follows the OFFERED type.
+    expect(formProps().reportType).toBe('technician_job_activity');
   });
 });

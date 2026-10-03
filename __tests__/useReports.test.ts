@@ -53,6 +53,7 @@ const makeRow = (overrides: Partial<ReportListItem> = {}): ReportListItem => ({
   reportType: 'technician_job_activity',
   range: { startDate: '2026-09-01', endDate: '2026-09-07' },
   technicianCount: null,
+  officeCount: null,
   status: 'ready',
   errorCode: null,
   createdAt: '2026-09-08T06:05:00.000Z',

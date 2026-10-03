@@ -17,7 +17,7 @@
  * Owner-only by construction: the route lives in the owner's
  * RootNavigator tree (App.tsx's role gate renders it for owners only).
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -35,11 +35,16 @@ import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button, EmptyState, IconButton, InlineError, Skeleton } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
-import { reportService, TECHNICIAN_JOB_ACTIVITY_TYPE } from '../../services';
+import { reportService } from '../../services';
 import type { ReportListItem } from '../../services';
+import { ATTENDANCE_REPORT_TYPE, TECHNICIAN_JOB_ACTIVITY_TYPE } from '../../services/resources/reports';
+import { officesService } from '../../services/resources/offices';
+import { enrolmentsService } from '../../services/resources/enrolments';
 import { openUrl } from '../../utils/linking';
 import type { RootStackParamList, MainTabParamList } from '../../navigation/types';
 import { useTechnicians } from '../technicians';
+import { useMyProfile } from '../profile/useMyProfile';
+import { availableReportTypes } from './reportModel';
 import { createReportRequest, loadReports, retryReportRequest, useReports } from './useReports';
 import { failedReportCopy, todayIst } from './reportModel';
 import { ReportRequestForm } from './components/ReportRequestForm';
@@ -76,12 +81,75 @@ export default function ReportsScreen({ navigation }: Props) {
     loadMore,
   } = useReports();
   const { technicians } = useTechnicians();
+  // The attendance report renders only when the tenant module flag is on
+  // (the same /users/me mirror that gates the Home attendance tile; the
+  // backend re-checks with ATTENDANCE_NOT_ENABLED either way).
+  const { profile } = useMyProfile();
+  const attendanceEnabled = profile?.attendance?.attendanceEnabled === true;
+  const availableTypes = useMemo(
+    () => availableReportTypes(attendanceEnabled),
+    [attendanceEnabled],
+  );
+  // The form falls back to the first offered type when the selection is
+  // not offered anymore (the gate flipped off mid-session) — the SUBMIT
+  // must follow the same fallback, or it would send a type the form is
+  // not showing, with stale office/employee selections.
+  const [rawReportType, setRawReportType] = useState<string>(
+    TECHNICIAN_JOB_ACTIVITY_TYPE,
+  );
+  const reportType =
+    availableTypes.find(t => t.type === rawReportType)?.type ??
+    availableTypes[0].type;
 
   const initialRange = useMemo(defaultRange, []);
   const [startDate, setStartDate] = useState(initialRange.startDate);
   const [endDate, setEndDate] = useState(initialRange.endDate);
   const [technicianIds, setTechnicianIds] = useState<string[]>([]);
+  const [officeIds, setOfficeIds] = useState<string[]>([]);
+  const [employeeIds, setEmployeeIds] = useState<string[]>([]);
   const todayIso = useMemo(() => todayIst(), []);
+
+  // Attendance picker options — loaded lazily, once, when the type is first
+  // selected. Offices come from the offices list; employees from the
+  // enrolments roster, already filtered to ENROLLED people (the picker's
+  // "All employees" placeholder means enrolled, never the whole roster).
+  const [officeOptions, setOfficeOptions] = useState<{ id: string; name: string }[]>([]);
+  const [employeeOptions, setEmployeeOptions] = useState<{ id: string; name: string }[]>([]);
+  const [isLoadingScope, setIsLoadingScope] = useState(false);
+  const scopeLoadedRef = useRef(false);
+  useEffect(() => {
+    if (reportType !== ATTENDANCE_REPORT_TYPE || scopeLoadedRef.current) {
+      return;
+    }
+    scopeLoadedRef.current = true;
+    setIsLoadingScope(true);
+    void (async () => {
+      try {
+        const [offices, roster] = await Promise.all([
+          officesService.list(false),
+          enrolmentsService.list(),
+        ]);
+        setOfficeOptions(
+          offices
+            .filter(o => o.archivedAt === null)
+            .map(o => ({ id: o.id, name: o.name })),
+        );
+        setEmployeeOptions(
+          roster
+            .filter(r => r.attendanceStartDate !== null)
+            .map(r => ({ id: r.employeeId, name: r.employeeName })),
+        );
+        setIsLoadingScope(false);
+      } catch {
+        // Un-latch: re-selecting the type retries the load — a one-off
+        // failure must not leave the pickers empty until a remount.
+        scopeLoadedRef.current = false;
+        setIsLoadingScope(false);
+        setOfficeOptions([]);
+        setEmployeeOptions([]);
+      }
+    })();
+  }, [reportType]);
 
   // Tap-to-open state: which row is opening (badge → "Opening…") and the
   // failure of the last open attempt (banner above the list).
@@ -127,11 +195,17 @@ export default function ReportsScreen({ navigation }: Props) {
   );
 
   const handleSubmit = useCallback(() => {
+    const isAttendance = reportType === ATTENDANCE_REPORT_TYPE;
     void createReportRequest({
-      reportType: TECHNICIAN_JOB_ACTIVITY_TYPE,
+      reportType,
       startDate,
       endDate,
-      technicianIds: technicianIds.length > 0 ? technicianIds : null,
+      technicianIds: (isAttendance ? employeeIds : technicianIds).length > 0
+        ? isAttendance
+          ? employeeIds
+          : technicianIds
+        : null,
+      officeIds: isAttendance && officeIds.length > 0 ? officeIds : undefined,
     })
       .then(() => {
         // Reset form and show success toast after submit per AC 3
@@ -139,13 +213,15 @@ export default function ReportsScreen({ navigation }: Props) {
         setStartDate(range.startDate);
         setEndDate(range.endDate);
         setTechnicianIds([]);
+        setEmployeeIds([]);
+        setOfficeIds([]);
         setShowSuccess(true);
       })
       .catch(() => {
         // The store holds `submitError` for the form's banner; nothing else to
         // do here — the row the submit would have created simply isn't there.
       });
-  }, [startDate, endDate, technicianIds]);
+  }, [reportType, startDate, endDate, technicianIds, employeeIds, officeIds]);
 
   const handleOpen = useCallback(
     async (item: ReportListItem) => {
@@ -188,6 +264,38 @@ export default function ReportsScreen({ navigation }: Props) {
     });
   }, []);
 
+  // One form element for both render branches (skeleton + main) — the
+  // props are identical, so the type Select / pickers stay in sync.
+  const form = (
+    <ReportRequestForm
+      reportType={reportType}
+      availableTypes={availableTypes}
+      startDate={startDate}
+      endDate={endDate}
+      selectedTechnicianIds={technicianIds}
+      technicians={technicians}
+      selectedOfficeIds={officeIds}
+      offices={officeOptions}
+      selectedEmployeeIds={employeeIds}
+      employees={employeeOptions}
+      isLoadingScope={isLoadingScope}
+      todayIso={todayIso}
+      isSubmitting={isSubmitting}
+      submitError={submitError}
+      onChange={next => {
+        if (next.startDate !== undefined) setStartDate(next.startDate);
+        if (next.endDate !== undefined) setEndDate(next.endDate);
+        if (next.technicianIds !== undefined) {
+          setTechnicianIds(next.technicianIds);
+        }
+        if (next.officeIds !== undefined) setOfficeIds(next.officeIds);
+        if (next.employeeIds !== undefined) setEmployeeIds(next.employeeIds);
+      }}
+      onSelectType={setRawReportType}
+      onSubmit={handleSubmit}
+    />
+  );
+
   // A failed load with nothing to show replaces the empty state entirely —
   // "no reports yet" would be a lie when the request just failed. The
   // `reports.length === 0` conjunct (not `!hasLoaded`): the store sets
@@ -218,23 +326,7 @@ export default function ReportsScreen({ navigation }: Props) {
         <ScrollView
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}>
-          <ReportRequestForm
-            startDate={startDate}
-            endDate={endDate}
-            selectedTechnicianIds={technicianIds}
-            technicians={technicians}
-            todayIso={todayIso}
-            isSubmitting={isSubmitting}
-            submitError={submitError}
-            onChange={next => {
-              if (next.startDate !== undefined) setStartDate(next.startDate);
-              if (next.endDate !== undefined) setEndDate(next.endDate);
-              if (next.technicianIds !== undefined) {
-                setTechnicianIds(next.technicianIds);
-              }
-            }}
-            onSubmit={handleSubmit}
-          />
+          {form}
           <Text style={styles.historyTitle}>History</Text>
           {/* Story 19-4 D2 — UX-DR5: the report-local skeleton became the
               shared DS `Skeleton`; identical output. */}
@@ -261,23 +353,7 @@ export default function ReportsScreen({ navigation }: Props) {
               onRefresh={() => void onRefresh()}
             />
           }>
-          <ReportRequestForm
-            startDate={startDate}
-            endDate={endDate}
-            selectedTechnicianIds={technicianIds}
-            technicians={technicians}
-            todayIso={todayIso}
-            isSubmitting={isSubmitting}
-            submitError={submitError}
-            onChange={next => {
-              if (next.startDate !== undefined) setStartDate(next.startDate);
-              if (next.endDate !== undefined) setEndDate(next.endDate);
-              if (next.technicianIds !== undefined) {
-                setTechnicianIds(next.technicianIds);
-              }
-            }}
-            onSubmit={handleSubmit}
-          />
+          {form}
 
           {showSuccess ? (
             <View style={[styles.successBanner]}>
