@@ -20,7 +20,7 @@ function render(critical?: boolean, count = 2) {
       <FlagStrip
         icon={null}
         label="Fake location attempt"
-        detail="GPS spoofing blocked on 2 days."
+        detail="A fake-location app was used on 2 days."
         count={count}
         chip={CHIP}
         critical={critical}
@@ -75,7 +75,7 @@ describe('FlagStrip', () => {
   it('shows the title, the one-line detail, and the count badge', () => {
     const shown = textContents(render(false, 3).renderer);
     expect(shown).toContain('Fake location attempt');
-    expect(shown).toContain('GPS spoofing blocked on 2 days.');
+    expect(shown).toContain('A fake-location app was used on 2 days.');
     expect(shown).toContain('3');
   });
 });

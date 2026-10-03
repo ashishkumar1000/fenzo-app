@@ -108,7 +108,7 @@ export async function remediateAttendanceLocation(
         {
           title: 'Location Permission',
           message:
-            'Allow Fenzo to access your precise location to verify your attendance check-in.',
+            'Allow Fenzit to access your precise location to verify your attendance check-in.',
           buttonPositive: 'Allow',
           buttonNegative: 'Cancel',
         },

@@ -202,7 +202,7 @@ describe('AttendanceDashboardScreen — loading postures', () => {
       await flush();
     });
     const shown = texts(renderer);
-    expect(shown).toContain('Tracked');
+    expect(shown).toContain('On attendance');
     expect(shown).toContain('Checked in');
     // The stats arrived with the SAME fetch — never a second round-trip.
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -227,10 +227,10 @@ describe('AttendanceDashboardScreen — loading postures', () => {
     const { renderer } = renderScreen();
     await fireFocus();
     const shown = texts(renderer);
-    hasA11yLabel(renderer, 'Tracked: 5', true);
+    hasA11yLabel(renderer, 'On attendance: 5', true);
     hasA11yLabel(renderer, 'Checked in: 2', true);
     hasA11yLabel(renderer, 'Not checked in: 1', true);
-    hasA11yLabel(renderer, 'Short day: 1', true);
+    hasA11yLabel(renderer, 'Short hours: 1', true);
     hasA11yLabel(renderer, 'Late: 0', true);
     hasA11yLabel(renderer, 'On leave: 1', true);
     // The share derives from the counts themselves (2 of 5 → 40%).
@@ -267,9 +267,9 @@ describe('AttendanceDashboardScreen — loading postures', () => {
     const { renderer } = renderScreen();
     await fireFocus();
     const shown = texts(renderer);
-    expect(shown).toContain('No one is tracked today');
+    expect(shown).toContain('No one is on attendance today');
     expect(shown).toContain("Add employees to attendance to see today's summary here.");
-    hasA11yLabel(renderer, 'Tracked: 0', false);
+    hasA11yLabel(renderer, 'On attendance: 0', false);
     expect(shown).not.toContain('40% workforce present today');
   });
 });
@@ -295,7 +295,7 @@ describe('AttendanceDashboardScreen — flag strips', () => {
     fetchMock.mockResolvedValueOnce(envelope());
     const { renderer } = renderScreen();
     await fireFocus();
-    expect(texts(renderer)).not.toContain('Checkout missing');
+    expect(texts(renderer)).not.toContain('Check-out missing');
     expect(texts(renderer)).not.toContain('Fake location attempt');
   });
 
@@ -304,14 +304,14 @@ describe('AttendanceDashboardScreen — flag strips', () => {
     const { renderer } = renderScreen();
     await fireFocus();
     const shown = texts(renderer);
-    expect(shown).toContain('Checkout missing');
+    expect(shown).toContain('Check-out missing');
     expect(shown).toContain('No check-out recorded for 2 past days.');
     expect(shown).toContain('Fake location attempt');
     expect(shown).toContain('CRITICAL');
 
     // Tap the checkout-missing strip → the sheet carries that kind.
     act(() => {
-      findButton(renderer, 'Checkout missing, 2 days').props.onPress();
+      findButton(renderer, 'Check-out missing, 2 days').props.onPress();
     });
     const sheet = renderer.root.findAllByType(FlagListSheet as never)[0];
     expect(sheet.props.visible).toBe(true);
@@ -346,7 +346,7 @@ describe('AttendanceDashboardScreen — flag strips', () => {
     const { renderer, navigation } = renderScreen();
     await fireFocus();
     act(() => {
-      findButton(renderer, 'Checkout missing, 2 days').props.onPress();
+      findButton(renderer, 'Check-out missing, 2 days').props.onPress();
     });
     const sheet = renderer.root.findAllByType(FlagListSheet as never)[0];
     expect(sheet.props.visible).toBe(true);
@@ -380,7 +380,7 @@ describe('AttendanceDashboardScreen — flag strips', () => {
     const { renderer } = renderScreen();
     await fireFocus();
     act(() => {
-      findButton(renderer, 'Checkout missing, 2 days').props.onPress();
+      findButton(renderer, 'Check-out missing, 2 days').props.onPress();
     });
     // The CLOSED press set (sorted-equal, the same discipline as the
     // tiles pin) plus the two strips and the two sheet rows — nothing
@@ -395,7 +395,7 @@ describe('AttendanceDashboardScreen — flag strips', () => {
       'Andheri',
       `Arya, ${flagRowDetail(flags.checkoutMissing[0])}`,
       'Ben, Tuesday, 15 September 2026',
-      'Checkout missing, 2 days',
+      'Check-out missing, 2 days',
       'Close',
       'Close',
       'Fake location attempt, 1 day',
@@ -413,8 +413,8 @@ describe('AttendanceDashboardScreen — flag strips', () => {
     );
     const { renderer } = renderScreen();
     await fireFocus();
-    expect(texts(renderer)).toContain('No one is tracked today');
-    expect(texts(renderer)).toContain('Checkout missing');
+    expect(texts(renderer)).toContain('No one is on attendance today');
+    expect(texts(renderer)).toContain('Check-out missing');
   });
 });
 
@@ -429,7 +429,7 @@ describe('AttendanceDashboardScreen — office filter', () => {
     fetchMock.mockResolvedValueOnce(envelope());
     const { renderer } = renderScreen();
     await fireFocus();
-    expect(texts(renderer)).toContain('3 Sites');
+    expect(texts(renderer)).toContain('3 offices');
   });
 
   it('Apply commits the pick → refetch WITH the officeId + the selector shows the name', async () => {
@@ -464,7 +464,7 @@ describe('AttendanceDashboardScreen — office filter', () => {
     expect(texts(renderer)).toContain('Hero wala');
     // Filtered: the sites pill hides (an all-office aggregate is not the
     // answer to the office's question).
-    expect(texts(renderer)).not.toContain('3 Sites');
+    expect(texts(renderer)).not.toContain('3 offices');
   });
 
   it('Reset commits null from a filtered state → refetch bare + the pill returns', async () => {
@@ -500,7 +500,7 @@ describe('AttendanceDashboardScreen — office filter', () => {
     });
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls[2][0]).toBeUndefined();
-    expect(texts(renderer)).toContain('3 Sites');
+    expect(texts(renderer)).toContain('3 offices');
   });
 
   it("Apply's PICK refetch runs under the card shimmer — the previous office's numbers never sit under the picked name (20-2)", async () => {
@@ -531,7 +531,7 @@ describe('AttendanceDashboardScreen — office filter', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1][0]).toBe('o1');
     expect(texts(renderer)).toContain('Hero wala');
-    hasA11yLabel(renderer, 'Tracked: 5', false);
+    hasA11yLabel(renderer, 'On attendance: 5', false);
     const shimmerRows = renderer.root.findAllByType(Skeleton as never).length;
     expect(shimmerRows).toBeGreaterThanOrEqual(1);
 
@@ -545,8 +545,8 @@ describe('AttendanceDashboardScreen — office filter', () => {
       );
       await flush();
     });
-    hasA11yLabel(renderer, 'Tracked: 3', true);
-    hasA11yLabel(renderer, 'Tracked: 5', false);
+    hasA11yLabel(renderer, 'On attendance: 3', true);
+    hasA11yLabel(renderer, 'On attendance: 5', false);
     expect(
       renderer.root.findAllByType(OfficeFilterSheet as never)[0].props.visible,
     ).toBe(false);
@@ -600,7 +600,7 @@ describe('AttendanceDashboardScreen — refetch discipline', () => {
     await fireFocus();
 
     const shown = texts(renderer);
-    hasA11yLabel(renderer, 'Tracked: 5', true); // last-good render intact
+    hasA11yLabel(renderer, 'On attendance: 5', true); // last-good render intact
     expect(shown).toContain(LOAD_ERROR_COPY);
     expect(retries(renderer)).toHaveLength(1);
   });
@@ -639,7 +639,7 @@ describe('AttendanceDashboardScreen — refetch discipline', () => {
       await flush();
     });
     // Content replaced by the shimmer (the helper asserts internally).
-    hasA11yLabel(renderer, 'Tracked: 5', false);
+    hasA11yLabel(renderer, 'On attendance: 5', false);
     const shimmerRows = renderer.root.findAllByType(Skeleton as never).length;
     expect(shimmerRows).toBeGreaterThanOrEqual(1);
 
@@ -648,12 +648,12 @@ describe('AttendanceDashboardScreen — refetch discipline', () => {
       resolveRefetch(envelope());
       await flush();
     });
-    hasA11yLabel(renderer, 'Tracked: 5', true);
+    hasA11yLabel(renderer, 'On attendance: 5', true);
 
     // A FOCUS refetch is silent — no shimmer flash on refocus.
     fetchMock.mockResolvedValueOnce(envelope());
     await fireFocus();
-    hasA11yLabel(renderer, 'Tracked: 5', true); // still the cards, not shimmer
+    hasA11yLabel(renderer, 'On attendance: 5', true); // still the cards, not shimmer
   });
 
   it('the Refresh control shows the pull on every in-flight fetch (not just first load)', async () => {
@@ -695,7 +695,7 @@ describe('AttendanceDashboardScreen — refetch discipline', () => {
     await fireFocus();
     const shown = texts(renderer);
     expect(shown).toContain(LOAD_ERROR_COPY);
-    hasA11yLabel(renderer, 'Tracked: 5', false);
+    hasA11yLabel(renderer, 'On attendance: 5', false);
 
     // Retry succeeds → the tiles render.
     fetchMock.mockResolvedValueOnce(envelope());
@@ -703,7 +703,7 @@ describe('AttendanceDashboardScreen — refetch discipline', () => {
       retries(renderer)[0]();
       await flush();
     });
-    hasA11yLabel(renderer, 'Tracked: 5', true);
+    hasA11yLabel(renderer, 'On attendance: 5', true);
     expect(texts(renderer)).not.toContain(LOAD_ERROR_COPY);
   });
 });
@@ -737,7 +737,7 @@ describe('AttendanceDashboardScreen — AppState-active refetch (19-4)', () => {
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
     // Still the settled cards afterwards.
-    hasA11yLabel(renderer, 'Tracked: 5', true);
+    hasA11yLabel(renderer, 'On attendance: 5', true);
   });
 
   it('ignores foregrounding while NOT focused (deep in the stack)', async () => {

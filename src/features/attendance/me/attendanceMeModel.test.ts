@@ -208,7 +208,7 @@ describe('buildPolicyRows (the summary card\'s policy rows with chips)', () => {
     expect(buildPolicyRows(summary())).toEqual([
       { key: 'office', label: 'Office', value: 'HQ', chip: 'Assigned branch' },
       { key: 'timings', label: 'Timings', value: '9:30 AM – 6:00 PM', chip: '8h 30m shift' },
-      { key: 'cutOff', label: 'Late cut-off', value: 'Late after 9:45 AM', chip: '15m grace' },
+      { key: 'cutOff', label: 'Late cut-off', value: 'Late after 9:45 AM', chip: '15 min grace' },
       { key: 'weekly', label: 'Weekly offs', value: 'Sat, Sun', chip: '2 days off' },
     ]);
   });

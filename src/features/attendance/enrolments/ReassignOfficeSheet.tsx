@@ -137,10 +137,10 @@ export function ReassignOfficeSheet({
           })}
 
           <View style={styles.dateField}>
-            <Text style={styles.dateLabel}>Effective from</Text>
+            <Text style={styles.dateLabel}>Starting</Text>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Effective from: ${formatLongDate(effectiveFrom)}, tap to change`}
+              accessibilityLabel={`Starting: ${formatLongDate(effectiveFrom)}, tap to change`}
               onPress={onPickDate}
               style={({ pressed }) => [
                 styles.dateFieldBox,

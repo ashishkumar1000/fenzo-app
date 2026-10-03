@@ -2,7 +2,7 @@
  * NotificationsScreen + NotificationCard — what the SCREEN decides (the
  * store behind it has its own tests): the card-tap deep-link contract
  * (navigate to JobDetail + optimistic mark-read of the card's unread
- * events), the All/Active/Completed filter chips, the "Mark all read"
+ * events), the All/Active/Completed filter chips, the "Mark all as read"
  * disabled state, the error/Retry view, the with-data error banners
  * (load + mutation), and the empty state's "Go to jobs" CTA. The store
  * module is mocked with plain fixtures, so nothing here touches the network.
@@ -137,12 +137,12 @@ async function mountScreen(): Promise<ReactTestRenderer.ReactTestRenderer> {
   return renderer;
 }
 
-/** The header's "Mark all read" button, found by its label. */
+/** The header's "Mark all as read" button, found by its label. */
 function markAllButton(renderer: ReactTestRenderer.ReactTestRenderer) {
   const match = renderer.root
     .findAllByType(Button)
-    .find(b => b.props.children === 'Mark all read');
-  if (!match) throw new Error('"Mark all read" button not rendered');
+    .find(b => b.props.children === 'Mark all as read');
+  if (!match) throw new Error('"Mark all as read" button not rendered');
   return match;
 }
 
@@ -215,7 +215,7 @@ it('the card\'s "View Job" footer button runs the same navigate-first contract',
 
 // --- Header action --------------------------------------------------------------
 
-it('"Mark all read" is disabled with no rows and enabled with rows', async () => {
+it('"Mark all as read" is disabled with no rows and enabled with rows', async () => {
   const empty = await mountScreen();
   expect(markAllButton(empty).props.disabled).toBe(true);
 
@@ -224,7 +224,7 @@ it('"Mark all read" is disabled with no rows and enabled with rows', async () =>
   expect(markAllButton(withRows).props.disabled).toBe(false);
 });
 
-it('pressing "Mark all read" invokes the store mutation', async () => {
+it('pressing "Mark all as read" invokes the store mutation', async () => {
   mockStore = emptyStore({ items: [makeNotification('n1')] });
   const renderer = await mountScreen();
 
@@ -413,7 +413,7 @@ describe('filter chips', () => {
     });
     expect(renderer.root.findAllByType(NotificationCard)).toHaveLength(0);
     const text = renderer.root.findAllByType(Text).map(t => t.props.children);
-    expect(text).toContain('No completed jobs yet.');
+    expect(text).toContain('No finished jobs yet.');
     // The real empty state (with its CTA) is NOT shown — rows exist.
     expect(
       renderer.root.findAllByType(Button).find(b => b.props.children === 'Go to jobs'),

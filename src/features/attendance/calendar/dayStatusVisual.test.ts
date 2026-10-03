@@ -95,7 +95,7 @@ describe('DAY_STATUS_VISUALS — the 12/12 table', () => {
     ['weekly_off', 'weeklyOff', Moon, 'Weekly off'],
     ['holiday', 'holiday', Flag, 'Holiday'],
     ['worked_on_holiday', 'workedHoliday', Briefcase, 'Worked on holiday'],
-    ['checkout_missing', 'checkoutMissing', AlertCircle, 'Checkout missing'],
+    ['checkout_missing', 'checkoutMissing', AlertCircle, 'Check-out missing'],
     ['not_tracked', 'notTracked', MinusCircle, 'Not tracked'],
     ['not_checked_in_yet', 'notCheckedIn', Circle, 'Not checked in yet'],
     ['in_progress', 'progress', Play, 'In progress'],
@@ -130,7 +130,7 @@ describe('distinct icons within each hue family (coverage only)', () => {
       .map(v => v.icon);
   }
 
-  it('amber (partial): Half day vs Checkout missing', () => {
+  it('amber (partial): Half day vs Check-out missing', () => {
     const icons = iconsInFamily(colors.status.scheduled.bg);
     expect(icons).toContain(Clock);
     expect(icons).toContain(AlertCircle);
@@ -173,14 +173,14 @@ describe('dayStatusColors — the Badge-soft mapping', () => {
 });
 
 describe('dayFlagVisuals — the DESIGN.md Flag table', () => {
-  it('Late · {n}m (amber, AlertCircle)', () => {
+  it('Late {n} min (amber, AlertCircle)', () => {
     const flags = dayFlagVisuals(row({ isLate: true, lateMinutes: 22 }));
     expect(flags).toEqual([
       {
         key: 'late',
         badgeStatus: 'checkoutMissing',
         icon: AlertCircle,
-        label: 'Late · 22m',
+        label: 'Late 22 min',
       },
     ]);
   });
@@ -190,7 +190,7 @@ describe('dayFlagVisuals — the DESIGN.md Flag table', () => {
     expect(flags[0].label).toBe('Late');
   });
 
-  it('Early · {n}m (amber, AlertCircle)', () => {
+  it('Early {n} min (amber, AlertCircle)', () => {
     const flags = dayFlagVisuals(
       row({ earlyCheckout: true, earlyCheckoutMinutes: 15 }),
     );
@@ -199,7 +199,7 @@ describe('dayFlagVisuals — the DESIGN.md Flag table', () => {
         key: 'early',
         badgeStatus: 'checkoutMissing',
         icon: AlertCircle,
-        label: 'Early · 15m',
+        label: 'Early 15 min',
       },
     ]);
   });

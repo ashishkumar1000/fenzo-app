@@ -236,10 +236,12 @@ it('fetches on mount with the route param and renders the full detail', async ()
   expect(getById).toHaveBeenCalledWith('j-1', expect.anything());
 
   const text = renderedText(renderer);
-  expect(text).toContain('JB-2026-0042'); // back-header title
+  expect(text).toContain('Ravi Kumar'); // back-header title = the customer's name (loaded)
   expect(text).toContain('Urgent');
   expect(text).toContain('In Progress');
+  expect(text).toContain('PROGRESS'); // the workflow card's renamed label
   expect(text).toContain('Plumbing'); // skill name
+  expect(text).toContain('Skills'); // the muted label above the skill chips
   expect(text).toContain('Step 3 of 6 — In progress'); // current step line
   expect(text).toContain('Leaking tap in the kitchen'); // description
   expect(text).toContain('Notes for technician');

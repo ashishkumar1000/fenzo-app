@@ -71,7 +71,7 @@ export function WorkflowStatusCard({ steps, currentStepIndex, jobStatus }: Props
     <View style={[styles.card, { backgroundColor: colors.surfaceCard, borderColor: colors.borderSubtle }]}>
       {/* Header Section */}
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.textMuted }]}>WORKFLOW STATUS</Text>
+        <Text style={[styles.title, { color: colors.textMuted }]}>PROGRESS</Text>
         <Badge
             status={badgeStatus}
             tone="soft"

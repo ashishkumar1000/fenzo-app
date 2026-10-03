@@ -110,11 +110,21 @@ export interface DayFlagVisual {
 }
 
 /**
- * The day's flag tags, in DESIGN.md order: Late · {n}m / Early · {n}m /
+ * The day's flag tags, in DESIGN.md order: Late {n} min / Early {n} min /
  * Fake location / Leave pending / Corrected. Late/early derive from the
  * row's outcome booleans + minutes (the BE emits no flags on off-day
- * statuses); minutes render only when present.
+ * statuses); minutes render only when present, in words past the hour
+ * ("90" → "1 hr 30 min").
  */
+/** Whole minutes → chip words: under an hour "22 min"; at or above,
+ *  hours + minutes ("2 hr 0 min"). */
+function flagMinutes(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h} hr ${m} min`;
+}
+
 export function dayFlagVisuals(day: DayStatusRow): DayFlagVisual[] {
   const flags: DayFlagVisual[] = [];
   if (day.isLate) {
@@ -123,7 +133,7 @@ export function dayFlagVisuals(day: DayStatusRow): DayFlagVisual[] {
       badgeStatus: 'checkoutMissing',
       icon: AlertCircle,
       label:
-        day.lateMinutes != null ? `Late · ${day.lateMinutes}m` : 'Late',
+        day.lateMinutes != null ? `Late ${flagMinutes(day.lateMinutes)}` : 'Late',
     });
   }
   if (day.earlyCheckout) {
@@ -133,7 +143,7 @@ export function dayFlagVisuals(day: DayStatusRow): DayFlagVisual[] {
       icon: AlertCircle,
       label:
         day.earlyCheckoutMinutes != null
-          ? `Early · ${day.earlyCheckoutMinutes}m`
+          ? `Early ${flagMinutes(day.earlyCheckoutMinutes)}`
           : 'Early',
     });
   }

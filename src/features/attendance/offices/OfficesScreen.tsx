@@ -164,7 +164,7 @@ export default function OfficesScreen({ navigation }: Props) {
                 </View>
                 <View style={styles.ctaTexts}>
                   <Text style={styles.ctaTitle}>Add new office</Text>
-                  <Text style={styles.ctaSubtitle}>Configure geofence &amp; shift hours</Text>
+                  <Text style={styles.ctaSubtitle}>Set the check-in area &amp; shift hours</Text>
                 </View>
               </Pressable>
               <OfficeSegmentTabs

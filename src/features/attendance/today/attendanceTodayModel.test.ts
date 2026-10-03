@@ -542,50 +542,34 @@ describe('punchStatusCard — the approved mockup table, copy verbatim', () => {
       office: OFFICE,
       now: base.now,
       checkinTimeText: null,
-      elapsedText: null,
     });
     expect(card).toMatchObject({
       tone: 'done',
-      title: 'Within Office Geofence',
-      chip: 'READY TO PUNCH',
+      title: 'At your office',
+      chip: 'READY TO CHECK IN',
     });
     expect(flat(card!)).toBe(
       `You are at Hero wala (${formatMetresGrouped(
         haversineMetres(IN_FIX, OFFICE),
-      )} away). Location verified via GPS.`,
+      )} away). Location checked.`,
     );
   });
 
-  it('readyOut in-fence → the BLUE card with the elapsed span (row 2)', () => {
+  it('readyOut in-fence → the BLUE card, the check-in time and the next step (row 2)', () => {
     const card = punchStatusCard({
       state: { kind: 'readyOut', distanceM: 28 },
       fix: IN_FIX,
       office: OFFICE,
       now: base.now,
       checkinTimeText: '9:02 AM',
-      elapsedText: '7 h 14 m',
     });
     expect(card).toMatchObject({
       tone: 'progress',
-      title: 'Shift Active • In Office',
-      chip: 'READY TO PUNCH OUT',
+      title: 'On shift · At your office',
+      chip: 'READY TO CHECK OUT',
     });
     expect(flat(card!)).toBe(
-      'Checked in at 9:02 AM (7 h 14 m elapsed). Ready to conclude your workday at Hero wala.',
-    );
-  });
-
-  it('readyOut in-fence with no elapsed yet degrades the span, never a placeholder', () => {
-    const card = punchStatusCard({
-      state: { kind: 'readyOut', distanceM: 28 },
-      fix: IN_FIX,
-      office: OFFICE,
-      now: base.now,
-      checkinTimeText: '9:02 AM',
-      elapsedText: null,
-    });
-    expect(flat(card!)).toBe(
-      'Checked in at 9:02 AM. Ready to conclude your workday at Hero wala.',
+      'Checked in at 9:02 AM. Tap Check out when your work is done.',
     );
   });
 
@@ -596,15 +580,14 @@ describe('punchStatusCard — the approved mockup table, copy verbatim', () => {
       office: OFFICE,
       now: base.now,
       checkinTimeText: null,
-      elapsedText: null,
     });
     expect(card).toMatchObject({
       tone: 'cancelled',
-      title: 'Outside Office Geofence',
-      chip: 'PUNCH DISABLED',
+      title: 'Too far from Hero wala',
+      chip: 'TOO FAR',
     });
     expect(flat(card!)).toBe(
-      'You are 1,357 m from Hero wala branch. Move within 150 m to punch.',
+      'You are 1.4 km from Hero wala. Go closer, then check in.',
     );
   });
 
@@ -615,15 +598,14 @@ describe('punchStatusCard — the approved mockup table, copy verbatim', () => {
       office: OFFICE,
       now: base.now,
       checkinTimeText: '9:02 AM',
-      elapsedText: '3 h 53 m',
     });
     expect(card).toMatchObject({
       tone: 'scheduled',
-      title: 'Out of Bounds for Check-out',
-      chip: 'LOCKED',
+      title: 'Too far to check out',
+      chip: 'TOO FAR',
     });
     expect(flat(card!)).toBe(
-      'You checked in at 9:02 AM. You are currently 1,357 m away. Move closer to punch out.',
+      'You checked in at 9:02 AM. You are 1,357 m away. Move closer to check out.',
     );
   });
 
@@ -634,7 +616,6 @@ describe('punchStatusCard — the approved mockup table, copy verbatim', () => {
       office: null,
       now: base.now,
       checkinTimeText: null,
-      elapsedText: null,
     });
     expect(flat(offline!)).toBe(
       "You're offline. Check-in needs a working connection.",
@@ -645,7 +626,6 @@ describe('punchStatusCard — the approved mockup table, copy verbatim', () => {
       office: null,
       now: base.now,
       checkinTimeText: null,
-      elapsedText: null,
     });
     expect(flat(rateLimited!)).toBe('Too many attempts. Try again in 9:42');
     const resolving = punchStatusCard({
@@ -654,7 +634,6 @@ describe('punchStatusCard — the approved mockup table, copy verbatim', () => {
       office: null,
       now: base.now,
       checkinTimeText: null,
-      elapsedText: null,
     });
     expect(resolving).toMatchObject({ tone: 'neutral', title: 'Getting your location…' });
   });
@@ -667,7 +646,6 @@ describe('punchStatusCard — the approved mockup table, copy verbatim', () => {
         office: OFFICE,
         now: base.now,
         checkinTimeText: null,
-        elapsedText: null,
       }),
     ).toMatchObject({ tone: 'neutral', title: 'Getting your location…' });
   });
@@ -680,7 +658,6 @@ describe('punchStatusCard — the approved mockup table, copy verbatim', () => {
         office: OFFICE,
         now: base.now,
         checkinTimeText: null,
-        elapsedText: null,
       }),
     ).toBeNull();
     expect(
@@ -690,7 +667,6 @@ describe('punchStatusCard — the approved mockup table, copy verbatim', () => {
         office: OFFICE,
         now: base.now,
         checkinTimeText: null,
-        elapsedText: null,
       }),
     ).toBeNull();
   });
@@ -702,10 +678,9 @@ describe('punchStatusCard — the approved mockup table, copy verbatim', () => {
       office: OFFICE,
       now: base.now,
       checkinTimeText: null,
-      elapsedText: null,
     });
     expect(card!.announce).toBe(
-      'Outside Office Geofence You are 1,357 m from Hero wala branch. Move within 150 m to punch.',
+      'Too far from Hero wala You are 1.4 km from Hero wala. Go closer, then check in.',
     );
   });
 });

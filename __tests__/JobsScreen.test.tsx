@@ -358,7 +358,7 @@ it('pressing a scope segment loads that scope and shows its empty state', async 
     badge?: number;
   }>;
   expect(options.find(o => o.value === 'overdue')?.badge).toBeUndefined();
-  expect(text.join(' ')).not.toContain('Dispatch tip');
+  expect(text.join(' ')).not.toContain('Tip:');
   // Upcoming hides the chip row entirely — the server pre-narrows status there.
   expect(renderer.root.findAllByType(StatusFilterBar).length).toBe(0);
 });
@@ -399,7 +399,7 @@ it('with overdue work, the Upcoming empty state shows the badge, the tip and the
   expect(options.find(o => o.value === 'overdue')?.badge).toBe(3);
   // ...and the tip repeats that same live count, never a hardcoded number.
   expect(renderedText(renderer).join(' ')).toContain(
-    'Tap Overdue (3) to clear or reassign delayed assignments.',
+    'Tap Overdue (3) to fix or reassign late jobs.',
   );
 
   // The CTA is the empty state's own entry point into the same flow the

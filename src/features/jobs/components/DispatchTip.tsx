@@ -21,8 +21,8 @@ export function DispatchTip({ overdueCount }: Props) {
         <Lightbulb size={16} color={colors.primary} strokeWidth={2} />
       </View>
       <Text style={styles.text}>
-        <Text style={styles.lead}>Dispatch tip: </Text>
-        Tap Overdue ({overdueCount}) to clear or reassign delayed assignments.
+        <Text style={styles.lead}>Tip: </Text>
+        Tap Overdue ({overdueCount}) to fix or reassign late jobs.
       </Text>
     </View>
   );

@@ -41,7 +41,7 @@ export function WorkspaceSelector({
       {officesCount !== null ? (
         <View style={styles.sitesPill}>
           <Text style={[styles.sitesText, { color: colors.status.leave.fg }]}>
-            {officesCount === 1 ? '1 Site' : `${officesCount} Sites`}
+            {officesCount === 1 ? '1 office' : `${officesCount} offices`}
           </Text>
         </View>
       ) : null}

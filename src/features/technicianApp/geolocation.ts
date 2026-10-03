@@ -13,7 +13,7 @@ export interface GeolocationCoordinates {
   accuracy: number;
 }
 
-export const LOCATION_PERMISSION_MESSAGE = 'Allow Fenzo to access your location to verify step completion';
+export const LOCATION_PERMISSION_MESSAGE = 'Allow Fenzit to access your location to verify step completion';
 
 const PLATFORM_MESSAGES = {
   android: {

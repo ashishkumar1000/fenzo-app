@@ -43,35 +43,35 @@ function schemeFor(state: TodayButtonState): Scheme {
     case 'readyIn':
       // Without a fresh in-fence distance this is the row-5 fallback — the
       // dimmed skeleton, never the inviting ready face.
-      if (state.distanceM == null) return dimAction('Tap to punch');
+      if (state.distanceM == null) return dimAction('Tap to check in');
       return {
         face: colors.punch.in,
         ring: colors.punch.ringIn,
         pill: { bg: colors.punch.pillReady, label: 'READY', dot: null, lock: false },
         dot: colors.punch.dotIn,
-        sub: 'Tap to punch',
+        sub: 'Tap to check in',
       };
     case 'readyOut':
-      if (state.distanceM == null) return dimAction('Tap to punch out');
+      if (state.distanceM == null) return dimAction('Tap to check out');
       return {
         face: colors.punch.out,
         ring: colors.punch.ringOut,
         pill: {
           bg: colors.punch.pillShiftActive,
-          label: 'SHIFT ACTIVE',
+          label: 'ON SHIFT',
           dot: null,
           lock: false,
         },
         dot: colors.punch.dotOut,
-        sub: 'Tap to punch out',
+        sub: 'Tap to check out',
       };
     case 'locked':
       return {
         face: colors.punch.dim,
         ring: colors.punch.ringLockedIn,
-        pill: { bg: colors.punch.pillLockedIn, label: 'LOCKED', dot: null, lock: true },
+        pill: { bg: colors.punch.pillLockedIn, label: 'TOO FAR', dot: null, lock: true },
         dot: colors.punch.dotLockedIn,
-        sub: 'Outside Geofence',
+        sub: 'Too far from your office',
       };
     case 'lockedOut':
       return {
@@ -79,12 +79,12 @@ function schemeFor(state: TodayButtonState): Scheme {
         ring: colors.punch.ringLockedOut,
         pill: {
           bg: colors.punch.pillLockedOut,
-          label: 'LOCKED OUT',
+          label: 'TRY LATER',
           dot: null,
           lock: true,
         },
         dot: colors.punch.dotLockedOut,
-        sub: 'Outside Geofence',
+        sub: 'Too far from your office',
       };
     case 'rateLimited':
       return {

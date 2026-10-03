@@ -164,7 +164,7 @@ export const DAY_STATUS_LABELS: Record<DayStatusKey, string> = {
   present: 'Present',
   half_day: 'Half day',
   absent: 'Absent',
-  checkout_missing: 'Checkout missing',
+  checkout_missing: 'Check-out missing',
 };
 
 const isStatusKey = (value: unknown): value is DayStatusKey =>

@@ -44,7 +44,7 @@ export interface NewSkillInput {
  * unusable for the pickers and must be surfaced as a fetch failure, never
  * rendered as data.
  */
-const SKILLS_SHAPE_ERROR = "Couldn't load the job types. Please try again.";
+const SKILLS_SHAPE_ERROR = "Couldn't load skills. Please try again.";
 
 /** `skills` must be an array of rows, each carrying string id/name/description/icon. */
 function isSkillRows(value: unknown): value is Skill[] {

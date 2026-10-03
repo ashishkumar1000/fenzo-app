@@ -84,11 +84,11 @@ describe('EmployeesStep — the 15-9 upcoming-row guard', () => {
       .findAll((n) => n.type === Text && typeof n.props.children === 'string')
       .map((n) => n.props.children as string);
     expect(texts).toContain(
-      `Starts 2026-11-01 \u00B7 tracking begins then \u2014 adjust from Team enrolment`,
+      `Starts 2026-11-01 \u00B7 tracking begins then \u2014 adjust from Team attendance`,
     );
 
     const sw = renderer.root.find(
-      (n) => n.props?.label === `Starts 2026-11-01 \u00B7 tracking begins then \u2014 adjust from Team enrolment`,
+      (n) => n.props?.label === `Starts 2026-11-01 \u00B7 tracking begins then \u2014 adjust from Team attendance`,
     );
     expect(sw.props.disabled).toBe(true);
 

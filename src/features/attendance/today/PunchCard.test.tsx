@@ -59,10 +59,10 @@ describe('the flag pills — late and early take SEPARATE pills', () => {
 
   it('early by itself: one pill with the value AND the before-shift caption', () => {
     const root = renderCard(
-      tiles({ earlyText: 'Early by 10 min', earlyBeforeShiftText: '11 h 20 m before shift' }),
+      tiles({ earlyText: 'Early by 10 min', earlyBeforeShiftText: '11 hrs 20 min before shift' }),
     );
     expect(strings(root)).toContain('Early by 10 min');
-    expect(strings(root)).toContain('11 h 20 m before shift');
+    expect(strings(root)).toContain('11 hrs 20 min before shift');
   });
 
   it('BOTH coexist: two pills — the early caption is grouped with the EARLY value, never the late one', () => {
@@ -70,7 +70,7 @@ describe('the flag pills — late and early take SEPARATE pills', () => {
       tiles({
         lateText: 'Late by 30 min',
         earlyText: 'Early by 45 min',
-        earlyBeforeShiftText: '10 h 45 m before shift',
+        earlyBeforeShiftText: '10 hrs 45 min before shift',
       }),
     );
     const s = strings(root);
@@ -81,7 +81,7 @@ describe('the flag pills — late and early take SEPARATE pills', () => {
     // Grouping: the caption's nearest View ancestor subtree contains the
     // EARLY value and NOT the late one (they are separate pill trees).
     const caption = root
-      .findAll((n) => n.type === Text && n.props.children === '10 h 45 m before shift')[0];
+      .findAll((n) => n.type === Text && n.props.children === '10 hrs 45 min before shift')[0];
     const hasValue = (node: ReactTestInstance): boolean =>
       node.findAll((m) => m.type === Text)
         .some((m) => String(m.props.children ?? '') === 'Early by 45 min');

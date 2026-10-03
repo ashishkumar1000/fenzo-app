@@ -242,7 +242,7 @@ describe('OfficeFilterSheet — the stat cards', () => {
     const shown = texts(hit.renderer);
     expect(shown).toContain('3 tracked · 2 checked in today');
     // The untracked row says so honestly — never a fabricated zero pair.
-    expect(shown).toContain('No employees tracked here today');
+    expect(shown).toContain('No one is on attendance here today');
   });
 
   it('the All-offices row aggregates the registry', () => {

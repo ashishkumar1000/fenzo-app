@@ -250,7 +250,7 @@ describe('AttendanceMonthlyScreen — bootstrap + loading postures', () => {
     const shown = texts(renderer);
     expect(shown).toContain('Asha');
     expect(shown).toContain('Ben');
-    expect(shown).toContain('18 worked');
+    expect(shown).toContain('17 full');
     expect(shown).toContain('Andheri West · 2 weekly offs');
     expect(
       renderer.root.findAll(
@@ -389,14 +389,39 @@ describe('AttendanceMonthlyScreen — rows', () => {
     );
     const { renderer } = renderScreen();
     await fireFocus();
-    expect(chipColor(renderer, '18 worked')).toBe(colors.status.done.fg);
+    expect(chipColor(renderer, '17 full')).toBe(colors.status.done.fg);
     expect(chipColor(renderer, '2 half days')).toBe(colors.status.scheduled.fg);
     expect(chipColor(renderer, '1 late')).toBe(colors.status.scheduled.fg);
     expect(chipColor(renderer, '2.5 leave')).toBe(colors.status.leave.fg);
     expect(chipColor(renderer, '1 absent')).toBe(colors.status.cancelled.fg);
-    expect(chipColor(renderer, '1 missing checkout')).toBe(
+    expect(chipColor(renderer, '1 missing check-out')).toBe(
       colors.status.checkoutMissing.fg,
     );
+  });
+
+  it('a ZERO worked chip renders the neutral grey (success needs count > 0)', async () => {
+    fetchMock.mockResolvedValue(
+      envelope({
+        employees: [
+          employee({
+            summary: {
+              daysWorked: 0,
+              halfDays: 0,
+              lateCount: 0,
+              leave: 0,
+              weeklyOffs: 2,
+              holidays: 0,
+              workedOnHoliday: 0,
+              absent: 0,
+              checkoutMissing: 0,
+            },
+          }),
+        ],
+      }),
+    );
+    const { renderer } = renderScreen();
+    await fireFocus();
+    expect(chipColor(renderer, '0 worked')).toBe(colors.status.neutral.fg);
   });
 
   it('a row tap navigates to the drill-down with the viewed month', async () => {
@@ -412,7 +437,7 @@ describe('AttendanceMonthlyScreen — rows', () => {
     expect(ashaRow).toHaveLength(1);
     // The EXACT assembled label (model-pinned shape, comma-joined).
     expect(ashaRow[0].props.accessibilityLabel).toBe(
-      'Asha. 18 worked, 2 half days, 1 absent. Andheri West, 2 weekly offs',
+      'Asha. 17 full, 2 half days, 1 absent. Andheri West, 2 weekly offs',
     );
     act(() => {
       ashaRow[0].props.onPress();

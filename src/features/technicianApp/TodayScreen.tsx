@@ -29,6 +29,7 @@ import { Bell, CalendarCheck, Plus, RefreshCw } from 'lucide-react-native';
 import { Button, EmptyState, Eyebrow, IconButton, InlineError } from '../../components/ui';
 import { colors, spacing, typography } from '../../theme';
 import { useNow } from '../../hooks';
+import { greetingForNow } from '../../utils';
 import { firstName, useMyProfile } from '../profile';
 import { JobCard } from '../jobs/components/JobCard';
 import { loadUnreadCount, useNotifications } from '../notifications';
@@ -118,7 +119,7 @@ export default function TodayScreen() {
     <SafeAreaView style={styles.root} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.greeting} numberOfLines={1}>
-          {name ? `Good morning, ${name}` : 'Good morning'}
+          {name ? `${greetingForNow()}, ${name}` : greetingForNow()}
         </Text>
         <IconButton
           variant="ghost"
@@ -214,7 +215,7 @@ export default function TodayScreen() {
                 </View>
               }
               ctaShape="pill"
-              ctaLabel="Tap to sync status"
+              ctaLabel="Tap to refresh"
               ctaIcon={<RefreshCw size={16} color={colors.primary} strokeWidth={2.2} />}
               onPressCta={() => void handleRefresh()}
             />

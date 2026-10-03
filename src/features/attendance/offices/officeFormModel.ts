@@ -102,13 +102,13 @@ export function validateOfficeForm(state: OfficeFormState): OfficeFormErrors {
     errors.location = 'Place the office pin on the map';
   }
   if (state.radiusM < 50 || state.radiusM > 1000) {
-    errors.radiusM = 'Radius must be 50–1000 metres';
+    errors.radiusM = 'Check-in distance must be 50–1000 m';
   }
   if (!isValidTime(state.startTime)) {
-    errors.startTime = 'Use 24-hour time, e.g. 09:00';
+    errors.startTime = 'Use 24-hour time — 09:00 means 9 AM';
   }
   if (!isValidTime(state.endTime)) {
-    errors.endTime = 'Use 24-hour time, e.g. 18:00';
+    errors.endTime = 'Use 24-hour time — 18:00 means 6 PM';
   } else if (isValidTime(state.startTime) && state.endTime <= state.startTime) {
     errors.endTime = 'End time must be after the start time';
   }

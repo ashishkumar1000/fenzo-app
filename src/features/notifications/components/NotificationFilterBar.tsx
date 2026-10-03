@@ -19,8 +19,8 @@ import type { NotificationFilter } from '../notificationCardModel';
 
 const FILTERS: { value: NotificationFilter; label: string }[] = [
   { value: 'all', label: 'All' },
-  { value: 'active', label: 'Active' },
-  { value: 'completed', label: 'Completed' },
+  { value: 'active', label: 'Ongoing' },
+  { value: 'completed', label: 'Finished' },
 ];
 
 type Props = {

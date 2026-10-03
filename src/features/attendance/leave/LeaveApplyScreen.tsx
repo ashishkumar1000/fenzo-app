@@ -101,7 +101,7 @@ export default function LeaveApplyScreen({ navigation, route }: Props) {
           <IconButton
             variant="ghost"
             size="md"
-            label="View leave policy"
+            label="View attendance rules"
             onPress={openPolicy}>
             <Info size={20} color={colors.textBody} strokeWidth={2} />
           </IconButton>
@@ -147,7 +147,7 @@ export default function LeaveApplyScreen({ navigation, route }: Props) {
       <Sheet
         visible={policyOpen}
         onClose={() => setPolicyOpen(false)}
-        title="Shift & location policy"
+        title="Your attendance rules"
         detents={['auto']}>
         <AttendanceSummaryView
           embedded

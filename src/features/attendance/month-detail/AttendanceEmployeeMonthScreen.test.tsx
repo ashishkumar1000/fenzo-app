@@ -38,6 +38,7 @@ import {
 } from '../../../services/resources/attendanceCorrections';
 import AttendanceEmployeeMonthScreen from './AttendanceEmployeeMonthScreen';
 import { RealMonthPane } from '../calendar/RealMonthPane';
+import { DayStatusLegend } from '../calendar/DayStatusLegend';
 import { DayDetailSheet } from '../calendar/DayDetailSheet';
 import { MonthCalendar } from '../calendar/MonthCalendar';
 import { dayMonthLabel } from '../calendar/dayDetailModel';
@@ -209,6 +210,10 @@ describe('AttendanceEmployeeMonthScreen — the host (19-5 D6)', () => {
     const shown = texts(renderer);
     expect(shown).toContain('Asha');
     expect(shown).toContain('September 2026');
+    // The icons' key rides under the calendar (2026-10 copy review) — the
+    // SAME DayStatusLegend the My month screen renders.
+    expect(renderer.root.findAllByType(DayStatusLegend as never)).toHaveLength(1);
+    expect(shown).toContain('Day status legend');
   });
 
   it('focusDate auto-opens ONCE when the row exists — visible flips only post-resolution', async () => {

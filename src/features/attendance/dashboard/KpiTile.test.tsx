@@ -35,14 +35,14 @@ function textContents(renderer: ReactTestRenderer.ReactTestRenderer): string[] {
 
 describe('KpiTile', () => {
   it('renders the count over the label and carries the a11y pairing', () => {
-    const rendered = render(tile({ key: 'tracked', label: 'Tracked', value: 5, a11yLabel: 'Tracked: 5' }));
+    const rendered = render(tile({ key: 'tracked', label: 'On attendance', value: 5, a11yLabel: 'On attendance: 5' }));
     const shown = textContents(rendered);
     expect(shown).toContain('5');
-    expect(shown).toContain('Tracked');
+    expect(shown).toContain('On attendance');
     // The pairing lives on the subtree root's label.
     expect(rendered.root.props.accessibilityLabel).toBeUndefined();
     const carriers = rendered.root.findAll(
-      node => node.props.accessibilityLabel === 'Tracked: 5',
+      node => node.props.accessibilityLabel === 'On attendance: 5',
     );
     expect(carriers.length).toBeGreaterThanOrEqual(1);
   });

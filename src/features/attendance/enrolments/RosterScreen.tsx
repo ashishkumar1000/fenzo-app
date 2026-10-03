@@ -181,7 +181,7 @@ export default function RosterScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      <ScreenHeader title="Team enrolment" onBack={goBackSafely} />
+      <ScreenHeader title="Team attendance" onBack={goBackSafely} />
 
       {enrolments.isLoading && !enrolments.hasLoaded ? (
         // First load: a roster-shaped shimmer, labelled (the 19-5 idiom).
@@ -277,7 +277,7 @@ export default function RosterScreen({ navigation, route }: Props) {
             <EmptyState
               icon={<Users size={24} color={colors.primary} strokeWidth={1.5} />}
               title="Invite technicians first"
-              description="Your team roster is empty. Invite technicians from the Home tab, then return here to enrol them."
+              description="Your team roster is empty. Invite technicians from the Home tab, then return here to switch on tracking."
             />
           }
           refreshControl={
@@ -315,7 +315,7 @@ export default function RosterScreen({ navigation, route }: Props) {
             ? reassignSheetDefaults(reassignRow, today).minDate
             : today;
           navigation.navigate('DatePicker', {
-            title: 'Effective from',
+            title: 'Starting',
             value: sheetDate,
             today,
             minDate: min,

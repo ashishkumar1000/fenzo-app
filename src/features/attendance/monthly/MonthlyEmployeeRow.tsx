@@ -50,6 +50,14 @@ const CHIP_COLORS: Record<MonthlyChipSpec['key'], string> = {
   checkoutMissing: colors.status.checkoutMissing.fg,
 };
 
+/** A ZERO count never renders in a status colour — a green "0 worked"
+ *  reads as good (2026-10 copy review). The DS neutral grey keeps the
+ *  zero an honest answer; absent stays red and late amber at any count. */
+const NEUTRAL_CHIP_COLOR = colors.status.neutral.fg;
+
+const chipColor = (chip: MonthlyChipSpec): string =>
+  chip.count === 0 ? NEUTRAL_CHIP_COLOR : CHIP_COLORS[chip.key];
+
 export function MonthlyEmployeeRow({
   row,
   onPress,
@@ -75,7 +83,7 @@ export function MonthlyEmployeeRow({
         <View style={styles.chips}>
           {chips.map((chip, i) => (
             <View key={chip.key} style={styles.chipRun}>
-              <Text style={[styles.chip, { color: CHIP_COLORS[chip.key] }]}>
+              <Text style={[styles.chip, { color: chipColor(chip) }]}>
                 {chip.label}
               </Text>
               {/* The separator is its OWN muted atom BETWEEN chips — a

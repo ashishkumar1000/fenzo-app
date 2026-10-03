@@ -97,7 +97,7 @@ describe('validateOfficeForm', () => {
 
   it('validates the radius against the 50–1000 DB range', () => {
     expect(validateOfficeForm(form({ radiusM: 49 })).radiusM).toBe(
-      'Radius must be 50–1000 metres',
+      'Check-in distance must be 50–1000 m',
     );
     expect(validateOfficeForm(form({ radiusM: 1001 })).radiusM).toBeDefined();
     expect(validateOfficeForm(form({ radiusM: 50 })).radiusM).toBeUndefined();

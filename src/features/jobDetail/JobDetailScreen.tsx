@@ -289,8 +289,10 @@ export default function JobDetailScreen() {
           <ChevronLeft size={22} color={colors.textStrong} strokeWidth={2} />
         </IconButton>
         <Text style={styles.title} numberOfLines={1}>
-          {/* Placeholder while loading / on an error view (deep-link safe). */}
-          {detail?.jobNumber ?? 'Job details'}
+          {/* The customer's name leads once the job is loaded; the job
+              number then the placeholder cover loading / error views
+              (deep-link safe). */}
+          {detail?.customer.name || detail?.jobNumber || 'Job details'}
         </Text>
       </View>
 
@@ -409,7 +411,7 @@ export default function JobDetailScreen() {
                     },
                   )
                 }>
-                Direction
+                Directions
               </Button>
             </View>
             {!customerDirection ? (
@@ -456,6 +458,7 @@ export default function JobDetailScreen() {
             />
             {detail.technician.skills.length ? (
                 <View style={styles.skillsRow}>
+                  <Text style={styles.skillsLabel}>Skills</Text>
                   <View style={styles.skillsChips}>
                     {detail.technician.skills.map((skill) => (
                         <Badge key={skill} status="scheduled" tone="soft" size="sm">
@@ -483,14 +486,14 @@ export default function JobDetailScreen() {
                 onPress={() =>
                   void openMaps('', null, lastKnownLocation)
                 }>
-                Direction
+                Directions
               </Button>
             </View>
             {!lastKnownLocation ? (
               <View style={styles.disabledHintRow}>
                 <Info size={13} color={colors.textMuted} strokeWidth={2} style={{marginTop: spacing.s1}}/>
                 <Text style={styles.disabledHint}>
-                  Direction is available once the technician's location is
+                  Directions appear once the technician's location is
                   captured on a step.
                 </Text>
               </View>
@@ -595,10 +598,15 @@ const styles = StyleSheet.create({
   },
   // Extra air between a PersonRow and the meta rows below it in a section.
   skillsRow: {
-    flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing.s2,
+    gap: spacing.s1,
     marginTop: spacing.s2,
+  },
+  // The muted eyebrow above the chips (2026-10 copy review) — the chips
+  // alone never said what the badge words were.
+  skillsLabel: {
+    ...typography.caption,
+    color: colors.textMuted,
   },
   skillsChips: {
     flexDirection: 'row',

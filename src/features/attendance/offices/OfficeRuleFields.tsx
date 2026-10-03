@@ -57,12 +57,12 @@ export default function OfficeRuleFields({ state, errors, onChange, isEdit }: Pr
         />
       </View>
       <Input
-        label="Late cut-off (minutes after start)"
+        label="Late after (minutes)"
         value={state.lateCutoffMinutes}
         onChangeText={(text) => onChange({ lateCutoffMinutes: text })}
         placeholder="15"
         error={errors.lateCutoffMinutes}
-        helper="Grace period"
+        helper="Time after the start that still counts as on time"
         keyboardType="number-pad"
         maxLength={3}
         trailingAdornment={<Text style={styles.suffix}>mins</Text>}

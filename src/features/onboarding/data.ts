@@ -29,7 +29,7 @@ export const SLIDES: Slide[] = [
     key: 'assign',
     Icon: ClipboardList,
     title: 'Assign jobs in seconds',
-    body: 'Send the right worker to the right job, with arrival times your customers can count on.',
+    body: 'Send the right technician to the right job, with arrival times your customers can count on.',
     from: palette.blue800,
     to: palette.blue600,
   },

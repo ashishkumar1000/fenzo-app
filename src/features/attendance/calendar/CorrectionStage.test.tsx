@@ -475,7 +475,7 @@ describe('the posture slots', () => {
   it("the day's StatusBadge leads the flagbadge row; the late flag tags beside it (the mock's Frame B)", async () => {
     const root = await renderStage({ day: row({ isLate: true, lateMinutes: 22 }) });
     expect(texts(root)).toContain('Present');
-    expect(texts(root)).toContain('Late · 22m');
+    expect(texts(root)).toContain('Late 22 min');
   });
 
   it('a flag-less day STILL shows the status badge — the stage never opens bare (triage: Frame B fidelity)', async () => {

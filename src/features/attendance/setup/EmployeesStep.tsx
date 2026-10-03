@@ -134,7 +134,7 @@ export function EmployeesStep({
         <EmptyState
           icon={<Users size={24} color={colors.primary} strokeWidth={1.5} />}
           title="Invite technicians first"
-          description="Your team roster is empty. Invite technicians from the Home tab, then return here to enrol them."
+          description="Your team roster is empty. Invite technicians from the Home tab, then return here to switch on tracking."
         />
       ) : (
         roster.map((row) => {
@@ -178,7 +178,7 @@ export function EmployeesStep({
                 onValueChange={(nextValue) => onToggle(row, nextValue)}
                 label={
                   upcomingStart !== null
-                    ? `Starts ${upcomingStart} \u00B7 tracking begins then — adjust from Team enrolment`
+                    ? `Starts ${upcomingStart} \u00B7 tracking begins then — adjust from Team attendance`
                     : `Track attendance for ${row.employeeName}`
                 }
                 disabled={isRowPending(row.employeeId) || upcomingStart !== null}

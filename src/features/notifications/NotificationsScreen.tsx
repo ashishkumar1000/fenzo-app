@@ -8,7 +8,7 @@
  * technician Today header). Newest-first cursor-paginated list over the
  * `useNotifications` shared store: loads on focus (TTL-throttled in the
  * store), pages in on scroll-end, pulls to refresh, and carries the
- * "Mark all read" action in its header.
+ * "Mark all as read" action in its header.
  *
  * The redesign renders one CARD per job (grouped client-side from the flat
  * list by `notificationCardModel.ts` — the card's stage timeline comes from
@@ -391,7 +391,7 @@ export default function NotificationsScreen({ navigation }: Props) {
           onPress={handleMarkAllRead}
           disabled={!hasData}
           leadingIcon={<Check size={16} color={colors.textStrong} strokeWidth={2.5} />}>
-          Mark all read
+          Mark all as read
         </Button>
       </View>
 
@@ -460,8 +460,8 @@ export default function NotificationsScreen({ navigation }: Props) {
                 // would lie).
                 <Text style={styles.filterEmpty}>
                   {filter === 'active'
-                    ? 'No active jobs right now.'
-                    : 'No completed jobs yet.'}
+                    ? 'No ongoing jobs right now.'
+                    : 'No finished jobs yet.'}
                 </Text>
               ) : (
                 <EmptyState

@@ -36,7 +36,7 @@ export default function OfficeLocationCard({ form, errors, gpsVerified, onOpenPi
             <MapPin size={16} color={colors.textOnColor} strokeWidth={2} />
           </View>
           <View style={styles.coordsText}>
-            <Text style={styles.coordsEyebrow}>Coordinates</Text>
+            <Text style={styles.coordsEyebrow}>Pin position</Text>
             <Text
               style={[styles.coordsValue, !hasPin && styles.coordsPlaceholder]}
               numberOfLines={1}>

@@ -119,9 +119,9 @@ describe('WorkflowStepper', () => {
     expect(tappableLabels(root)).toHaveLength(0);
   });
 
-  it('the pending row shows "Waiting to sync" (the subtle pressed state)', () => {
+  it('the pending row shows "Waiting to send" (the subtle pressed state)', () => {
     const root = renderStepper(job(), { pendingStep: 'on_my_way' });
-    const texts = root.findAllByProps({ children: 'Waiting to sync' });
+    const texts = root.findAllByProps({ children: 'Waiting to send' });
     expect(texts.length).toBeGreaterThan(0);
   });
 

@@ -14,7 +14,7 @@ const LABELS: Record<string, string> = {
   job_created: 'Job created',
   job_reassigned: 'Reassigned to another technician',
   job_cancelled: 'Job cancelled',
-  conflict_resolved: 'Synced an offline update',
+  conflict_resolved: 'Sent a saved update',
 };
 
 export const eventLabel = (t: string) => LABELS[t] ?? t;

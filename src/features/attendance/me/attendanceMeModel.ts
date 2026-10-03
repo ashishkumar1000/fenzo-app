@@ -83,7 +83,7 @@ export function shouldShowIntro(access: AttendanceAccess | null): boolean {
 // facts as icon rows, each with an optional right-side chip. The chips
 // derive from fields the summary ALREADY carries (never new wire data):
 //   Timings      → the shift duration ("7h shift")
-//   Late cut-off → the grace window ("15m grace")
+//   Late cut-off → the grace window ("15 min grace")
 //   Weekly offs  → the off-day label ("Friday off")
 
 /** ISO weekday 1 (Mon) .. 7 (Sun) → the full weekday name (chip copy). */
@@ -115,8 +115,9 @@ export function shiftDurationChip(
   return `${h}h${m > 0 ? ` ${m}m` : ''} shift`;
 }
 
-/** 15 → "15m grace"; null when absent/non-positive (a 0m grace window is
- *  not a grace the employee can see — the value row alone is honest). */
+/** 15 → "15 min grace"; null when absent/non-positive (a 0-min grace
+ *  window is not a grace the employee can see — the value row alone is
+ *  honest). */
 export function graceChip(lateCutOffMinutes: number | null): string | null {
   if (
     lateCutOffMinutes === null ||
@@ -126,7 +127,7 @@ export function graceChip(lateCutOffMinutes: number | null): string | null {
   ) {
     return null;
   }
-  return `${Math.trunc(lateCutOffMinutes)}m grace`;
+  return `${Math.trunc(lateCutOffMinutes)} min grace`;
 }
 
 /** [5] → "Friday off"; [5,6] → "2 days off"; [] → null (the value row

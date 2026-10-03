@@ -235,7 +235,7 @@ describe('title, badge and flags', () => {
   it('the StatusBadge renders the label; the late flag tags on a WRAPPING row', async () => {
     const root = await renderSheet();
     expect(texts(root)).toContain('Present');
-    expect(texts(root)).toContain('Late · 22m');
+    expect(texts(root)).toContain('Late 22 min');
   });
 
   it('a no-row day opens as "Not tracked" — badge only, no rows, no flags', async () => {
@@ -273,7 +273,7 @@ describe('the value rows + distance rules', () => {
     const root = await renderSheet({
       day: row({ markers: ['corrected'], isLate: true, lateMinutes: 22 }),
     });
-    expect(texts(root)).toContain('Late · 22m');
+    expect(texts(root)).toContain('Late 22 min');
     const wrapping = root.findAll(
       node => (node.props.style as { flexWrap?: string } | undefined)?.flexWrap === 'wrap',
     );

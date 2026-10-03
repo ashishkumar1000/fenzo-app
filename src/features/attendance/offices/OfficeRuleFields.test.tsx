@@ -55,7 +55,7 @@ describe('OfficeRuleFields picker wiring (D-TP3)', () => {
     expect(timeField(root, 'End time').props.value).toBe('18:30');
     // The minute-count fields are NOT picker fields.
     const inputs = root.findAllByType(Input).map(i => i.props.label);
-    expect(inputs).toContain('Late cut-off (minutes after start)');
+    expect(inputs).toContain('Late after (minutes)');
     expect(inputs).not.toContain('Start time');
   });
 
@@ -70,16 +70,16 @@ describe('OfficeRuleFields picker wiring (D-TP3)', () => {
   it('the model\'s submit-time copy flows into the picker fields\' error slots', async () => {
     const { root } = await renderFields({
       errors: {
-        startTime: 'Use 24-hour time, e.g. 09:00',
-        endTime: 'Use 24-hour time, e.g. 18:00',
+        startTime: 'Use 24-hour time — 09:00 means 9 AM',
+        endTime: 'Use 24-hour time — 18:00 means 6 PM',
       },
     });
     expect(timeField(root, 'Start time').props.error).toBe(
-      'Use 24-hour time, e.g. 09:00',
+      'Use 24-hour time — 09:00 means 9 AM',
     );
     expect(timeField(root, 'End time').props.error).toBe(
-      'Use 24-hour time, e.g. 18:00',
+      'Use 24-hour time — 18:00 means 6 PM',
     );
-    expect(texts(root)).toContain('Use 24-hour time, e.g. 09:00');
+    expect(texts(root)).toContain('Use 24-hour time — 09:00 means 9 AM');
   });
 });

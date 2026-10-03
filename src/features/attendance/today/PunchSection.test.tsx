@@ -299,9 +299,9 @@ describe('the geofence LOCKED display (the user-found gap: a rejected press must
   it('a fresh beyond-radius fix renders the mockup LOCKED card verbatim (pill + card)', () => {
     prescreen();
     const view = renderView(fencedSummary(), {});
-    expect(textContaining(view.root, 'Outside Office Geofence').length).toBeGreaterThan(0);
-    expect(textContaining(view.root, 'PUNCH DISABLED').length).toBeGreaterThan(0);
-    expect(textContaining(view.root, 'LOCKED').length).toBeGreaterThan(0);
+    expect(textContaining(view.root, 'Too far from Hero wala').length).toBeGreaterThan(0);
+    expect(textContaining(view.root, 'TOO FAR').length).toBeGreaterThan(0);
+    expect(textContaining(view.root, 'Go closer, then check in.').length).toBeGreaterThan(0);
   });
 
   it('a server-rejected press (message set) shows the CARD, not the flat server line', () => {
@@ -309,7 +309,7 @@ describe('the geofence LOCKED display (the user-found gap: a rejected press must
     const view = renderView(fencedSummary(), {
       message: { tone: 'error', text: 'You are 1355 m from Hero wala. Move within 150 m.' },
     });
-    expect(textContaining(view.root, 'Outside Office Geofence').length).toBeGreaterThan(0);
+    expect(textContaining(view.root, 'Too far from Hero wala').length).toBeGreaterThan(0);
     expect(
       textContaining(view.root, 'You are 1355 m from Hero wala. Move within 150 m.'),
     ).toHaveLength(0);
@@ -323,7 +323,7 @@ describe('the geofence LOCKED display (the user-found gap: a rejected press must
     expect(
       textContaining(view.root, 'You are 1355 m from Hero wala. Move within 150 m.'),
     ).toHaveLength(1);
-    expect(textContaining(view.root, 'Outside Office Geofence')).toHaveLength(0);
+    expect(textContaining(view.root, 'Too far from Hero wala')).toHaveLength(0);
   });
 
   it('the press flow\'s own fix is adopted into the prescreen (the fence verdict survives a failed capture cycle)', () => {
@@ -333,6 +333,6 @@ describe('the geofence LOCKED display (the user-found gap: a rejected press must
       lastFix: { latitude: 12.1, longitude: 77.74 },
     });
     expect(adoptFix).toHaveBeenCalledWith({ latitude: 12.1, longitude: 77.74 });
-    expect(textContaining(view.root, 'Outside Office Geofence').length).toBeGreaterThan(0);
+    expect(textContaining(view.root, 'Too far from Hero wala').length).toBeGreaterThan(0);
   });
 });

@@ -45,7 +45,7 @@ export default function RadiusStepper({ radiusM, onChange }: Props) {
         </Pressable>
         <View style={styles.readout}>
           <Text style={styles.readoutValue}>{radiusM} m</Text>
-          <Text style={styles.readoutLabel}>geofence radius</Text>
+          <Text style={styles.readoutLabel}>check-in distance</Text>
         </View>
         <Pressable
           accessibilityRole="button"

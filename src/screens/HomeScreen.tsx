@@ -19,6 +19,7 @@ import HomeHeader from '../components/HomeHeader';
 import { Card, EmptyState, InlineError } from '../components/ui';
 import { Tile } from '../components/Tile';
 import { colors, radius, spacing, typography } from '../theme';
+import { greetingForNow } from '../utils';
 import { firstName, loadMyProfile, useMyProfile } from '../features/profile';
 import { QuickActions, TodaysJobsSection, hasAnyJobCount } from '../features/home';
 import { useNotifications } from '../features/notifications';
@@ -217,7 +218,9 @@ export default function HomeScreen({ navigation }: Props) {
       <SafeAreaView style={styles.newUserRoot} edges={['top']}>
         <View style={styles.greetingHeader}>
           <Text style={styles.greeting}>
-            {ownerFirstName ? `Good morning, ${ownerFirstName}` : 'Good morning'}
+            {ownerFirstName
+              ? `${greetingForNow()}, ${ownerFirstName}`
+              : greetingForNow()}
           </Text>
           <Text style={styles.business}>{businessName}</Text>
         </View>

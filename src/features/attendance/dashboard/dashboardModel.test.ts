@@ -56,10 +56,10 @@ describe('kpiTiles', () => {
   it('lists the six FR-24 answers in the spec order, labelled', () => {
     const tiles = kpiTiles(counts({ shortDay: 1 }));
     expect(tiles.map(t => [t.key, t.label, t.value])).toEqual([
-      ['tracked', 'Tracked', 9],
+      ['tracked', 'On attendance', 9],
       ['checkedIn', 'Checked in', 6],
       ['notCheckedIn', 'Not checked in', 2],
-      ['shortDay', 'Short day', 1],
+      ['shortDay', 'Short hours', 1],
       ['late', 'Late', 1],
       ['onLeave', 'On leave', 1],
     ]);
@@ -128,9 +128,9 @@ describe('flagStrips', () => {
     expect(strips).toHaveLength(1);
     expect(strips[0]).toMatchObject({
       kind: 'checkoutMissing',
-      label: 'Checkout missing',
+      label: 'Check-out missing',
       count: 2,
-      a11yLabel: 'Checkout missing, 2 days',
+      a11yLabel: 'Check-out missing, 2 days',
     });
   });
 
@@ -152,10 +152,10 @@ describe('flagStrips', () => {
       checkoutMissing: [flagRow()],
       fakeLocationAttempt: [fakeRow()],
     });
-    expect(strips[0].a11yLabel).toBe('Checkout missing, 1 day');
+    expect(strips[0].a11yLabel).toBe('Check-out missing, 1 day');
     expect(strips[0].detail).toBe('No check-out recorded for 1 past day.');
     expect(strips[1].a11yLabel).toBe('Fake location attempt, 1 day');
-    expect(strips[1].detail).toBe('GPS spoofing blocked on 1 day.');
+    expect(strips[1].detail).toBe('A fake-location app was used on 1 day.');
   });
 
   it('the detail line counts DAYS, not devices (the wire has no device identity)', () => {
@@ -169,7 +169,7 @@ describe('flagStrips', () => {
 
 describe('flagSheetTitle', () => {
   it('names the fake-location kind PLURAL (attempts) but checkout missing plain', () => {
-    expect(flagSheetTitle('checkoutMissing')).toBe('Checkout missing');
+    expect(flagSheetTitle('checkoutMissing')).toBe('Check-out missing');
     expect(flagSheetTitle('fakeLocationAttempt')).toBe('Fake location attempts');
     expect(flagSheetTitle(null)).toBe('');
   });

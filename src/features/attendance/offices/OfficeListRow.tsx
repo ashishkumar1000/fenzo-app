@@ -2,7 +2,7 @@
  * OfficeListRow — one office in the Offices list (Story 15-4, reshaped to
  * the user-approved sample design 2026-09-28): identity header (icon tile,
  * name + status pill, chevron) over a hairline-separated facts row
- * (geofence radius · shift hours).
+ * (check-in distance · shift hours).
  *
  * Archived rows render read-only (muted, no press, neutral pill) — they are
  * grouped behind the screen's "Archived" disclosure/tab and can never be
@@ -28,10 +28,10 @@ export function officeTimingSummary(office: Office): string {
   return `${office.rule.startTime} – ${office.rule.endTime}`;
 }
 
-/** "11h full · 5.5h half" — JS number formatting already drops a trailing .0. */
+/** "Full day 8 hrs · Half day 4 hrs" — JS number formatting already drops a trailing .0. */
 export function officeHoursSummary(office: Office): string | null {
   if (!office.rule) return null;
-  return `${office.rule.fullDayHours}h full · ${office.rule.halfDayHours}h half`;
+  return `Full day ${office.rule.fullDayHours} hrs · Half day ${office.rule.halfDayHours} hrs`;
 }
 
 /** "12.938° N, 77.690° E" — 3 decimals, hemisphere suffixes. */
@@ -69,10 +69,13 @@ export default function OfficeListRow({ office, onPress }: Props) {
                 {archived ? 'Archived' : 'Active'}
               </Badge>
             </View>
-            {/* Coordinates double as the location line (offices carry no
-                free-text address). */}
+            {/* Plain-English location line (offices carry no free-text
+                address): the timing summary, or the check-in distance when
+                no timing is set. Raw coordinates never render on the row. */}
             <Text style={[styles.coords, archived && styles.textArchived]} numberOfLines={1}>
-              {officeCoordinates(office)}
+              {office.rule
+                ? officeTimingSummary(office)
+                : `Check-in within ${office.radiusM} m`}
             </Text>
           </View>
           {archived ? null : (
@@ -84,7 +87,7 @@ export default function OfficeListRow({ office, onPress }: Props) {
           <View style={styles.fact}>
             <LocateFixed size={14} color={colors.primary} strokeWidth={2} />
             <Text style={[styles.factStrong, archived && styles.textArchived]}>
-              {office.radiusM} m geofence
+              Check-in within {office.radiusM} m
             </Text>
           </View>
           <View style={styles.divider} />
@@ -98,7 +101,9 @@ export default function OfficeListRow({ office, onPress }: Props) {
             <>
               <View style={styles.divider} />
               <View style={styles.cutoffChip}>
-                <Text style={styles.cutoffText}>{office.rule.lateCutoffMinutes}m cutoff</Text>
+                <Text style={styles.cutoffText}>
+                  Late after {office.rule.lateCutoffMinutes} min
+                </Text>
               </View>
             </>
           ) : null}

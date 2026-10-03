@@ -318,7 +318,7 @@ export default function ReportsScreen({ navigation }: Props) {
         </IconButton>
         <Text style={styles.title}>Reports</Text>
         {isPolling ? (
-          <Text style={styles.syncingIndicator}>syncing...</Text>
+          <Text style={styles.syncingIndicator}>Refreshing…</Text>
         ) : null}
       </View>
 
@@ -372,7 +372,7 @@ export default function ReportsScreen({ navigation }: Props) {
           {showSyncPausedBanner && syncPaused ? (
             <View style={styles.syncPausedBanner}>
               <View style={styles.syncPausedContent}>
-                <Text style={styles.syncPausedText}>Sync paused — pull to retry</Text>
+                <Text style={styles.syncPausedText}>Couldn't refresh — pull to retry</Text>
               </View>
               <Button
                 variant="ghost"

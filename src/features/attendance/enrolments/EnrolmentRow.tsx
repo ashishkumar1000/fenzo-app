@@ -153,7 +153,7 @@ export function EnrolmentRow({
           <Text style={styles.toggleDescription}>
             {state === 'upcoming'
               ? `Tracking begins on their start date — nothing before that.`
-              : 'Geofenced check-ins at their assigned office.'}
+              : 'They check in near their office.'}
           </Text>
         </Pressable>
         {/* In-flight write feedback: the switch is disabled while the PUT

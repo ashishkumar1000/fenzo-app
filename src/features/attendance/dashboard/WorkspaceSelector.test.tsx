@@ -55,12 +55,12 @@ describe('WorkspaceSelector', () => {
   });
 
   it('the pill hide/show is the count\'s job (null hides — the CALLER passes null when filtered)', () => {
-    expect(textContents(render('All offices', 3).renderer)).toContain('3 Sites');
-    expect(textContents(render('All offices', null).renderer)).not.toContain('3 Sites');
+    expect(textContents(render('All offices', 3).renderer)).toContain('3 offices');
+    expect(textContents(render('All offices', null).renderer)).not.toContain('3 offices');
   });
 
   it('the pill singularises at 1 office', () => {
-    expect(textContents(render('All offices', 1).renderer)).toContain('1 Site');
-    expect(textContents(render('All offices', 1).renderer)).not.toContain('1 Sites');
+    expect(textContents(render('All offices', 1).renderer)).toContain('1 office');
+    expect(textContents(render('All offices', 1).renderer)).not.toContain('1 offices');
   });
 });

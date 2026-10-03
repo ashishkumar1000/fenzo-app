@@ -23,23 +23,25 @@
  * "Not tracked" day sheets — U10). The params pair is normalized once:
  * a `focusDate` outside `yearMonth` is dev-warned and treated as absent.
  *
- * Add nothing (Sally D): no legend, no office caption, no summary block —
- * header + month nav + pane + day sheet is complete. No focus refetch:
+ * header + month nav + pane + legend + day sheet is complete (the legend
+ * joined 2026-10 so the calendar's marks explain themselves). No focus
+ * refetch:
  * the pane's own AppState-active refresh covers foregrounding, and
  * returning from a pushed screen needs none (the sheet, not a route,
  * does the writes).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { colors } from '../../../theme';
+import { colors, spacing } from '../../../theme';
 import type { RootStackParamList } from '../../../navigation/types';
 import ScreenHeader from '../offices/ScreenHeader';
 import {
   RealMonthPane,
   type RealMonthReport,
 } from '../calendar/RealMonthPane';
+import { DayStatusLegend } from '../calendar/DayStatusLegend';
 import { DayDetailSheet } from '../calendar/DayDetailSheet';
 import { shiftYearMonth } from '../monthly/monthlyModel';
 import { correctDay } from '../../../services/resources/attendanceCorrections';
@@ -148,6 +150,12 @@ export default function AttendanceEmployeeMonthScreen({ route, navigation }: Pro
         nextDisabled={nextDisabled}
       />
 
+      {/* The icons' key, straight under the calendar (2026-10 copy review):
+          the SAME component the My month screen renders — never restyled. */}
+      <View style={styles.legendWrap}>
+        <DayStatusLegend />
+      </View>
+
       <DayDetailSheet
         visible={pickedDay !== null}
         workDate={pickedDay}
@@ -175,5 +183,11 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.surfacePage,
+  },
+  // The legend Card keeps its own look — this wrapper only gives it the
+  // screen gutter (the My month host's s4 padding, transplanted).
+  legendWrap: {
+    paddingHorizontal: spacing.s4,
+    paddingTop: spacing.s2,
   },
 });

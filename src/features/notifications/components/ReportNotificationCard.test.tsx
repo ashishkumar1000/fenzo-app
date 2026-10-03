@@ -1,8 +1,8 @@
 /**
  * ReportNotificationCard — one report notification's card (Epic 12). What
  * the CARD decides (the model behind it has its own coverage through the
- * screen tests): the ready vs failed copy paths, the status banner label,
- * the unread dot's a11y announcement, and the onPress wiring — the card
+ * screen tests): the ready vs failed copy paths (the ready state drops
+ * the status banner; failed keeps it), the unread dot's a11y announcement, and the onPress wiring — the card
  * body AND the "View report" button both hand back the exact card object
  * (navigation itself is the screen's contract, tested there).
  */
@@ -61,7 +61,7 @@ function renderedTexts(renderer: ReactTestRenderer.ReactTestRenderer): unknown[]
   return renderer.root.findAllByType(Text).map(t => t.props.children);
 }
 
-it('a ready card shows its title, "Ready" banner, message and View report — never "View Job"', () => {
+it('a ready card shows its title + message and NO "Ready" banner — never "View Job"', () => {
   const card = makeCard(
     makeReportNotification('r1', { readAt: '2026-09-20T05:01:00Z' }),
   );
@@ -69,7 +69,9 @@ it('a ready card shows its title, "Ready" banner, message and View report — ne
 
   const texts = renderedTexts(renderer);
   expect(texts).toContain('Report ready');
-  expect(texts).toContain('Ready');
+  // The green "Ready" banner is dropped on the ready state (2026-10 copy
+  // review) — the title and the message already say it. Failed keeps its.
+  expect(texts).not.toContain('Ready');
   expect(texts).toContain('Technician Job Report is ready to view.');
 
   const viewReport = renderer.root

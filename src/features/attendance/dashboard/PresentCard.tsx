@@ -2,10 +2,9 @@
  * PresentCard — the dashboard's sixth tile (19-4 redesign): the present
  * share of today's workforce as a progress line. Honest labelling: the
  * card's refresh behaviour is the screen's refetch-per-appearance, so the
- * header says "Live Sync" only as the mock's label for the same idea — no
- * claim of a background push feed ("Auto" notes the refetch, the caption
- * names the number's meaning; the percent is derivable FE-side from the
- * BE's own counts — no second source).
+ * header says "Updates automatically" — no claim of a background push feed
+ * (the caption names the number's meaning; the percent is derivable
+ * FE-side from the BE's own counts — no second source).
  *
  * The share is `checkedInPct` (dashboardModel) rounded to a whole percent
  * — the same number the Checked-in pill shows, one source.
@@ -30,13 +29,12 @@ export function PresentCard({
       <View style={styles.head}>
         <View style={styles.headLeft}>
           <View style={styles.pulseDot} />
-          <Text style={styles.title}>Live Sync</Text>
+          <Text style={styles.title}>Updates automatically</Text>
         </View>
-        <Text style={styles.auto}>Auto</Text>
       </View>
       <View
         style={styles.track}
-        accessibilityLabel={`Live Sync: ${shown}% workforce present today`}
+        accessibilityLabel={`Updates automatically: ${shown}% workforce present today`}
         accessibilityRole="progressbar">
         <View style={[styles.fill, { width: `${shown}%` }]} />
       </View>
@@ -75,10 +73,6 @@ const styles = StyleSheet.create({
   title: {
     ...typography.bodyStrong,
     color: colors.primary,
-  },
-  auto: {
-    ...typography.caption,
-    color: colors.textMuted,
   },
   track: {
     height: 8,

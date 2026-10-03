@@ -127,16 +127,20 @@ function locationCaptionFor(
   return { kind: 'chip', text: formatDistance(metres), flagged: location.flagged };
 }
 
-/** "12 Aug, 2:14 PM" — the timeline's timestamp format (AC 3). Unparseable input → raw. */
+/** "12 Aug, 2:14 PM" — the timeline's timestamp format (AC 3); the
+ *  meridiem is uppercased to match the app's other time renders (en-IN
+ *  prints it lowercase). Unparseable input → raw. */
 function timestampLabel(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return date
+    .toLocaleString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+    .replace(/\b(am|pm)\b/g, (meridiem) => meridiem.toUpperCase());
 }
 
 export function ActivityTimeline({ entries, workflowTemplate, jobSite }: Props) {
@@ -169,7 +173,7 @@ export function ActivityTimeline({ entries, workflowTemplate, jobSite }: Props) 
                         {caption.text}
                       </Badge>
                       {caption.flagged ? (
-                        <Text style={styles.flagHint}>· low GPS accuracy</Text>
+                        <Text style={styles.flagHint}>· low location accuracy</Text>
                       ) : null}
                     </View>
                   );

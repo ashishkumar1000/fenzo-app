@@ -48,10 +48,10 @@ export interface KpiTileSpec {
  *  highlights the family, never judges. */
 export function kpiTiles(counts: AttendanceDashboardCounts): KpiTileSpec[] {
   const entries: Array<[KpiTileSpec['key'], string]> = [
-    ['tracked', 'Tracked'],
+    ['tracked', 'On attendance'],
     ['checkedIn', 'Checked in'],
     ['notCheckedIn', 'Not checked in'],
-    ['shortDay', 'Short day'],
+    ['shortDay', 'Short hours'],
     ['late', 'Late'],
     ['onLeave', 'On leave'],
   ];
@@ -104,9 +104,9 @@ export function flagStrips(flags: DashboardFlags): FlagStripSpec[] {
   if (flags.checkoutMissing.length > 0) {
     strips.push({
       kind: 'checkoutMissing',
-      label: 'Checkout missing',
+      label: 'Check-out missing',
       count: flags.checkoutMissing.length,
-      a11yLabel: a11y('Checkout missing', flags.checkoutMissing.length),
+      a11yLabel: a11y('Check-out missing', flags.checkoutMissing.length),
       detail:
         flags.checkoutMissing.length === 1
           ? 'No check-out recorded for 1 past day.'
@@ -121,8 +121,8 @@ export function flagStrips(flags: DashboardFlags): FlagStripSpec[] {
       a11yLabel: a11y('Fake location attempt', flags.fakeLocationAttempt.length),
       detail:
         flags.fakeLocationAttempt.length === 1
-          ? 'GPS spoofing blocked on 1 day.'
-          : `GPS spoofing blocked on ${flags.fakeLocationAttempt.length} days.`,
+          ? 'A fake-location app was used on 1 day.'
+          : `A fake-location app was used on ${flags.fakeLocationAttempt.length} days.`,
     });
   }
   return strips;
@@ -134,7 +134,7 @@ export function flagSheetTitle(
 ): string {
   switch (kind) {
     case 'checkoutMissing':
-      return 'Checkout missing';
+      return 'Check-out missing';
     case 'fakeLocationAttempt':
       return 'Fake location attempts';
     case null:

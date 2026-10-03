@@ -397,7 +397,7 @@ describe('the summary block (D5/D9)', () => {
     expect(all).toContain('2 half days');
     expect(all).toContain('1 late');
     expect(all).toContain('1 leave');
-    expect(all).toContain('2 missing checkouts');
+    expect(all).toContain('2 missing check-outs');
   });
 
   it('an all-zero meta renders no meta line (the empty-omit precedent)', async () => {
@@ -434,7 +434,7 @@ describe('the summary block (D5/D9)', () => {
     const group = summaryGroup(renderer);
     expect(group.props.accessibilityLabel).toBe(
       'Days worked: 14.5 so far, Worked 14.5, Absent 1, Days off 3, Holiday 1, '
-        + '2 half days, 1 late, 1 leave, 2 missing checkouts',
+        + '2 half days, 1 late, 1 leave, 2 missing check-outs',
     );
   });
 
@@ -452,7 +452,7 @@ describe('the summary block (D5/D9)', () => {
     await flush();
 
     expect(summaryGroup(renderer).props.accessibilityLabel).toBe(
-      'Worked 14.5, Absent 1, Days off 3, Holiday 1, 2 half days, 1 late, 1 leave, 2 missing checkouts',
+      'Worked 14.5, Absent 1, Days off 3, Holiday 1, 2 half days, 1 late, 1 leave, 2 missing check-outs',
     );
   });
 

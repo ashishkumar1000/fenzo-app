@@ -2,7 +2,7 @@ import { formatLongDate } from './formatLongDate';
 
 describe('formatLongDate', () => {
   it.each([
-    ['2026-09-30', 'Wed, 30 Sept, 2026'],
+    ['2026-09-30', 'Wed, 30 Sep, 2026'],
     ['2026-01-01', 'Thu, 1 Jan, 2026'],
     ['2027-03-14', 'Sun, 14 Mar, 2027'],
   ])('pins the literal en-IN output for %s', (input, expected) => {

@@ -42,7 +42,7 @@ export default function SettingsScreen({ navigation }: Props) {
         <Tile
           icon={<Users size={20} color={colors.primary} strokeWidth={1.5} />}
           iconBg={colors.surfacePage}
-          title="Team enrolment"
+          title="Team attendance"
           subtitle="Start dates, offices & tracking per employee"
           onPress={() => navigation.navigate('AttendanceEnrolments')}
         />
@@ -50,14 +50,14 @@ export default function SettingsScreen({ navigation }: Props) {
           icon={<CalendarDays size={20} color={colors.status.scheduled.solid} strokeWidth={1.5} />}
           iconBg={colors.status.scheduled.bg}
           title="Weekly off"
-          subtitle="Tenant default & per-employee overrides"
+          subtitle="For everyone — change per employee"
           onPress={() => navigation.navigate('AttendanceWeeklyOff')}
         />
         <Tile
           icon={<Calendar size={20} color={colors.status.progress.solid} strokeWidth={1.5} />}
           iconBg={colors.status.progress.bg}
           title="Holidays"
-          subtitle="Tenant-wide holiday list"
+          subtitle="Company holiday list"
           onPress={() => navigation.navigate('AttendanceHolidays')}
         />
       </ScrollView>

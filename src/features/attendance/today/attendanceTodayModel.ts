@@ -293,7 +293,7 @@ export function captureFailureMessage(failure: unknown): string {
     case 'unavailable':
       return 'Location services are unavailable. Turn on location and try again.';
     case 'stale':
-      return 'Your location seems outdated. Refresh GPS and try again';
+      return 'Your location seems outdated. Please try again';
     default:
       return 'Could not determine your location. Try again.';
   }
@@ -343,6 +343,15 @@ export function formatMetresGrouped(metres: number): string {
   return `${grouped} m`;
 }
 
+/** The too-far line's distance: metres under a kilometre ("990 m"), one-
+ *  decimal kilometres at or above ("1.4 km") — the formatDistance house
+ *  pattern (nearest-10 m rounding) without its "away" suffix. */
+function formatGeofenceDistance(metres: number): string {
+  const rounded = Math.round(metres / 10) * 10;
+  if (rounded < 1000) return `${rounded} m`;
+  return `${(metres / 1000).toFixed(1)} km`;
+}
+
 const seg = (text: string, emphasis?: PunchBodySegment['emphasis']): PunchBodySegment =>
   emphasis ? { text, emphasis } : { text };
 
@@ -371,9 +380,8 @@ function card(
  * carry their existing remediation copy in the same visual language; the
  * done posture renders NO card (the punch tiles are the done render).
  *
- * `checkinTimeText`/`elapsedText` are preformatted by the caller (wall-
- * clock rendering is a view concern); `elapsedText` null degrades the
- * shift-active body gracefully rather than lying with a placeholder.
+ * `checkinTimeText` is preformatted by the caller (wall-clock rendering is
+ * a view concern).
  */
 export function punchStatusCard(input: {
   state: TodayButtonState;
@@ -381,7 +389,6 @@ export function punchStatusCard(input: {
   office: PunchOffice | null | undefined;
   now: number;
   checkinTimeText: string | null;
-  elapsedText: string | null;
 }): PunchStatusCardModel | null {
   const { state, fix, office, now } = input;
   const distance = freshDistanceM(fix, office, now);
@@ -395,46 +402,40 @@ export function punchStatusCard(input: {
         // the punch stays available, the card explains what's missing.
         return card('neutral', 'Getting your location…', null, []);
       }
-      return card('done', 'Within Office Geofence', 'READY TO PUNCH', [
+      return card('done', 'At your office', 'READY TO CHECK IN', [
         seg('You are at '),
         seg(officeName, 'strong'),
         seg(' ('),
         seg(formatMetresGrouped(distance), 'danger'),
-        seg(' away). Location verified via GPS.'),
+        seg(' away). Location checked.'),
       ]);
     }
     case 'readyOut': {
       if (!inRadius) {
         return card('neutral', 'Getting your location…', null, []);
       }
-      const elapsed = input.elapsedText;
-      return card('progress', 'Shift Active • In Office', 'READY TO PUNCH OUT', [
+      return card('progress', 'On shift · At your office', 'READY TO CHECK OUT', [
         seg('Checked in at '),
         seg(input.checkinTimeText ?? '—', 'strong'),
-        ...(elapsed ? [seg(' ('), seg(elapsed, 'danger'), seg(' elapsed)')] : []),
-        seg('. Ready to conclude your workday at '),
-        seg(officeName, 'strong'),
-        seg('.'),
+        seg('. Tap Check out when your work is done.'),
       ]);
     }
     case 'locked': {
-      return card('cancelled', 'Outside Office Geofence', 'PUNCH DISABLED', [
+      return card('cancelled', `Too far from ${officeName}`, 'TOO FAR', [
         seg('You are '),
-        seg(formatMetresGrouped(state.distanceM), 'danger'),
+        seg(formatGeofenceDistance(state.distanceM), 'danger'),
         seg(' from '),
         seg(officeName, 'strong'),
-        seg(' branch. Move within '),
-        seg(formatMetresGrouped(office?.radiusM ?? 0), 'danger'),
-        seg(' to punch.'),
+        seg('. Go closer, then check in.'),
       ]);
     }
     case 'lockedOut': {
-      return card('scheduled', 'Out of Bounds for Check-out', 'LOCKED', [
+      return card('scheduled', 'Too far to check out', 'TOO FAR', [
         seg('You checked in at '),
         seg(input.checkinTimeText ?? '—', 'strong'),
-        seg('. You are currently '),
+        seg('. You are '),
         seg(formatMetresGrouped(state.distanceM), 'danger'),
-        seg(' away. Move closer to punch out.'),
+        seg(' away. Move closer to check out.'),
       ]);
     }
     case 'offline':

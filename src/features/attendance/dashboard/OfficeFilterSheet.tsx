@@ -232,7 +232,7 @@ export function OfficeFilterSheet({
                       stat === null
                         ? undefined
                         : stat.tracked === 0
-                          ? 'No employees tracked here today'
+                          ? 'No one is on attendance here today'
                           : `${stat.tracked} tracked · ${stat.checkedIn} checked in today`
                     }
                     activeChip={stat !== null && stat.checkedIn > 0}
@@ -240,7 +240,7 @@ export function OfficeFilterSheet({
                       stat === null
                         ? undefined
                         : stat.tracked === 0
-                          ? 'No employees are tracked at this office today'
+                          ? 'No one is on attendance at this office today'
                           : `${stat.tracked} tracked, ${stat.checkedIn} checked in today`
                     }
                     selected={draft === row.id}

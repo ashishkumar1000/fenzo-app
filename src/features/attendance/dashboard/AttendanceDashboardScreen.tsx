@@ -227,7 +227,7 @@ export default function AttendanceDashboardScreen({ navigation }: Props) {
                 icon={
                   <Users size={26} color={colors.status.neutral.fg} strokeWidth={1.5} />
                 }
-                title="No one is tracked today"
+                title="No one is on attendance today"
                 description="Add employees to attendance to see today's summary here."
               />
             )}

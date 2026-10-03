@@ -83,7 +83,7 @@ describe('ActivityTimeline location caption (7.10)', () => {
       workflowTemplate: null,
       jobSite: { latitude: 12.9726, longitude: 77.5946 },
     });
-    expect(allTexts(root).some(t => /low GPS accuracy/.test(t))).toBe(true);
+    expect(allTexts(root).some(t => /low location accuracy/.test(t))).toBe(true);
   });
 
   it('shows "Location captured" without a distance when the job site is unknown', () => {

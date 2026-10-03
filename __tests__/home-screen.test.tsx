@@ -9,6 +9,7 @@
 import React from 'react';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 import { RefreshControl, ScrollView } from 'react-native';
+import { greetingForNow } from '../src/utils';
 
 const mockNavigation = { navigate: jest.fn(), goBack: jest.fn(), canGoBack: jest.fn(() => false) };
 
@@ -176,7 +177,9 @@ it('renders the greeting and header stats from the jobCounts buckets', async () 
   const renderer = await mountScreen();
 
   const text = allText(renderer);
-  expect(text).toContain('Good morning,');
+  // The greeting is the time-of-day helper's — pin the composition
+  // (greeting, comma, name), not a fixed clock time.
+  expect(text).toContain(`${greetingForNow()},`);
   expect(text).toContain('Fenzit Services');
   // The tiles show the jobCounts buckets directly (Today 1, Upcoming 2) —
   // there is no all-time total row, and Overdue/Technicians were removed as

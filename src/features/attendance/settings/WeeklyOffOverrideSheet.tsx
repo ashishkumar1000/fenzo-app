@@ -271,7 +271,7 @@ export default function WeeklyOffOverrideSheet({
         ) : null}
 
         <DatePickerField
-          label="Effective from"
+          label="Starting"
           value={effectiveFrom}
           today={today}
           minDate={today}
@@ -282,8 +282,8 @@ export default function WeeklyOffOverrideSheet({
           placeholder={today}
           helper={
             effectiveFrom
-              ? `Effective from ${effectiveFrom}`
-              : `Effective from today (${today}) if you leave it blank`
+              ? `Starting ${effectiveFrom}`
+              : `Starting today (${today}) if you leave it blank`
           }
         />
       </ScrollView>

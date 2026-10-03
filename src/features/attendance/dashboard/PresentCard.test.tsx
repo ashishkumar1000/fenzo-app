@@ -48,19 +48,19 @@ describe('PresentCard', () => {
     const rendered = render(60);
     const shown = textContents(rendered);
     expect(shown).toContain('60% workforce present today');
-    expect(a11yLabel(rendered)).toBe('Live Sync: 60% workforce present today');
+    expect(a11yLabel(rendered)).toBe('Updates automatically: 60% workforce present today');
   });
 
   it('CLAMPS an over-100 drifted share to 100 everywhere it is shown', () => {
     const rendered = render(200);
     expect(textContents(rendered)).toContain('100% workforce present today');
-    expect(a11yLabel(rendered)).toBe('Live Sync: 100% workforce present today');
+    expect(a11yLabel(rendered)).toBe('Updates automatically: 100% workforce present today');
     expect(textContents(rendered).some(t => t.includes('200%'))).toBe(false);
   });
 
   it('CLAMPS a negative drifted share to 0 everywhere it is shown', () => {
     const rendered = render(-20);
     expect(textContents(rendered)).toContain('0% workforce present today');
-    expect(a11yLabel(rendered)).toBe('Live Sync: 0% workforce present today');
+    expect(a11yLabel(rendered)).toBe('Updates automatically: 0% workforce present today');
   });
 });

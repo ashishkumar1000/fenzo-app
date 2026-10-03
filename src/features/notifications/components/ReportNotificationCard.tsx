@@ -8,10 +8,12 @@
  * them with job_id NULL), so this is deliberately NOT the job card's
  * anatomy: no avatar, no job-number pill, no stage timeline. Instead:
  * title ("Report ready" / "Report failed"), a status banner in the same
- * Fenzit status family the Reports screen's Badge uses (done / cancelled),
- * the friendly message line, and a "View report" footer button that opens
- * the Reports screen (same navigate-first contract as the job card's tap).
- * Unread cards carry the primary dot top-right, like the job card.
+ * Fenzit status family the Reports screen's Badge uses (failed only — a
+ * ready report's title + message already say it, so its banner is
+ * dropped, 2026-10 copy review), the friendly message line, and a
+ * "View report" footer button that opens the Reports screen (same
+ * navigate-first contract as the job card's tap). Unread cards carry the
+ * primary dot top-right, like the job card.
  */
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { FileText } from 'lucide-react-native';
@@ -49,17 +51,22 @@ export function ReportNotificationCard({ card, onPress }: ReportNotificationCard
         </Text>
       </View>
 
-      {/* Status banner — the same family the job card banner uses. */}
-      <View
-        style={[styles.banner, { backgroundColor: statusColors.bg, borderColor: statusColors.border }]}>
-        <View style={styles.bannerLead}>
-          <View style={[styles.bannerDot, { backgroundColor: statusColors.solid }]} />
-          <Text numberOfLines={1} style={[styles.bannerLabel, { color: statusColors.fg }]}>
-            {card.statusLabel}
-          </Text>
+      {/* Status banner — only on the FAILED state (2026-10 copy review):
+          when the report is ready the title ("Report ready") and the
+          message ("… is ready to view.") already say it, so the green
+          banner repeated itself. Failed keeps the banner. */}
+      {card.isFailed ? (
+        <View
+          style={[styles.banner, { backgroundColor: statusColors.bg, borderColor: statusColors.border }]}>
+          <View style={styles.bannerLead}>
+            <View style={[styles.bannerDot, { backgroundColor: statusColors.solid }]} />
+            <Text numberOfLines={1} style={[styles.bannerLabel, { color: statusColors.fg }]}>
+              {card.statusLabel}
+            </Text>
+          </View>
+          <Text style={[styles.bannerTime, { color: statusColors.fg }]}>{time}</Text>
         </View>
-        <Text style={[styles.bannerTime, { color: statusColors.fg }]}>{time}</Text>
-      </View>
+      ) : null}
 
       <Text style={styles.message} numberOfLines={2}>
         {card.message}

@@ -123,14 +123,18 @@ describe('formatCredit', () => {
 describe('summaryChips', () => {
   it('orders worked first, then the > 0 chips in D4 order', () => {
     const chips = summaryChips(row().summary);
+    // 18 worked with 2 half days → 17 full · 2 half days (the half days are
+    // no longer double-displayed as both credit and caveat).
     expect(chips.map(c => [c.key, c.label])).toEqual([
-      ['daysWorked', '18 worked'],
+      ['daysWorked', '17 full'],
       ['halfDays', '2 half days'],
       ['lateCount', '1 late'],
       ['leave', '1.5 leave'],
       ['absent', '1 absent'],
-      ['checkoutMissing', '3 missing checkouts'],
+      ['checkoutMissing', '3 missing check-outs'],
     ]);
+    // The row greys a chip whose count is 0 — the count rides the spec.
+    expect(chips.map(c => c.count)).toEqual([17, 2, 1, 1.5, 1, 3]);
   });
 
   it('suppresses zeros EXCEPT the worked anchor', () => {
@@ -139,7 +143,15 @@ describe('summaryChips', () => {
         .summary,
     );
     expect(chips).toHaveLength(1);
-    expect(chips[0]).toEqual({ key: 'daysWorked', label: '0 worked' });
+    expect(chips[0]).toEqual({ key: 'daysWorked', label: '0 worked', count: 0 });
+  });
+
+  it('all half days → a 0-full anchor (the row greys it, not green)', () => {
+    const chips = summaryChips(
+      row({ summary: { daysWorked: 1.5, halfDays: 3 } }).summary,
+    );
+    expect(chips[0]).toEqual({ key: 'daysWorked', label: '0 full', count: 0 });
+    expect(chips[1]).toEqual({ key: 'halfDays', label: '3 half days', count: 3 });
   });
 
   it('uses the singular noun at 1 (half day / missing checkout)', () => {
@@ -155,16 +167,16 @@ describe('summaryChips', () => {
       }).summary,
     );
     expect(chips.map(c => c.label)).toEqual([
-      '18 worked',
+      '18 full',
       '1 half day',
       '1 late',
-      '1 missing checkout',
+      '1 missing check-out',
     ]);
   });
 
   it('formats decimal worked/leave through formatCredit', () => {
     const chips = summaryChips(
-      row({ summary: { daysWorked: 17.5, leave: 2.5 } }).summary,
+      row({ summary: { daysWorked: 17.5, halfDays: 0, leave: 2.5 } }).summary,
     );
     expect(chips[0].label).toBe('17.5 worked');
     expect(chips.find(c => c.key === 'leave')!.label).toBe('2.5 leave');
@@ -297,7 +309,7 @@ describe('monthlyRowA11yLabel (the exact pinned string)', () => {
         row({ summary: { workedOnHoliday: 1 } }),
       ),
     ).toBe(
-      'Asha. 18 worked, 2 half days, 1 late, 1.5 leave, 1 absent, 3 missing checkouts. '
+      'Asha. 17 full, 2 half days, 1 late, 1.5 leave, 1 absent, 3 missing check-outs. '
         + 'Andheri West, 4 weekly offs, 1 holiday, 1 worked on holiday',
     );
   });
@@ -333,7 +345,7 @@ describe('monthlyRowA11yLabel (the exact pinned string)', () => {
           summary: { weeklyOffs: 0, holidays: 0, workedOnHoliday: 0 },
         }),
       ),
-    ).toBe('Asha. 18 worked, 2 half days, 1 late, 1.5 leave, 1 absent, 3 missing checkouts');
+    ).toBe('Asha. 17 full, 2 half days, 1 late, 1.5 leave, 1 absent, 3 missing check-outs');
   });
 
   it('the caption sentence keeps the nullable-office drop and plural nouns', () => {
@@ -345,6 +357,6 @@ describe('monthlyRowA11yLabel (the exact pinned string)', () => {
           summary: { halfDays: 1, lateCount: 0, leave: 0, absent: 0, checkoutMissing: 0, weeklyOffs: 1, holidays: 0, workedOnHoliday: 0 },
         }),
       ),
-    ).toBe('Asha. 18 worked, 1 half day. 1 weekly off');
+    ).toBe('Asha. 18 full, 1 half day. 1 weekly off');
   });
 });

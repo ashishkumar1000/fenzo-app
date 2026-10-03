@@ -15,8 +15,10 @@ export {
 } from './istDate';
 // Coarse "5m ago" feed labels (falls back to a calendar date past 4 weeks)
 export { relativeTime } from './relativeTime';
-// Locale-pinned long date ("Wed, 30 Sept, 2026") for attendance surfaces
+// Locale-pinned long date ("Wed, 30 Sep, 2026") for attendance surfaces
 export { formatLongDate } from './formatLongDate';
+// Time-of-day greeting ("Good morning" / "Good afternoon" / "Good evening")
+export { greetingForNow } from './greeting';
 export { openMaps, openTel } from './linking';
 export { generateIdempotencyKey } from './idempotency';
 export { putToPresignedUrl } from './r2Upload';

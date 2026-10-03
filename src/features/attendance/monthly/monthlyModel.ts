@@ -108,7 +108,8 @@ export function formatCredit(value: number): string {
 /** A summary chip — one atomic Text on the row's chips line (a wrap
  *  breaks BETWEEN chips, never mid-phrase). `key` selects the family
  *  colour in MonthlyEmployeeRow's map (colour lives with the component,
- *  the KpiTile precedent). */
+ *  the KpiTile precedent). `count` is the number the label shows — the
+ *  row greys a chip whose count is 0 (a green zero reads as good). */
 export interface MonthlyChipSpec {
   key:
     | 'daysWorked'
@@ -118,6 +119,7 @@ export interface MonthlyChipSpec {
     | 'absent'
     | 'checkoutMissing';
   label: string;
+  count: number;
 }
 
 const plural = (n: number, word: string): string =>
@@ -128,27 +130,61 @@ const plural = (n: number, word: string): string =>
  * anchor — zero is an answer), then halfDays / lateCount / leave / absent
  * / checkoutMissing each only when > 0 (zero-suppressed). Number-first
  * copy throughout (the copy table).
+ *
+ * With half days on the row the worked credit no longer renders as
+ * "«n» worked" — that number counts a half day as 0.5 while the half-day
+ * chip repeats the same days, so the pair read as a double display
+ * (2026-10 copy review). It splits instead: "«fullDays» full · «n» half
+ * day(s)", fullDays = worked − 0.5 × halfDays rounded for display (the
+ * underlying credit math is untouched). No half days: "«n» worked" stays.
  */
 export function summaryChips(summary: MonthlyEmployeeSummary): MonthlyChipSpec[] {
-  const chips: MonthlyChipSpec[] = [
-    { key: 'daysWorked', label: `${formatCredit(summary.daysWorked)} worked` },
-  ];
+  const chips: MonthlyChipSpec[] = [];
   if (summary.halfDays > 0) {
-    chips.push({ key: 'halfDays', label: plural(summary.halfDays, 'half day') });
+    const fullDays = Math.round(summary.daysWorked - 0.5 * summary.halfDays);
+    chips.push({
+      key: 'daysWorked',
+      label: `${formatCredit(fullDays)} full`,
+      count: fullDays,
+    });
+    chips.push({
+      key: 'halfDays',
+      label: plural(summary.halfDays, 'half day'),
+      count: summary.halfDays,
+    });
+  } else {
+    chips.push({
+      key: 'daysWorked',
+      label: `${formatCredit(summary.daysWorked)} worked`,
+      count: summary.daysWorked,
+    });
   }
   if (summary.lateCount > 0) {
-    chips.push({ key: 'lateCount', label: `${summary.lateCount} late` });
+    chips.push({
+      key: 'lateCount',
+      label: `${summary.lateCount} late`,
+      count: summary.lateCount,
+    });
   }
   if (summary.leave > 0) {
-    chips.push({ key: 'leave', label: `${formatCredit(summary.leave)} leave` });
+    chips.push({
+      key: 'leave',
+      label: `${formatCredit(summary.leave)} leave`,
+      count: summary.leave,
+    });
   }
   if (summary.absent > 0) {
-    chips.push({ key: 'absent', label: `${summary.absent} absent` });
+    chips.push({
+      key: 'absent',
+      label: `${summary.absent} absent`,
+      count: summary.absent,
+    });
   }
   if (summary.checkoutMissing > 0) {
     chips.push({
       key: 'checkoutMissing',
-      label: plural(summary.checkoutMissing, 'missing checkout'),
+      label: plural(summary.checkoutMissing, 'missing check-out'),
+      count: summary.checkoutMissing,
     });
   }
   return chips;

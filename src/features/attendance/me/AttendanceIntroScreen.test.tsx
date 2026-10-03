@@ -152,7 +152,7 @@ describe('copy', () => {
       });
 
     expect(text('Mark attendance with a tap').length).toBe(1);
-    expect(text('Fenzo checks your location').length).toBe(1);
+    expect(text('Fenzit checks your location').length).toBe(1);
     expect(text('never in the background').length).toBe(1);
   });
 });

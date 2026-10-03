@@ -21,7 +21,7 @@ import { Button, ConfirmDialog, Skeleton } from '../../../components/ui';
 import { colors, fontSize, spacing } from '../../../theme';
 import { useNow } from '../../../hooks';
 import type { AttendanceSummaryState } from '../me/useAttendanceSummary';
-import { formatOffsetInstantTime, formatWorkedMinutes } from '../../../utils/offsetInstant';
+import { formatOffsetInstantTime } from '../../../utils/offsetInstant';
 import {
   buildTodayTiles,
   deriveTodayButtonState,
@@ -172,16 +172,9 @@ export function PunchSection({
     : null;
   const done = buttonState.kind === 'done';
 
-  // The status card's time inputs (wall-clock rendering is the view's job):
-  // the check-in instant formatted, and the open shift's client elapsed.
+  // The status card's time input (wall-clock rendering is the view's job):
+  // the check-in instant formatted.
   const checkinTimeText = check.record ? formatTime(check.record.checkinAt) : null;
-  const elapsedMin = check.record
-    ? Math.max(0, Math.round((now - Date.parse(check.record.checkinAt)) / 60_000))
-    : 0;
-  const elapsedText =
-    check.record && !check.record.checkoutAt
-      ? formatWorkedMinutes(elapsedMin)
-      : null;
 
   // Card-vs-message precedence: a settled server message outranks the card
   // (the server copy is the authoritative explanation) — EXCEPT the locked
@@ -199,7 +192,6 @@ export function PunchSection({
           office,
           now,
           checkinTimeText,
-          elapsedText,
         })
       : null;
 

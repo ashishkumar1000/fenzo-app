@@ -158,22 +158,26 @@ describe('OfficesScreen — the sample redesign', () => {
     expect(pressableWithLabel(screen.root, 'Show archived offices (1)')).toBeTruthy();
   });
 
-  it('cards carry the sample anatomy: pill, geofence · hours · cutoff, coords, valid-from', async () => {
+  it('cards carry the sample anatomy: pill, check-in · hours · cutoff, plain-English location, valid-from', async () => {
     const screen = await renderLoaded();
     expect(pressableWithLabel(screen.root, 'Office HQ')).toBeTruthy();
     expect(textNodes(screen.root, 'Active').length).toBeGreaterThan(0);
     // Facts row (JSX interpolation makes these children arrays — flatten).
-    expect(textContaining(screen.root, '100 m geofence').length).toBe(1);
-    expect(textContaining(screen.root, '09:00 – 18:00').length).toBe(1);
+    expect(textContaining(screen.root, 'Check-in within 100 m').length).toBe(1);
+    // HQ has a rule: its timing summary is both the location line and the
+    // facts-row fact.
+    expect(textContaining(screen.root, '09:00 – 18:00').length).toBe(2);
     // The late-cutoff chip (amber, from rule.lateCutoffMinutes). Only HQ's
     // card is visible here (archived rows hide behind the disclosure).
-    expect(textContaining(screen.root, '15m cutoff').length).toBe(1);
+    expect(textContaining(screen.root, 'Late after 15 min').length).toBe(1);
     // The hours chip.
-    expect(textNodes(screen.root, '8h full · 4h half').length).toBe(1);
-    // Coordinates line + valid-from caption.
-    expect(textNodes(screen.root, '12.970° N, 77.590° E').length).toBe(1);
+    expect(textNodes(screen.root, 'Full day 8 hrs · Half day 4 hrs').length).toBe(1);
+    // The location line is plain English — raw coordinates never render.
+    // Branch (no rule) falls back to its check-in distance (location line +
+    // facts row), and keeps the honest timing gap on the facts row.
+    expect(textContaining(screen.root, '12.970° N, 77.590° E').length).toBe(0);
+    expect(textContaining(screen.root, 'Check-in within 200 m').length).toBe(2);
     expect(textContaining(screen.root, 'Valid from').length).toBe(1);
-    // An office without a rule shows the honest gap (no chips, no valid-from).
     expect(textNodes(screen.root, 'Timing not set').length).toBe(1);
   });
 

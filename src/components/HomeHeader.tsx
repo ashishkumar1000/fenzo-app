@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, Pressable, StatusBar, useWindowDimensions } fro
 import { Bell, Calendar, CalendarClock } from 'lucide-react-native';
 import { Card } from './ui';
 import { colors, palette, radius, spacing, typography } from '../theme';
+import { greetingForNow } from '../utils';
 import type { JobCounts, JobScope } from '../services';
 
 interface StatCardProps {
@@ -103,7 +104,7 @@ export default function HomeHeader({
           <View style={styles.headerContent}>
             <View style={styles.greetingSection}>
               <Text style={styles.greetingText}>
-                {ownerName ? `Good morning, ${ownerName}` : 'Good morning'}
+                {ownerName ? `${greetingForNow()}, ${ownerName}` : greetingForNow()}
               </Text>
               <Text style={styles.serviceText}>{businessName}</Text>
             </View>

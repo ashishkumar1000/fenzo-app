@@ -28,8 +28,8 @@ type Props = NativeStackScreenProps<TechnicianRootStackParamList, 'AttendanceInt
 
 const COPY = {
   headline: 'Mark attendance with a tap',
-  body: 'Check in and out from your office — Fenzo checks your location, so no paperwork and no arguments about who came in.',
-  privacy: 'Fenzo only reads your location the moment you check in or out — never in the background.',
+  body: 'Check in and out from your office — Fenzit checks your location, so no paperwork and no arguments about who came in.',
+  privacy: 'Fenzit only reads your location the moment you check in or out — never in the background.',
   primary: 'Allow location access',
   secondary: "Not now — I'll browse without it",
 };

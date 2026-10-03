@@ -117,10 +117,10 @@ function Glyph({ view, pending }: { view: StepView; pending: boolean }) {
   return <View style={[styles.circle, styles.lockedCircle]} />;
 }
 
-/** The right-hand caption: "Up next" / "Waiting to sync". */
+/** The right-hand caption: "Up next" / "Waiting to send". */
 function RightCaption({ view, pending }: { view: StepView; pending: boolean }) {
   if (pending) {
-    return <Text style={styles.pendingCaption}>Waiting to sync</Text>;
+    return <Text style={styles.pendingCaption}>Waiting to send</Text>;
   }
   if (view.state === 'next') {
     return <Text style={styles.nextCaption}>Up next</Text>;

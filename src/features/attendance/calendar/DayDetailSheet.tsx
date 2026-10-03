@@ -468,18 +468,18 @@ export function DayDetailSheet({
 
           {latest != null && latest.note.trim() !== '' ? (
             // The correction note card: the quote plus the wire's actor
-            // attribution ("Regularized by System Admin" in the mock).
+            // attribution ("Fixed by System Admin" in the mock).
             <View
               style={styles.noteCard}
               accessibilityLabel={
                 latest.actorName
-                  ? `Correction note: ${latest.note}. Regularized by ${latest.actorName}`
+                  ? `Correction note: ${latest.note}. Fixed by ${latest.actorName}`
                   : `Correction note: ${latest.note}`
               }>
               <Text style={styles.noteQuote}>{`“${latest.note}”`}</Text>
               {latest.actorName ? (
                 <Text style={styles.noteAttribution}>
-                  {`Regularized by ${latest.actorName}`}
+                  {`Fixed by ${latest.actorName}`}
                 </Text>
               ) : null}
             </View>

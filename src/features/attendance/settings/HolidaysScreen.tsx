@@ -164,7 +164,7 @@ export default function HolidaysScreen({ navigation }: Props) {
             <EmptyState
               icon={<Plus size={24} color={colors.primary} strokeWidth={1.5} />}
               title="No holidays yet"
-              description="Add tenant-wide holidays so attendance marks these days off for everyone."
+              description="Add company holidays so attendance marks these days off for everyone."
               ctaLabel="Add holiday"
               ctaIcon={
                 <Plus size={16} color={colors.onPrimary} strokeWidth={2} />
